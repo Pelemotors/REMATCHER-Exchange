@@ -14,6 +14,7 @@ export default function DemandPage() {
     "מחפש CX-5 מ-22 ומעלה, עד 130, עדיפות מפואר, לא אדום"
   );
   const [loading, setLoading] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [demandId, setDemandId] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedDemand | null>(null);
   const [confirmed, setConfirmed] = useState<Record<string, unknown>>({});
@@ -21,11 +22,17 @@ export default function DemandPage() {
   async function handleParse(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setParseError(null);
     const res = await fetch("/api/demands/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rawText }),
     });
+    if (!res.ok) {
+      setParseError("לא הצלחנו לנתח את הבקשה. נסה שוב או ערוך את הניסוח.");
+      setLoading(false);
+      return;
+    }
     const data = await res.json();
     setDemandId(data.demandId);
     setParsed(data.parsed);
@@ -57,7 +64,7 @@ export default function DemandPage() {
     <div>
       <PageHeader
         title="יצירת ביקוש"
-        subtitle="תאר מה אתה מחפש — המערכת תפרק ותאשר איתך"
+        subtitle="תאר מה אתה מחפש — נפרק את הבקשה ונאשר איתך לפני הפעלה"
       />
 
       {step === "input" && (
@@ -73,8 +80,11 @@ export default function DemandPage() {
             required
           />
           <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "מנתח..." : "נתח ביקוש (AI)"}
+            {loading ? "מנתח..." : "נתח ביקוש"}
           </button>
+          {parseError && (
+            <p className="text-sm text-error">{parseError}</p>
+          )}
         </form>
       )}
 
@@ -83,7 +93,7 @@ export default function DemandPage() {
           <div className="card space-y-4">
             <h3 className="font-semibold">אשר את הפירוש</h3>
             <p className="text-sm text-text-secondary">
-              AI מציע — אתה מחליט. לא יווצר ביקוש פעיל עד אישורך.
+              בדוק שהבנו נכון את החיפוש שלך. החיפוש יופעל רק לאחר אישורך.
             </p>
 
             <div className="space-y-3">

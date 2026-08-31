@@ -3,7 +3,7 @@ import {
   parsedDemandSchema,
   type ParsedDemand,
 } from "@/lib/schemas/ai";
-import { callOpenAIStructured, isOpenAIConfigured } from "./client";
+import { callOpenAIStructured, isOpenAIConfigured, logAiOperation } from "./client";
 
 const SYSTEM_PROMPT = `You parse Hebrew/English natural language vehicle demand for a B2B dealer exchange.
 Rules (CRITICAL):
@@ -85,9 +85,13 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     hardConstraints: [],
     softPreferences: [],
     exclusions: [],
-    ambiguities: ["Parsing via fallback — OpenAI unavailable"],
+    ambiguities: [],
     rawSummary: rawText,
   };
+
+  if (text.includes("מאזדה") || text.includes("mazda")) {
+    result.make = { value: "Mazda", status: "known", source: "inferred" };
+  }
 
   // CX-5 pattern from demo
   if (text.includes("cx") || text.includes("cx5") || text.includes("cx-5")) {
@@ -127,24 +131,52 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
   return parsedDemandSchema.parse(result);
 }
 
+async function logDemandParseFallback(
+  reason: string,
+  userId?: string
+): Promise<void> {
+  await logAiOperation({
+    operation: "demand_parse",
+    promptVersion: AI_PROMPT_VERSIONS.demandParser,
+    model: AI_MODELS.demandParser,
+    success: false,
+    errorMessage: reason,
+    userId,
+  });
+}
+
 export async function parseDemand(
   rawText: string,
   userId?: string
 ): Promise<ParsedDemand> {
   if (!isOpenAIConfigured()) {
+    await logDemandParseFallback(
+      "OPENAI_API_KEY not configured — deterministic fallback",
+      userId
+    );
     return parseDemandFallback(rawText);
   }
 
-  const { data } = await callOpenAIStructured<ParsedDemand>({
-    operation: "demand_parse",
-    promptVersion: AI_PROMPT_VERSIONS.demandParser,
-    model: AI_MODELS.demandParser,
-    systemPrompt: SYSTEM_PROMPT,
-    userContent: rawText,
-    schemaName: "parsed_demand",
-    schema: RESPONSE_SCHEMA as unknown as Record<string, unknown>,
-    userId,
-  });
+  try {
+    const { data } = await callOpenAIStructured<ParsedDemand>({
+      operation: "demand_parse",
+      promptVersion: AI_PROMPT_VERSIONS.demandParser,
+      model: AI_MODELS.demandParser,
+      systemPrompt: SYSTEM_PROMPT,
+      userContent: rawText,
+      schemaName: "parsed_demand",
+      schema: RESPONSE_SCHEMA as unknown as Record<string, unknown>,
+      userId,
+    });
 
-  return parsedDemandSchema.parse(data);
+    return parsedDemandSchema.parse(data);
+  } catch (error) {
+    await logDemandParseFallback(
+      `OpenAI demand parse failed — deterministic fallback: ${
+        error instanceof Error ? error.message : "unknown"
+      }`,
+      userId
+    );
+    return parseDemandFallback(rawText);
+  }
 }

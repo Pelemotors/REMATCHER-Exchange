@@ -4,7 +4,12 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/common";
 import { formatRelative } from "@/lib/utils";
 import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
-import { COPY, BRAND } from "@/config/brand";
+import { BRAND } from "@/config/brand";
+import {
+  connectionsMonthlyUsedLabel,
+  connectionsRemainingSecondary,
+  connectionsUsedLabel,
+} from "@/lib/brand-copy";
 
 export default async function HomePage() {
   const session = await auth();
@@ -33,12 +38,18 @@ export default async function HomePage() {
     getDealerUsageSummary(dealerId),
   ]);
 
-  const connectionsUsed = usage.freeUsed + usage.monthlyUsed;
-  const connectionsTotal = usage.freeAllowance + usage.monthlyAllowance;
   const connectionsLabel =
     usage.planSlug === "onboarding"
-      ? COPY.connectionsRemaining(usage.freeUsed, usage.freeAllowance)
-      : `${connectionsUsed} מתוך ${connectionsTotal} חיבורים החודש`;
+      ? connectionsUsedLabel(usage.freeUsed, usage.freeAllowance)
+      : connectionsMonthlyUsedLabel(usage.monthlyUsed, usage.monthlyAllowance);
+  const connectionsSecondary =
+    usage.planSlug === "onboarding"
+      ? connectionsRemainingSecondary(usage.freeUsed, usage.freeAllowance, true)
+      : connectionsRemainingSecondary(
+          usage.monthlyUsed,
+          usage.monthlyAllowance,
+          false
+        );
 
   const recentNotifications = await prisma.notification.findMany({
     where: { userId: session!.user!.id },
@@ -124,7 +135,7 @@ export default async function HomePage() {
         </div>
         <div className="card col-span-2 text-center md:col-span-1">
           <p className="text-lg font-bold text-text-primary">{connectionsLabel}</p>
-          <p className="text-xs text-text-secondary">חיבורים</p>
+          <p className="text-xs text-text-secondary">{connectionsSecondary}</p>
         </div>
       </section>
 

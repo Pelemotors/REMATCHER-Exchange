@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { PageHeader, LoadingSpinner, EmptyState } from "@/components/ui/common";
+import { InventoryImportPanel } from "@/components/inventory/inventory-import";
+import { freshnessLabel, vehicleStatusLabel } from "@/lib/status-labels";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 interface Vehicle {
@@ -20,6 +21,7 @@ export default function InventoryPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [rawInput, setRawInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -62,11 +64,18 @@ export default function InventoryPage() {
         title="המלאי שלי"
         subtitle="רק המלאי שלך — לא גלישה ברשת"
         action={
-          <button className="btn-primary" onClick={() => setShowAdd(true)}>
-            + הוסף
-          </button>
+          <div className="flex gap-2">
+            <button className="btn-secondary" onClick={() => setShowImport(!showImport)}>
+              ייבוא קובץ
+            </button>
+            <button className="btn-primary" onClick={() => setShowAdd(true)}>
+              + הוסף
+            </button>
+          </div>
         }
       />
+
+      {showImport && <InventoryImportPanel onComplete={load} />}
 
       {showAdd && (
         <form onSubmit={handleAdd} className="card mb-6 space-y-4">
@@ -118,8 +127,8 @@ export default function InventoryPage() {
                 </span>
               </div>
               <div className="mt-2 flex gap-2">
-                <span className="badge-neutral">{v.freshnessState}</span>
-                <span className="badge">{v.status}</span>
+                <span className="badge-neutral">{freshnessLabel(v.freshnessState)}</span>
+                <span className="badge">{vehicleStatusLabel(v.status)}</span>
               </div>
             </div>
           ))}

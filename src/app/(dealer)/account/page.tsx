@@ -5,16 +5,32 @@ import { signOut, useSession } from "next-auth/react";
 import { PageHeader, UsageProgress } from "@/components/ui/common";
 import { PushSubscribeButton } from "@/components/pwa/push-subscribe";
 import { COPY } from "@/config/brand";
+import {
+  connectionsMonthlyUsedLabel,
+  connectionsRemainingSecondary,
+  connectionsUsedLabel,
+  verificationLabel,
+} from "@/lib/brand-copy";
 import type { DealerUsageSummary } from "@/config/commercial";
 
 export default function AccountPage() {
   const { data: session } = useSession();
   const [usage, setUsage] = useState<DealerUsageSummary | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<string>(
+    session?.user?.verificationStatus ?? "PENDING"
+  );
 
   useEffect(() => {
     fetch("/api/commercial/usage")
       .then((r) => r.json())
       .then(setUsage);
+    fetch("/api/account/context")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((ctx) => {
+        if (ctx?.verificationStatus) {
+          setVerificationStatus(ctx.verificationStatus);
+        }
+      });
   }, []);
 
   return (
@@ -39,7 +55,7 @@ export default function AccountPage() {
         <div>
           <p className="text-sm text-text-secondary">סטטוס אימות</p>
           <span className="badge-signal">
-            {session?.user?.verificationStatus ?? "PENDING"}
+            {verificationLabel(verificationStatus)}
           </span>
         </div>
       </div>
@@ -53,24 +69,32 @@ export default function AccountPage() {
             </p>
           )}
           {usage.planSlug === "onboarding" ? (
-            <>
-              <p className="text-body text-text-secondary">
-                5 החיבורים הראשונים עלינו
-              </p>
-              <UsageProgress
-                used={usage.freeUsed}
-                total={usage.freeAllowance}
-                label={COPY.connectionsRemaining(
-                  usage.freeUsed,
-                  usage.freeAllowance
-                )}
-              />
-            </>
+            <UsageProgress
+              used={usage.freeUsed}
+              total={usage.freeAllowance}
+              primaryLabel={connectionsUsedLabel(
+                usage.freeUsed,
+                usage.freeAllowance
+              )}
+              secondaryLabel={connectionsRemainingSecondary(
+                usage.freeUsed,
+                usage.freeAllowance,
+                true
+              )}
+            />
           ) : (
             <UsageProgress
               used={usage.monthlyUsed}
               total={usage.monthlyAllowance}
-              label={`${usage.monthlyUsed} מתוך ${usage.monthlyAllowance} חיבורים החודש`}
+              primaryLabel={connectionsMonthlyUsedLabel(
+                usage.monthlyUsed,
+                usage.monthlyAllowance
+              )}
+              secondaryLabel={connectionsRemainingSecondary(
+                usage.monthlyUsed,
+                usage.monthlyAllowance,
+                false
+              )}
             />
           )}
           <p className="text-label text-text-muted">מסלול: {usage.planName}</p>

@@ -49,3 +49,8 @@ next-env.d.ts
 
 # vitest
 .vitest
+
+.vercel
+.env*
+.qa-dealer-credentials.local
+.admin-bootstrap-credentials.local

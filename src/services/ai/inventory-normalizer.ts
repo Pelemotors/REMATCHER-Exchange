@@ -5,7 +5,7 @@ import {
   extractKnownNumber,
   extractKnownString,
 } from "@/lib/schemas/ai";
-import { callOpenAIStructured, isOpenAIConfigured } from "./client";
+import { callOpenAIStructured, isOpenAIConfigured, logAiOperation } from "./client";
 
 const SYSTEM_PROMPT = `You normalize messy Hebrew/English vehicle inventory text into structured data.
 Rules (CRITICAL):
@@ -37,7 +37,7 @@ const RESPONSE_SCHEMA = {
 
 export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
   const result: NormalizedVehicle = {
-    ambiguities: ["Fallback normalization — OpenAI unavailable"],
+    ambiguities: [],
     rawSummary: rawInput,
   };
 

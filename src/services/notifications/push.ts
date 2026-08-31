@@ -23,16 +23,20 @@ export function isPushConfigured(): boolean {
 export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; link?: string }
-) {
-  if (!configureWebPush()) return;
+): Promise<{ sent: number; failed: number }> {
+  if (!configureWebPush()) return { sent: 0, failed: 0 };
 
   const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+  if (subs.length === 0) return { sent: 0, failed: 0 };
 
   const pushPayload = JSON.stringify({
     title: payload.title,
     body: payload.body,
     link: payload.link,
   });
+
+  let sent = 0;
+  let failed = 0;
 
   await Promise.allSettled(
     subs.map(async (sub) => {
@@ -44,7 +48,9 @@ export async function sendPushToUser(
           },
           pushPayload
         );
+        sent += 1;
       } catch (err: unknown) {
+        failed += 1;
         const statusCode = (err as { statusCode?: number })?.statusCode;
         if (statusCode === 410 || statusCode === 404) {
           await prisma.pushSubscription.delete({ where: { id: sub.id } });
@@ -52,6 +58,19 @@ export async function sendPushToUser(
       }
     })
   );
+
+  if (subs.length > 0) {
+    await prisma.appEvent
+      .create({
+        data: {
+          eventType: sent > 0 ? "push_dispatched" : "push_failed",
+          metadataJson: { userId, sent, failed, subscriptionCount: subs.length },
+        },
+      })
+      .catch(() => {});
+  }
+
+  return { sent, failed };
 }
 
 export async function savePushSubscription(

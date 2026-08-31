@@ -73,21 +73,21 @@ export function PageHeader({
 export function UsageProgress({
   used,
   total,
-  label,
+  primaryLabel,
+  secondaryLabel,
 }: {
   used: number;
   total: number;
-  label: string;
+  primaryLabel: string;
+  secondaryLabel?: string;
 }) {
   const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
   return (
     <div className="space-y-2">
-      <div className="flex justify-between text-small">
-        <span className="text-text-secondary">{label}</span>
-        <span className="font-semibold text-ink">
-          {used} מתוך {total}
-        </span>
-      </div>
+      <p className="font-semibold text-ink">{primaryLabel}</p>
+      {secondaryLabel && (
+        <p className="text-small text-text-secondary">{secondaryLabel}</p>
+      )}
       <div className="progress-bar">
         <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
       </div>

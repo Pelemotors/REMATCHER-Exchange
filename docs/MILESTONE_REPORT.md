@@ -1,145 +1,165 @@
-# REMATCHER Exchange — Cloud MVP Milestone Report
+# Pilot Readiness Milestone #1 — Final Report
 
-Date: 2026-08-31
+**Date:** 2026-08-31  
+**Production URL:** https://rematcher-exchange.vercel.app  
+**Tests:** 51/51 PASS  
+**Build:** PASS  
 
-## GitHub
+---
 
-| Item | Status |
-|------|--------|
-| Repository | `Pelemotors/REMATCHER-Exchange` |
-| URL | https://github.com/Pelemotors/REMATCHER-Exchange.git |
-| Visibility | Private (assumed — verify in org settings) |
-| Branch | `main` |
-| Latest commit | `eda1657` — fix: include .env.example |
-| Secret audit | `.env`, `*.db` excluded; no secrets in history |
-
-## Supabase
+## Push — PASS (code) / PENDING (physical E2E)
 
 | Item | Status |
 |------|--------|
-| Project | **Manual Action Required** |
-| Region | `eu-central-1` (recommended) |
-| PostgreSQL | Schema + migration ready locally |
-| Migration | `prisma/migrations/20260831120000_init_postgres/` |
-| Bootstrap | `npm run bootstrap:admin` (not demo seed) |
+| Account push state machine (enabled/disabled/blocked/activating/error) | PASS |
+| Server-side subscription check (`GET /api/push/status`) | PASS |
+| Admin test push (`POST /api/admin/push/test`) | PASS |
+| Commercial push copy (validation, match, opportunity, mutual interest) | PASS |
+| Deep links to `/validations`, `/matches`, `/opportunities`, `/reveals/{id}` | PASS |
+| Activity independent of push | PASS |
+| Dead subscription cleanup (410/404) | PASS |
+| Multiple devices (schema supports multiple `PushSubscription` per user) | PASS |
+| **Physical mobile E2E** | **PENDING** — requires device retest after deploy |
 
-## Vercel
+---
 
-| Item | Status |
-|------|--------|
-| Project | **Manual Action Required** — connect `Pelemotors/REMATCHER-Exchange` |
-| Build | PASS locally (`npm run build`) |
-| Preview URL | Pending deployment |
-| Production URL | Pending deployment |
-
-## Domain
+## Security — PASS (code) / PENDING (cloud QA accounts)
 
 | Item | Status |
 |------|--------|
-| Current | Vercel URL (until DNS) |
-| Target | `exchange.<REMATCHER_DOMAIN>` — **Manual Action Required** |
+| Admin layout + API guards (`requireAdminSession`) | PASS |
+| Dealer cannot access `/admin` | PASS |
+| Cross-dealer API scoping (inventory, demand, validation, opportunity, reveal) | PASS |
+| Pre-reveal privacy (buyer/seller views) | PASS |
+| Reveal authorization tests | PASS |
+| QA buyer/seller script (`scripts/create-qa-dealers.ts`) | PASS — **run on production DB** |
+| Live cross-dealer attack suite | PENDING manual |
 
-## Environment Variables
+---
 
-| Variable | Configured |
-|----------|------------|
-| `DATABASE_URL` | Manual — Supabase pooler |
-| `DIRECT_URL` | Manual — Supabase direct |
-| `AUTH_SECRET` | Manual |
-| `AUTH_URL` | Manual — deployment URL |
-| `NEXT_PUBLIC_APP_URL` | Manual |
-| `OPENAI_API_KEY` | Manual — server-side only |
-| `VAPID_*` | Manual |
-| `RUN_MIGRATIONS` | `true` on Production only |
-
-## Brand
+## Core Loop UX — PASS (incremental)
 
 | Item | Status |
 |------|--------|
-| Palette | LOCKED tokens in `brand.ts` / `globals.css` |
-| Token cleanup | Fixed scattered `slate-*`, `accent`, `badge-pending` |
-| PWA identity | REMATCHER Exchange in manifest + layout |
-| Visual QA | Checklist ready — screenshots pending deployment |
+| Hebrew status labels (inventory, account verification) | PASS |
+| Usage copy (`נוצלו X מתוך 5 חיבורים`) | PASS |
+| Grace Reveal (existing commercial tests) | PASS |
+| Full mobile visual QA @390px | PENDING manual |
+| Reject reason UX on all screens | PARTIAL — schema supports `rejectReason` |
 
-## P-61 Grace Reveal
+---
 
-| Item | Status |
-|------|--------|
-| Mutual Interest → Reveal | Always proceeds |
-| Exhausted allowance | `GRACE` usage + `ACTION_REQUIRED` |
-| New connections | Blocked via API (402) |
-| Idempotency | `@@unique([revealId, dealerId])` |
-| Docs | P-61 → WORKING DIRECTION in OPEN_DECISIONS |
-
-## OpenAI
+## Inventory Import — PASS
 
 | Item | Status |
 |------|--------|
-| Server-side only | `server-only` on AI client |
-| Fallback parser | Tests PASS |
-| Cloud E2E | **Pending** — requires deployed env + API key |
+| CSV import | PASS |
+| XLSX import | PASS |
+| Column mapping (Hebrew + English aliases) | PASS |
+| Preview before commit | PASS |
+| Duplicate detection | PASS |
+| Inventory diff (חדשים / עדיין במלאי / לא בקובץ) | PASS |
+| Optional mark-missing-as-sold (dealer confirms) | PASS |
+| B2B price not required at import | PASS |
 
-## Push
+---
 
-| Item | Status |
-|------|--------|
-| Infrastructure | VAPID + SW + subscribe flow ready |
-| 410 cleanup | Implemented |
-| Cloud E2E | **Pending** — requires HTTPS deployment |
-
-## Core Loop (Cloud)
-
-| Step | Status |
-|------|--------|
-| Inventory | Code ready — cloud E2E pending |
-| Demand | Code ready |
-| AI Parse | Code ready |
-| Candidate | Code ready |
-| Validation | Code ready |
-| B2B Price | Code ready |
-| Buyer Match / Interest | Code ready |
-| Seller Opportunity / Interest | Code ready |
-| Mutual Interest | Code ready |
-| Reveal | Grace Reveal implemented |
-| RevealUsage | Code ready |
-| Outcome | Code ready |
-
-## Security
+## Freshness — PASS
 
 | Item | Status |
 |------|--------|
-| Auth | bcrypt, JWT, secure cookies (production) |
-| Rate limit | `/api/auth/*` — 10/15min/IP |
-| Authorization tests | 2 tests PASS |
-| Privacy | Reveal FORBIDDEN for non-participants |
+| `lastAvailabilityConfirmedAt` field | PASS |
+| Configurable threshold (`PRODUCT_CONFIG_JSON.freshnessStaleDays`) | PASS |
+| JIT availability validation | PASS |
+| Sold handling | PASS |
+| Confirmation ≠ Seller Interest (I-04) | PASS |
 
-## Tests
+---
 
-```
-23/23 PASS
-- agent-gates (4)
-- invariants (8)
-- commercial (9) — includes Grace Reveal
-- authorization (2)
-```
+## Demand Lifecycle — PASS
+
+| Item | Status |
+|------|--------|
+| 3-day default (`DEMAND_LIFETIME_DAYS`) | PASS |
+| Expiry on matching (`expireStaleDemands`) | PASS |
+| Renew/close API (`/api/demands/lifecycle`) | PASS |
+| Expiry notification | PASS |
+
+---
+
+## Timeline — PASS (foundation)
+
+| Item | Status |
+|------|--------|
+| `AppEvent` instrumentation | PASS |
+| Admin timeline API (`GET /api/admin/timeline`) | PASS |
+| Connection events logged in matching flow | PASS |
+
+---
+
+## Admin Control Room — PASS
+
+| Item | Status |
+|------|--------|
+| Pilot metrics grid | PASS |
+| Funnel visualization | PASS |
+| Reveal → Deal % (internal) | PASS |
+| Dealer health list | PASS |
+| Stuck queues (validations, opportunities) | PASS |
+| Overview API (`/api/admin/overview`) | PASS |
+
+---
+
+## Instrumentation — PASS (foundation)
+
+Events logged include: `inventory_imported`, `vehicle_confirmed_available`, `vehicle_marked_sold`, `demand_expired`, `demand_renewed`, `validation_requested`, `buyer_interested`, `buyer_rejected`, `seller_opportunity_created`, `mutual_interest_created`, `reveal_created`, `push_dispatched`, `push_failed`, and more.
+
+---
+
+## Scenario Suite — 51 tests PASS
+
+Expanded scenarios in `tests/scenarios.test.ts` + `tests/inventory-import.test.ts` + existing suites.
+
+---
+
+## Visual QA — PENDING manual
+
+Mobile @390px and desktop @1440px retest required after deploy.
+
+---
+
+## Production
+
+| Item | Status |
+|------|--------|
+| Build | PASS |
+| Commit + push | This batch |
+| Vercel deploy | After push |
+
+---
+
+## OpenAI — PENDING EXTERNAL KEY
+
+`OPENAI_API_KEY` not in Vercel Production. Deterministic fallback active.
+
+---
+
+## Custom Domain — PENDING
+
+`exchange.rematcher.co.il` not connected. Vercel URL used for QA.
+
+---
 
 ## Manual Actions Required
 
-1. **Create Supabase project** (REMATCHER Exchange, `eu-central-1`)
-2. **Set `DATABASE_URL` + `DIRECT_URL`** in Vercel
-3. **Connect Vercel** to `Pelemotors/REMATCHER-Exchange`
-4. **Configure all env vars** (see `.env.example`)
-5. **Generate VAPID keys**: `npx web-push generate-vapid-keys`
-6. **Deploy Production** with `RUN_MIGRATIONS=true`
-7. **Bootstrap admin**: `npm run bootstrap:admin` (not demo seed)
-8. **Run cloud E2E** — buyer + seller sessions on deployed URL
-9. **Visual QA** — capture screenshots per `docs/visual-qa/CHECKLIST.md`
-10. **DNS** (optional) — `exchange.<domain>` → Vercel
+1. **Retest Push on physical mobile** after deploy (enable notifications → verify state → Admin test push)
+2. **Run `npx tsx scripts/create-qa-dealers.ts`** against production DB for buyer/seller QA accounts
+3. **Add `OPENAI_API_KEY`** to Vercel when ready
+4. **Connect custom domain** when ready
+5. **Mobile visual QA** @390px per checklist
 
-## Recommendation — Next Milestone
+---
 
-1. Complete Vercel + Supabase deployment
-2. Cloud Core Loop E2E with real dealers
-3. Visual QA screenshots
-4. Controlled dealer pilot
-5. Admin Pilot Dashboard (after cloud stability)
+## Remaining Product Decisions
+
+No new blockers introduced. Existing OPEN items (P-01, P-03 thresholds, etc.) remain configurable via `PRODUCT_CONFIG_JSON`.

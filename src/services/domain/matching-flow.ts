@@ -17,10 +17,10 @@ import {
   toBuyerMatchView,
   toSellerOpportunityView,
 } from "@/lib/privacy-views";
+import { computeFreshnessState } from "@/services/inventory/freshness";
 import { COPY, BRAND } from "@/config/brand";
-import { createRevealFromMutualInterest } from "@/services/commercial/reveal-flow";
 
-export { toBuyerMatchView, toSellerOpportunityView };
+import { createRevealFromMutualInterest } from "@/services/commercial/reveal-flow";
 
 export async function runMatchingForDemand(demandId: string) {
   const demand = await prisma.demand.findUnique({
@@ -28,6 +28,8 @@ export async function runMatchingForDemand(demandId: string) {
     include: { constraints: true },
   });
   if (!demand || !demand.confirmedJson) return [];
+
+  await expireStaleDemands(demand.dealerId);
 
   const profile = demandProfileFromConstraints(
     demand.constraints,
@@ -38,23 +40,34 @@ export async function runMatchingForDemand(demandId: string) {
     where: {
       status: "ACTIVE",
       dealerId: { not: demand.dealerId },
-      b2bPrice: { not: null },
     },
   });
 
   const results = [];
 
   for (const vehicle of vehicles) {
+    const freshnessState = computeFreshnessState(vehicle);
+    if (freshnessState !== vehicle.freshnessState) {
+      await prisma.vehicle.update({
+        where: { id: vehicle.id },
+        data: { freshnessState },
+      });
+      vehicle.freshnessState = freshnessState;
+    }
+
     const evaluation = evaluateMatch(vehicle, profile);
     if (evaluation.overallBand === "HIDDEN") continue;
 
     const explanation = await explainMatch(evaluation);
-    const needsValidation =
+    const needsAvailability =
       vehicle.freshnessState === "STALE" ||
       vehicle.freshnessState === "VALIDATION_REQUIRED" ||
       vehicle.freshnessState === "UNKNOWN";
+    const needsB2bPrice = vehicle.b2bPrice == null;
 
-    const status = needsValidation ? "PENDING_VALIDATION" : "VALIDATED";
+    let status: "PENDING_VALIDATION" | "VALIDATED" = needsAvailability || needsB2bPrice
+      ? "PENDING_VALIDATION"
+      : "VALIDATED";
 
     const match = await prisma.candidateMatch.upsert({
       where: {
@@ -82,7 +95,7 @@ export async function runMatchingForDemand(demandId: string) {
       },
     });
 
-    if (needsValidation && status === "PENDING_VALIDATION") {
+    if (needsAvailability && status === "PENDING_VALIDATION") {
       const existing = await prisma.validationEvent.findFirst({
         where: {
           candidateMatchId: match.id,
@@ -102,11 +115,52 @@ export async function runMatchingForDemand(demandId: string) {
         });
         await notifyDealerUsers(vehicle.dealerId, {
           type: "VALIDATION_REQUEST",
-          title: "נדרש אימות",
-          body: COPY.validationAvailability,
+          title: COPY.validationContext,
+          body: "יש ביקוש רלוונטי לרכב שלך — הוא עדיין זמין?",
           link: `/validations`,
           entityType: "validation",
           entityId: match.id,
+        });
+        await logAppEvent({
+          eventType: "validation_requested",
+          entityType: "ValidationEvent",
+          entityId: match.id,
+          dealerId: vehicle.dealerId,
+          metadata: { type: "AVAILABILITY" },
+        });
+      }
+    } else if (needsB2bPrice && status === "PENDING_VALIDATION") {
+      const existing = await prisma.validationEvent.findFirst({
+        where: {
+          candidateMatchId: match.id,
+          type: "B2B_PRICE",
+          status: "PENDING",
+        },
+      });
+      if (!existing) {
+        await prisma.validationEvent.create({
+          data: {
+            type: "B2B_PRICE",
+            vehicleId: vehicle.id,
+            dealerId: vehicle.dealerId,
+            candidateMatchId: match.id,
+            status: "PENDING",
+          },
+        });
+        await notifyDealerUsers(vehicle.dealerId, {
+          type: "VALIDATION_REQUEST",
+          title: COPY.validationContext,
+          body: "נדרש מחיר B2B להמשך התאמה",
+          link: `/validations`,
+          entityType: "validation",
+          entityId: match.id,
+        });
+        await logAppEvent({
+          eventType: "validation_requested",
+          entityType: "ValidationEvent",
+          entityId: match.id,
+          dealerId: vehicle.dealerId,
+          metadata: { type: "B2B_PRICE" },
         });
       }
     }
@@ -116,7 +170,7 @@ export async function runMatchingForDemand(demandId: string) {
         type: "BUYER_MATCH",
         title:
           evaluation.overallBand === "STRONG"
-            ? COPY.matchStrong
+            ? "נמצאה התאמה גבוהה לחיפוש שלך"
             : COPY.matchPossible,
         body: explanation.summary,
         link: `/matches`,
@@ -164,6 +218,13 @@ export async function confirmAvailabilityValidation(
       where: { id: validation.vehicleId },
       data: { status: "SOLD" },
     });
+    await logAppEvent({
+      eventType: "vehicle_marked_sold",
+      entityType: "Vehicle",
+      entityId: validation.vehicleId,
+      dealerId,
+      metadata: { source: "availability_validation" },
+    });
     if (validation.candidateMatchId) {
       await prisma.candidateMatch.update({
         where: { id: validation.candidateMatchId },
@@ -179,6 +240,13 @@ export async function confirmAvailabilityValidation(
       lastAvailabilityConfirmedAt: new Date(),
       freshnessState: "FRESH",
     },
+  });
+
+  await logAppEvent({
+    eventType: "vehicle_confirmed_available",
+    entityType: "Vehicle",
+    entityId: validation.vehicleId,
+    dealerId,
   });
 
   if (validation.candidateMatchId) {
@@ -207,9 +275,9 @@ export async function confirmAvailabilityValidation(
       if (demand) {
         await notifyDealerUsers(demand.dealerId, {
           type: "BUYER_MATCH",
-          title: "נמצאה התאמה",
+          title: "נמצאה התאמה גבוהה לחיפוש שלך",
           body: "התאמה מאומתת זמינה לצפייה",
-          link: `/matches/${match.id}`,
+          link: `/matches`,
           entityType: "match",
           entityId: match.id,
         });
@@ -393,3 +461,29 @@ export async function recordSellerInterest(params: {
 export function computeDemandExpiry() {
   return addDays(new Date(), 3);
 }
+
+export async function expireStaleDemands(dealerId?: string) {
+  const now = new Date();
+  const demands = await prisma.demand.findMany({
+    where: {
+      status: "ACTIVE",
+      expiresAt: { lte: now },
+      ...(dealerId ? { dealerId } : {}),
+    },
+  });
+  for (const d of demands) {
+    await prisma.demand.update({
+      where: { id: d.id },
+      data: { status: "EXPIRED" },
+    });
+    await logAppEvent({
+      eventType: "demand_expired",
+      entityType: "Demand",
+      entityId: d.id,
+      dealerId: d.dealerId,
+    });
+  }
+  return demands.length;
+}
+
+export { toBuyerMatchView, toSellerOpportunityView };
