@@ -1,0 +1,50 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env
+.env
+.env.*
+.env*.local
+
+# prisma / sqlite
+*.db
+*.db-journal
+/prisma/dev.db
+/prisma/dev.db-journal
+
+# vercel
+.vercel/
+
+# build output
+dist/
+
+# logs
+*.log
+
+# typescript
+next-env.d.ts
+
+# vitest
+.vitest

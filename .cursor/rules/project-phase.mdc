@@ -1,0 +1,47 @@
+---
+description: Controlled Core MVP Build — PWA; מה מותר/אסור לבנות
+alwaysApply: true
+---
+
+# Project Phase — REMATCHER Exchange Controlled Core MVP Build
+
+**Product:** REMATCHER Exchange (brand: REMATCHER)  
+**Development Status: CORE MVP IMPLEMENTATION AUTHORIZED — CONTROLLED BUILD**
+
+Product Discovery ממשיך במקביל. OPEN decisions — אל תמציא.
+
+## מותר לבנות
+
+Auth, Dealers, DB, Backend, Frontend, **Mobile-first PWA**, **Web Push**, Inventory, Demand, Matching v1, Validation, B2B Price, Match/Opportunity flows, Reveal + usage, Outcome, Commercial foundation, in-app notifications, Admin בסיסי.
+
+Brand: REMATCHER Exchange — see `docs/BRAND_SYSTEM.md`, `src/config/brand.ts`.
+
+Frontend + Backend + UX **יחד** — לא "backend קודם".
+
+## Real Core MVP with Changeable Rules
+
+- DB/Backend/Users/Matching/Push **אמיתיים**
+- Product Decisions שאינן LOCKED — **configurable**, לא hard-coded
+- OPEN → escalate per [decision-status.mdc](./decision-status.mdc); המשך parallel
+
+## Platform — LOCKED (PRD §76)
+
+Mobile-first **PWA**: mobile UX, desktop, install to home screen, Web Push, deep links.  
+Native iOS/Android — **לא** MVP.
+
+## Notifications — LOCKED (PRD §77)
+
+Web Push + in-app activity. Push ≠ source of truth. Deep link to screen/object.
+
+## Integration = Accelerator (LOCKED)
+
+❌ WhatsApp/Meta as Core requirement  
+✅ Web Push as Core; WhatsApp/SMS/Email = future Accelerators
+
+## Non-MVP (REJECTED)
+
+Public marketplace, Browse, ratings, Auction, Payments, Escrow, Native apps, Full CRM — PRD §67–68.
+
+## Invariants
+
+I-01–I-20 בתוקף מלא. ראה [product-invariants.mdc](./product-invariants.mdc).

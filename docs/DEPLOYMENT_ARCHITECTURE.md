@@ -1,0 +1,85 @@
+# REMATCHER Exchange — Deployment Architecture
+
+## Overview
+
+```
+Browser / Installed PWA
+          ↓
+     Vercel / Next.js 15
+          ↓
+   Application Services
+      ↙      ↓       ↘
+Supabase   OpenAI   Web Push (VAPID)
+Postgres
+```
+
+**Source control:** GitHub `Pelemotors/REMATCHER-Exchange` (private)  
+**Hosting:** Vercel project `rematcher-exchange` (separate from REMATCHER main product)  
+**Database:** Supabase PostgreSQL — region `eu-central-1` (Frankfurt)
+
+## Environment Variables
+
+See [`.env.example`](../.env.example). Never commit secrets.
+
+| Variable | Scope | Purpose |
+|----------|-------|---------|
+| `DATABASE_URL` | Server | Supabase pooler connection (runtime) |
+| `DIRECT_URL` | Server | Supabase direct connection (migrations) |
+| `AUTH_SECRET` | Server | NextAuth JWT signing |
+| `AUTH_URL` | Server | Production/preview canonical URL |
+| `NEXT_PUBLIC_APP_URL` | Public | Absolute URLs / deep links |
+| `OPENAI_API_KEY` | Server only | AI parsing — never `NEXT_PUBLIC_` |
+| `VAPID_*` | Server (+ public key via API) | Web Push |
+| `SEED_DEMO` | Local only | Enable `npm run db:seed` |
+| `RUN_MIGRATIONS` | Production | Run `prisma migrate deploy` on build |
+
+## Database Migrations
+
+**Development:** `npx prisma migrate dev` against local/direct Postgres.
+
+**Production:** `prisma migrate deploy` runs automatically when `VERCEL_ENV=production` or `RUN_MIGRATIONS=true` (see `scripts/migrate-if-production.js`).
+
+**Do not** use `prisma db push` in production.
+
+### Preview Safety
+
+Preview deployments share the production DB in phase 1. Migrations **do not** run on preview builds. Seeds **never** run on Vercel.
+
+## Local Setup
+
+```bash
+npm install
+cp .env.example .env
+# Set DATABASE_URL + DIRECT_URL to Supabase (or local Postgres)
+npx prisma migrate dev
+SEED_DEMO=true npm run db:seed
+npm run dev
+```
+
+## Production Bootstrap
+
+1. Deploy to Vercel with env vars configured
+2. Migrations apply on first production build
+3. Create admin (one-time):
+   ```bash
+   ADMIN_BOOTSTRAP_EMAIL=... ADMIN_BOOTSTRAP_PASSWORD=... npm run bootstrap:admin
+   ```
+4. **Do not** run demo seed in production
+
+## Supabase Role
+
+Supabase = **managed PostgreSQL** only. Auth remains NextAuth (Credentials + JWT). No Supabase Auth migration in this phase.
+
+## Backup
+
+Use Supabase project backup settings (Point-in-Time Recovery per plan). No custom backup infrastructure in MVP.
+
+## Domain
+
+Target: `exchange.<REMATCHER_DOMAIN>` → Vercel CNAME.
+
+Until DNS is ready: use the Vercel deployment URL for `AUTH_URL` and `NEXT_PUBLIC_APP_URL`.
+
+## Integration Principle
+
+Vercel / Supabase / OpenAI are **infrastructure** — replaceable. WhatsApp is **not** a Core dependency.

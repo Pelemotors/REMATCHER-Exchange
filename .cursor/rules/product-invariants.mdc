@@ -1,0 +1,37 @@
+---
+description: Invariants חוקתיים I-01–I-20; Validation≠Interest; Match≠Opportunity
+alwaysApply: true
+---
+
+# Product Invariants
+
+20 כללים חוקתיים — **בתוקף מלא** ב-Controlled Core MVP Build.  
+פירוט: [docs/INVARIANTS.md](../../docs/INVARIANTS.md) | PRD §69.
+
+## קריטיים ל-Core Loop
+
+- **I-04** Validation ≠ Interest — אימות זמינות/מחיר ≠ Seller Interested
+- **I-05** Match ≠ Opportunity — Opportunity רק אחרי Buyer Interest
+- **I-06** Hard Constraint לא נשבר בגלל Score גבוה
+- **I-09** Unknown ≠ Match ≠ Mismatch — AI לא משלים נתונים (I-07, I-08)
+- **I-12** No Response ≠ Rejected
+- **I-18** Interested = non-binding — לא התחייבות לעסקה
+
+## Privacy & Data
+
+- **I-01** No Browse All Inventory
+- **I-02, I-03** Identity hidden until Mutual Interest
+- **I-10** Private flexibility — never reveal or hint
+- **I-20** Private data for matching/ranking only — no manipulation
+
+## דוגמה — I-04
+
+Seller לוחץ "כן, הרכב זמין" בתגובה ל-Validation:
+❌ `seller_interested = true`
+✅ `availability_validated = true` (Validation Event)
+
+## דוגמה — I-05
+
+Candidate Match between A's vehicle and B's demand:
+❌ Push Opportunity to Seller A
+✅ Wait for Buyer B Interested → then create Opportunity

@@ -1,0 +1,36 @@
+---
+description: OPEN/LOCKED ב-Controlled Build — escalate; אל תבחר default
+alwaysApply: true
+---
+
+# Decision Status — Controlled Build
+
+מקור: [PRD_CORE.md](../../PRD_CORE.md) §70, §78.
+
+| סטטוס | התנהגות Agent |
+|-------|---------------|
+| `LOCKED` | יישם לפי ההגדרה |
+| `WORKING DIRECTION` | בנה עם abstraction/config — **אל ת hard-code** כ-LOCKED |
+| `OPEN` | **אל תמציא** — escalate (ראה למטה) |
+| `REJECTED` | אל תimplement |
+| `EXPLORED` | אל תציג כתובנה חדשה |
+
+## כש-Implementation תלוי ב-OPEN
+
+1. ציין `P-XX` + מה חוסם/משפיע
+2. **3 אפשרויות** — יתרון / חסרון / UX·Product·Complexity
+3. **Recommendation** אחת
+4. **המתן** ל-Product Decision לנקודה זו בלבד
+5. **המשך parallel** בעבודה לא חסומה
+
+> Flag the ambiguity. Do not silently decide it in code.
+
+## ❌ אסור גם ב-Build
+
+- Default נוח (Freshness=7d, weights, exact card fields)
+- WORKING DIRECTION → LOCKED ללא החלטה
+- DB schema convenience → product policy
+
+## Tracker
+
+[P-01 → P-16](../../docs/OPEN_DECISIONS.md)

@@ -1,0 +1,181 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* REMATCHER Brand System v1 — LOCKED */
+  --rm-midnight: #0B1220;
+  --rm-ink: #111827;
+  --rm-signal: #18C37E;
+  --rm-signal-hover: #12A96D;
+  --rm-signal-soft: #E8F8F1;
+  --rm-canvas: #F6F8FA;
+  --rm-surface: #FFFFFF;
+  --rm-surface-secondary: #F1F4F7;
+  --rm-border: #E2E7EC;
+  --rm-border-strong: #CDD5DE;
+  --rm-text-primary: #111827;
+  --rm-text-secondary: #5F6B7A;
+  --rm-text-muted: #8B96A5;
+  --rm-success: #16865C;
+  --rm-success-soft: #E8F5EF;
+  --rm-warning: #C47A12;
+  --rm-warning-soft: #FFF5E5;
+  --rm-error: #C53B3B;
+  --rm-error-soft: #FDECEC;
+  --rm-info: #3478C9;
+  --rm-info-soft: #EAF2FC;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  @apply bg-canvas text-text-primary antialiased;
+  font-family: var(--font-heebo), 'Heebo', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 23px;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-lg px-4 md:max-w-content md:px-6;
+  }
+
+  .card {
+    @apply rounded-lg border border-border bg-surface p-4 shadow-card;
+  }
+
+  .card-signal {
+    @apply card border-s-[3px] border-s-signal;
+  }
+
+  .btn {
+    @apply inline-flex min-h-touch items-center justify-center rounded-md px-4 py-2.5 text-body font-semibold transition duration-normal active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2;
+  }
+
+  @media (max-width: 767px) {
+    .btn {
+      @apply min-h-touch-mobile;
+    }
+  }
+
+  .btn-primary {
+    @apply btn bg-signal text-white hover:bg-signal-hover;
+  }
+
+  .btn-secondary {
+    @apply btn border border-border-strong bg-surface text-text-primary hover:bg-surface-secondary;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-text-secondary hover:bg-surface-secondary hover:text-text-primary;
+  }
+
+  .btn-danger {
+    @apply btn bg-error text-white hover:opacity-90;
+  }
+
+  .input {
+    @apply w-full rounded-sm border border-border bg-surface px-4 py-3 text-body outline-none focus:border-signal focus:ring-2 focus:ring-signal/20;
+  }
+
+  .label {
+    @apply mb-1.5 block text-small font-semibold text-text-primary;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-sm px-2 py-0.5 text-label font-semibold;
+  }
+
+  .badge-signal {
+    @apply badge bg-signal-soft text-success;
+  }
+
+  .badge-neutral {
+    @apply badge bg-surface-secondary text-text-secondary;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-soft text-warning;
+  }
+
+  .badge-validation {
+    @apply badge bg-warning-soft text-warning;
+  }
+
+  .badge-connection {
+    @apply badge bg-signal-soft text-success font-semibold;
+  }
+
+  .badge-info {
+    @apply badge bg-info-soft text-info;
+  }
+
+  .text-price {
+    @apply text-h3 font-bold text-ink tabular-nums;
+  }
+
+  .vehicle-meta {
+    @apply text-small text-text-secondary;
+  }
+
+  .reveal-hero {
+    @apply shadow-elevated;
+  }
+
+  .connection-motif {
+    @apply flex items-center justify-center gap-0 py-2;
+  }
+
+  .connection-node {
+    @apply h-2.5 w-2.5 rounded-full bg-signal;
+  }
+
+  .connection-line {
+    @apply h-0.5 w-12 bg-signal;
+  }
+
+  .sidebar-dark {
+    @apply bg-midnight text-white;
+  }
+
+  .nav-active {
+    @apply bg-signal/15 text-signal;
+  }
+
+  .nav-inactive {
+    @apply text-text-muted hover:bg-white/5 hover:text-white;
+  }
+
+  .sidebar-nav-active {
+    @apply bg-signal/20 text-signal;
+  }
+
+  .sidebar-nav-inactive {
+    @apply text-white/70 hover:bg-white/5 hover:text-white;
+  }
+
+  .progress-bar {
+    @apply h-1.5 overflow-hidden rounded-sm bg-surface-secondary;
+  }
+
+  .progress-bar-fill {
+    @apply h-full rounded-sm bg-signal transition-all duration-normal;
+  }
+}

@@ -1,0 +1,542 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Auth & Users ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  role          UserRole  @default(DEALER_USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships   DealerMembership[]
+  sessions      Session[]
+  pushSubs      PushSubscription[]
+  notifications Notification[]
+  buyerInterests BuyerInterest[]
+  sellerInterests SellerInterest[]
+  aiLogs        AiOperationLog[]
+}
+
+enum UserRole {
+  DEALER_USER
+  ADMIN
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Dealer {
+  id              String           @id @default(cuid())
+  businessName    String
+  contactName     String
+  phone           String
+  email           String?
+  city            String?
+  region          String?
+  verificationStatus VerificationStatus @default(PENDING)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  memberships     DealerMembership[]
+  vehicles        Vehicle[]
+  demands         Demand[]
+  buyerInterests  BuyerInterest[]
+  sellerInterests SellerInterest[]
+  validationEvents ValidationEvent[]
+  revealsAsBuyer  Reveal[]         @relation("BuyerDealer")
+  revealsAsSeller Reveal[]         @relation("SellerDealer")
+  commercial      DealerCommercial?
+  revealUsages    RevealUsage[]
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  DISABLED
+}
+
+model DealerMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  dealerId  String
+  role      MembershipRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dealerId])
+}
+
+enum MembershipRole {
+  OWNER
+  MEMBER
+}
+
+// ─── Inventory ──────────────────────────────────────────────────
+
+model Vehicle {
+  id              String        @id @default(cuid())
+  dealerId        String
+  status          VehicleStatus @default(ACTIVE)
+
+  // Raw & normalized data
+  rawInput        String?
+  make            String?
+  model           String?
+  trim            String?
+  year            Int?
+  mileage         Int?
+  color           String?
+  ownershipHand   Int?
+  ownershipType   String?
+  region          String?
+  retailPrice     Int?
+  b2bPrice        Int?
+  b2bPriceConfirmedAt DateTime?
+  conditionNotes  String?
+
+  // Provenance & unknown tracking
+  fieldProvenance Json?
+
+  // Freshness (P-03 thresholds configurable)
+  lastInventoryUpdate DateTime @default(now())
+  lastAvailabilityConfirmedAt DateTime?
+  freshnessState  FreshnessState @default(UNKNOWN)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?
+
+  dealer          Dealer        @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  candidateMatches CandidateMatch[]
+  validationEvents ValidationEvent[]
+  sellerOpportunities SellerOpportunity[]
+}
+
+enum VehicleStatus {
+  ACTIVE
+  SOLD
+  ARCHIVED
+}
+
+enum FreshnessState {
+  FRESH
+  STALE
+  UNKNOWN
+  VALIDATION_REQUIRED
+}
+
+model InventoryImport {
+  id          String   @id @default(cuid())
+  dealerId    String
+  sourceType  String
+  rawContent  String?
+  fileName    String?
+  status      ImportStatus @default(PENDING)
+  previewJson Json?
+  resultJson  Json?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+}
+
+enum ImportStatus {
+  PENDING
+  PREVIEW
+  CONFIRMED
+  FAILED
+  COMPLETED
+}
+
+// ─── Demand ─────────────────────────────────────────────────────
+
+model Demand {
+  id              String       @id @default(cuid())
+  dealerId        String
+  status          DemandStatus @default(DRAFT)
+
+  rawText         String
+  parsedJson      Json?
+  confirmedJson   Json?
+  parsedAt        DateTime?
+  confirmedAt     DateTime?
+
+  expiresAt       DateTime?
+  renewedAt       DateTime?
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  dealer          Dealer       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  constraints     DemandConstraint[]
+  candidateMatches CandidateMatch[]
+  buyerInterests  BuyerInterest[]
+}
+
+enum DemandStatus {
+  DRAFT
+  PENDING_CONFIRMATION
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model DemandConstraint {
+  id          String         @id @default(cuid())
+  demandId    String
+  field       String
+  constraintType ConstraintType
+  value       Json
+  source      String         @default("user_confirmed")
+  createdAt   DateTime       @default(now())
+
+  demand      Demand         @relation(fields: [demandId], references: [id], onDelete: Cascade)
+}
+
+enum ConstraintType {
+  HARD
+  SOFT
+  EXCLUSION
+  UNKNOWN
+}
+
+// ─── Matching ───────────────────────────────────────────────────
+
+model CandidateMatch {
+  id              String            @id @default(cuid())
+  demandId        String
+  vehicleId       String
+  status          CandidateMatchStatus @default(CANDIDATE)
+
+  score           Float?
+  scoreBand       ScoreBand?
+  hardPassed      Boolean           @default(false)
+  evaluationJson  Json?
+  explanationJson Json?
+  explanationText String?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  demand          Demand            @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  validationEvents ValidationEvent[]
+  buyerInterests  BuyerInterest[]
+  sellerOpportunities SellerOpportunity[]
+
+  @@unique([demandId, vehicleId])
+}
+
+enum CandidateMatchStatus {
+  CANDIDATE
+  PENDING_VALIDATION
+  VALIDATED
+  REJECTED
+  HIDDEN
+}
+
+enum ScoreBand {
+  STRONG
+  ALTERNATIVE
+  HIDDEN
+}
+
+// ─── Validation (≠ Interest) ────────────────────────────────────
+
+model ValidationEvent {
+  id              String          @id @default(cuid())
+  type            ValidationType
+  vehicleId       String
+  dealerId        String
+  candidateMatchId String?
+  status          ValidationStatus @default(PENDING)
+  response        String?
+  metadataJson    Json?
+  requestedAt     DateTime        @default(now())
+  respondedAt     DateTime?
+
+  vehicle         Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  dealer          Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  candidateMatch  CandidateMatch? @relation(fields: [candidateMatchId], references: [id], onDelete: SetNull)
+}
+
+enum ValidationType {
+  AVAILABILITY
+  B2B_PRICE
+}
+
+enum ValidationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  EXPIRED
+}
+
+// ─── Interest & Opportunity ─────────────────────────────────────
+
+model BuyerInterest {
+  id              String          @id @default(cuid())
+  demandId        String
+  dealerId        String
+  candidateMatchId String
+  userId          String
+  status          InterestStatus  @default(INTERESTED)
+  rejectReason    String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  demand          Demand          @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  dealer          Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  candidateMatch  CandidateMatch  @relation(fields: [candidateMatchId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sellerOpportunity SellerOpportunity?
+
+  @@unique([candidateMatchId, dealerId])
+}
+
+enum InterestStatus {
+  INTERESTED
+  REJECTED
+  NO_RESPONSE
+}
+
+model SellerOpportunity {
+  id              String          @id @default(cuid())
+  candidateMatchId String         @unique
+  buyerInterestId String          @unique
+  vehicleId       String
+  status          OpportunityStatus @default(OPEN)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  candidateMatch  CandidateMatch  @relation(fields: [candidateMatchId], references: [id], onDelete: Cascade)
+  buyerInterest   BuyerInterest   @relation(fields: [buyerInterestId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  sellerInterest  SellerInterest?
+}
+
+enum OpportunityStatus {
+  OPEN
+  INTERESTED
+  REJECTED
+  NO_RESPONSE
+  CLOSED
+}
+
+model SellerInterest {
+  id              String          @id @default(cuid())
+  opportunityId   String          @unique
+  dealerId        String
+  userId          String
+  status          InterestStatus  @default(INTERESTED)
+  rejectReason    String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  opportunity     SellerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  dealer          Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mutualInterest  MutualInterest?
+}
+
+model MutualInterest {
+  id              String          @id @default(cuid())
+  sellerInterestId String         @unique
+  createdAt       DateTime        @default(now())
+
+  sellerInterest  SellerInterest  @relation(fields: [sellerInterestId], references: [id], onDelete: Cascade)
+  reveal          Reveal?
+}
+
+model Reveal {
+  id              String          @id @default(cuid())
+  mutualInterestId String         @unique
+  buyerDealerId   String
+  sellerDealerId  String
+  candidateMatchId String?
+  revealedAt      DateTime        @default(now())
+  buyerContactJson Json
+  sellerContactJson Json
+  matchSummaryJson Json?
+
+  mutualInterest  MutualInterest  @relation(fields: [mutualInterestId], references: [id], onDelete: Cascade)
+  buyerDealer     Dealer          @relation("BuyerDealer", fields: [buyerDealerId], references: [id])
+  sellerDealer    Dealer          @relation("SellerDealer", fields: [sellerDealerId], references: [id])
+  outcome         Outcome?
+  usages          RevealUsage[]
+}
+
+model RevealUsage {
+  id        String          @id @default(cuid())
+  revealId  String
+  dealerId  String
+  source    RevealUsageSource
+  createdAt DateTime        @default(now())
+
+  reveal    Reveal          @relation(fields: [revealId], references: [id], onDelete: Cascade)
+  dealer    Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@unique([revealId, dealerId])
+  @@index([dealerId, createdAt])
+}
+
+enum RevealUsageSource {
+  FREE_LIFETIME
+  MONTHLY_PLAN
+  GRACE
+}
+
+model DealerCommercial {
+  id                    String    @id @default(cuid())
+  dealerId              String    @unique
+  planSlug              String    @default("onboarding")
+  planStatus            PlanStatus @default(ACTIVE)
+  freeRevealAllowance   Int       @default(5)
+  freeRevealUsed        Int       @default(0)
+  monthlyRevealAllowance Int      @default(0)
+  monthlyRevealUsed     Int       @default(0)
+  billingPeriodStart    DateTime  @default(now())
+  billingPeriodEnd      DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  dealer                Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+}
+
+enum PlanStatus {
+  ACTIVE
+  EXHAUSTED
+  ACTION_REQUIRED
+  SUSPENDED
+}
+
+model Outcome {
+  id          String        @id @default(cuid())
+  revealId    String        @unique
+  status      OutcomeStatus
+  notes       String?
+  reportedAt  DateTime      @default(now())
+  reportedByDealerId String?
+
+  // Learning linkage
+  candidateMatchId String?
+  demandId         String?
+  vehicleId        String?
+  buyerDealerId    String?
+  sellerDealerId   String?
+  matchScore       Float?
+  scoreBand        String?
+  priceGapPercent  Float?
+  freshnessState   String?
+  learningJson     Json?
+
+  reveal      Reveal        @relation(fields: [revealId], references: [id], onDelete: Cascade)
+}
+
+enum OutcomeStatus {
+  DEAL_CLOSED
+  PRICE_DIDNT_WORK
+  VEHICLE_DIDNT_FIT
+  DID_NOT_PROGRESS
+  STILL_IN_PROGRESS
+}
+
+// ─── Notifications ──────────────────────────────────────────────
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  type        NotificationType
+  title       String
+  body        String
+  link        String?
+  entityType  String?
+  entityId    String?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+enum NotificationType {
+  VALIDATION_REQUEST
+  BUYER_MATCH
+  SELLER_OPPORTUNITY
+  MUTUAL_INTEREST
+  REVEAL
+  DEMAND_EXPIRY
+  FRESHNESS
+  SYSTEM
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Product Config & AI Logs ───────────────────────────────────
+
+model ProductConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AiOperationLog {
+  id            String   @id @default(cuid())
+  operation     String
+  model         String?
+  promptVersion String?
+  success       Boolean
+  latencyMs     Int?
+  usageJson     Json?
+  errorMessage  String?
+  entityType    String?
+  entityId      String?
+  userId        String?
+  createdAt     DateTime @default(now())
+
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([operation, createdAt])
+}
+
+model AppEvent {
+  id          String   @id @default(cuid())
+  eventType   String
+  entityType  String?
+  entityId    String?
+  dealerId    String?
+  metadataJson Json?
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, createdAt])
+}

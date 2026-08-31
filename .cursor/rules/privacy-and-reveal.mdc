@@ -1,0 +1,44 @@
+---
+description: Privacy model — Dark marketplace; Reveal; inference risk; no images pre-Reveal
+alwaysApply: true
+---
+
+# Privacy & Reveal Model
+
+Private Exchange / Dark Marketplace. PRD §8–10, §38–40.
+
+## LOCKED
+
+- **No Browse** — Dealer לא רואה מלאי/ביקוש של אחרים (I-01)
+- **Identity hidden** until Mutual Interest (I-02)
+- **One-sided Interest** never reveals identity (I-03)
+- **No original images** before Reveal in MVP (I-11)
+
+## לפני Reveal — אסור להציג
+
+Dealer name, phone, VIN, exact address, seller floor, hidden buyer max, MOVE, liquidity, private flexibility.
+
+## Inference Risk (I-19)
+
+שאל: **מה המשתמש יכול להסיק משילוב המידע?**
+
+❌ Rare vehicle + exact city + unique mileage → may identify dealer
+✅ Review every UI field combination for inference attacks
+
+## Private Data Use (I-10, I-20)
+
+מותר: Engine משתמש במידע פרטי ל-Matching/Ranking.
+אסור: לחשוף, לרמוז, או לנצל ל-manipulation.
+
+❌ "המוכר לחוץ על הרכב"
+✅ (internal only) prioritize MOVE-tagged inventory
+
+## Buyer Match Card ≠ Listing
+
+מטרה: להחליט אם **להביע Interest** — לא "לקנות את הרכב" (§36).
+
+## Seller Opportunity
+
+Seller רואה Demand + relationship — **לא** Buyer identity (§42).
+✅ "סוחר מאומת ברשת הביע עניין"
+❌ "Dealer X מחפש את הרכב"
