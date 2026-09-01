@@ -6,7 +6,17 @@ import {
 } from "@/services/ai/client";
 import { SYNTHESIZER_PROMPT } from "@/services/assistant/agent-constitution";
 import type { AssistantCard } from "@/services/assistant/conversation-state";
-import type { ConversationListItem } from "@/services/assistant/conversation-state";
+import type { ConversationListItem, SessionContext } from "@/services/assistant/conversation-state";
+import {
+  applyCommercialJudgment,
+  buildBrokerOnlyMessage,
+  buildBrokerOnlySuggestions,
+  buildIdleSuggestions,
+  isBrokerNoInventoryDisclosure,
+  isBrokerOnlyMode,
+  isZeroCategoryNarration,
+  type CommercialJudgmentInput,
+} from "@/services/assistant/commercial-judgment";
 
 export interface SynthesizedResponse {
   message: string;
@@ -18,6 +28,7 @@ export interface SynthesizedResponse {
 export interface BuildResponseOptions {
   goal?: string;
   toolErrors?: Record<string, string>;
+  sessionContext?: SessionContext;
 }
 
 type ActionItem = {
@@ -45,11 +56,10 @@ const DETERMINISTIC_GOALS = new Set([
   "list_pending_validations",
   "inventory_attention",
   "commercial_status",
-  "general_inquiry",
 ]);
 
 function isMetricDump(message: string): boolean {
-  return METRIC_DUMP_PATTERNS.some((p) => p.test(message));
+  return METRIC_DUMP_PATTERNS.some((p) => p.test(message)) || isZeroCategoryNarration(message);
 }
 
 function displayShortName(title: string): string {
@@ -86,7 +96,10 @@ function allToolsFailed(
   return keys.every((k) => toolResults[k] == null);
 }
 
-function buildActionItems(toolResults: Record<string, unknown>): ActionItem[] {
+function buildActionItems(
+  toolResults: Record<string, unknown>,
+  options: { skipInventory?: boolean } = {}
+): ActionItem[] {
   const items: ActionItem[] = [];
 
   const opportunities = toolResults.getMyOpportunities as
@@ -162,7 +175,7 @@ function buildActionItems(toolResults: Record<string, unknown>): ActionItem[] {
   const inventory = toolResults.getMyInventoryRequiringAttention as
     | Array<{ id: string; title: string; freshnessState: string }>
     | undefined;
-  if (inventory?.length) {
+  if (!options.skipInventory && inventory?.length) {
     for (const v of inventory) {
       const name = displayShortName(v.title);
       items.push({
@@ -185,10 +198,30 @@ function emptyStateMessage(activeDemands: number, intent: string): string {
   return "כרגע אין משהו דחוף שמחכה לך.";
 }
 
+function judgmentInput(
+  userMessage: string,
+  options: BuildResponseOptions,
+  intent: string,
+  activeDemands: number,
+  hasActionableItems: boolean,
+  commercialActionRequired?: boolean
+): CommercialJudgmentInput {
+  return {
+    userMessage,
+    goal: options.goal,
+    activeDemands,
+    hasActionableItems,
+    commercialActionRequired,
+    sessionContext: options.sessionContext,
+    intent,
+  };
+}
+
 function formatActionResponse(
   actions: ActionItem[],
   activeDemands: number,
-  intent: string
+  intent: string,
+  judgment: CommercialJudgmentInput
 ): SynthesizedResponse {
   const cards = actions.map((a) => a.card).filter(Boolean) as AssistantCard[];
   const lastList = actions
@@ -197,14 +230,8 @@ function formatActionResponse(
 
   if (actions.length === 0) {
     const message = emptyStateMessage(activeDemands, intent);
-    const suggestions =
-      activeDemands > 0 && intent === "prioritize"
-        ? [
-            { label: "החיפושים שלי", href: "/demand" },
-            { label: "פתח חיפוש", href: "/demand?new=1" },
-          ]
-        : [{ label: "פתח חיפוש", href: "/demand?new=1" }];
-    return { message, suggestions, cards: [], lastList: [] };
+    const suggestions = buildIdleSuggestions(judgment);
+    return applyCommercialJudgment({ message, suggestions }, judgment);
   }
 
   if (actions.length === 1) {
@@ -249,7 +276,7 @@ function buildDeterministicResponse(
   userMessage: string,
   options: BuildResponseOptions = {}
 ): SynthesizedResponse {
-  const { goal, toolErrors } = options;
+  const { goal, toolErrors, sessionContext } = options;
 
   if (allToolsFailed(toolResults, toolErrors)) {
     return {
@@ -266,9 +293,34 @@ function buildDeterministicResponse(
         activeDemands?: number;
         authorizedMatches?: number;
         openOpportunities?: number;
+        connectionsRemaining?: number;
       }
     | undefined;
   const activeDemands = state?.activeDemands ?? 0;
+  const commercial = toolResults.getMyCommercialStatus as
+    | { actionRequired?: boolean }
+    | undefined;
+  const commercialActionRequired =
+    commercial?.actionRequired === true;
+  const skipInventory = isBrokerOnlyMode(sessionContext);
+  const judgment = judgmentInput(
+    userMessage,
+    options,
+    intent,
+    activeDemands,
+    false,
+    commercialActionRequired
+  );
+
+  if (isBrokerNoInventoryDisclosure(userMessage)) {
+    const brokerMessage = buildBrokerOnlyMessage(activeDemands);
+    const brokerSuggestions = buildBrokerOnlySuggestions(activeDemands, judgment);
+    return applyCommercialJudgment(
+      { message: brokerMessage, suggestions: brokerSuggestions },
+      judgment
+    );
+  }
+
   const activeDemandsList = toolResults.getMyActiveDemands as
     | Array<{ id: string; title: string; daysLeft: number | null }>
     | undefined;
@@ -302,7 +354,8 @@ function buildDeterministicResponse(
     }
   }
 
-  const actions = buildActionItems(toolResults);
+  const actions = buildActionItems(toolResults, { skipInventory });
+  judgment.hasActionableItems = actions.length > 0;
 
   if (
     actions.length === 0 &&
@@ -312,19 +365,15 @@ function buildDeterministicResponse(
     (state?.openOpportunities ?? 0) === 0
   ) {
     if (/מה כדאי/i.test(userMessage)) {
-      return {
-        message: `כרגע אין משהו דחוף שמחכה לך. יש לך ${activeDemands} חיפושים פעילים, אבל עדיין לא נוצרה התאמה ששווה פעולה.`,
-        suggestions: [
-          { label: "החיפושים שלי", href: "/demand" },
-          { label: "פתח חיפוש", href: "/demand?new=1" },
-        ],
-        cards: [],
-        lastList: [],
-      };
+      const message = `כרגע אין משהו דחוף שמחכה לך. יש לך ${activeDemands} חיפושים פעילים, אבל עדיין לא נוצרה התאמה ששווה פעולה.`;
+      return applyCommercialJudgment(
+        { message, suggestions: buildIdleSuggestions(judgment) },
+        judgment
+      );
     }
   }
 
-  return formatActionResponse(actions, activeDemands, intent);
+  return formatActionResponse(actions, activeDemands, intent, judgment);
 }
 
 function shouldPreferDeterministic(userMessage: string, goal?: string): boolean {
@@ -341,6 +390,7 @@ export async function synthesizeResponse(params: {
   toolErrors?: Record<string, string>;
   userId: string;
   goal: string;
+  sessionContext?: SessionContext;
 }): Promise<{
   response: SynthesizedResponse;
   synthesizerUsed: boolean;
@@ -348,10 +398,15 @@ export async function synthesizeResponse(params: {
   durationMs: number;
 }> {
   const start = Date.now();
+  const buildOpts = {
+    goal: params.goal,
+    toolErrors: params.toolErrors,
+    sessionContext: params.sessionContext,
+  };
   const fallback = buildDeterministicResponse(
     params.toolResults,
     params.userMessage,
-    { goal: params.goal, toolErrors: params.toolErrors }
+    buildOpts
   );
 
   if (shouldPreferDeterministic(params.userMessage, params.goal)) {
@@ -455,12 +510,36 @@ export async function synthesizeResponse(params: {
               : "/opportunities",
     }));
 
-    return {
-      response: {
+    const state = params.toolResults.getMyExchangeState as
+      | { activeDemands?: number }
+      | undefined;
+    const commercial = params.toolResults.getMyCommercialStatus as
+      | { actionRequired?: boolean }
+      | undefined;
+    const intent = detectResponseIntent(params.userMessage, params.goal);
+    const judgment = judgmentInput(
+      params.userMessage,
+      buildOpts,
+      intent,
+      state?.activeDemands ?? 0,
+      data.listItems.length > 0,
+      commercial?.actionRequired === true
+    );
+
+    const judged = applyCommercialJudgment(
+      {
         message: data.message,
         suggestions: data.suggestions
           .filter((s) => s.label)
           .map((s) => ({ label: s.label, href: s.href ?? undefined })),
+      },
+      judgment
+    );
+
+    return {
+      response: {
+        message: judged.message,
+        suggestions: judged.suggestions,
         cards,
         lastList: data.listItems,
       },
@@ -483,10 +562,7 @@ export function helpOnlyResponse(): SynthesizedResponse {
   return {
     message:
       "אפשר לשאול מה דורש טיפול, אילו חיפושים עומדים לפוג, לחדש או לסגור חיפוש, או לפתוח חיפוש חדש.",
-    suggestions: [
-      { label: "מה כדאי לטפל בו עכשיו?" },
-      { label: "פתח חיפוש", href: "/demand?new=1" },
-    ],
+    suggestions: [{ label: "מה כדאי לטפל בו עכשיו?" }],
     cards: [],
     lastList: [],
   };

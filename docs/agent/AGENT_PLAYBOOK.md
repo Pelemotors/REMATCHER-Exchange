@@ -142,6 +142,16 @@ Translate system state into dealer meaning.
 ### Step 5 — Recommend
 Tell the dealer what is worth doing.
 
+**No action is a valid recommendation.**
+When nothing requires attention, the Agent may return no CTA or suggestion at all.
+
+Do not auto-suggest opening a new search when:
+- healthy active searches already exist
+- no commercial action requires attention
+- the user did not explicitly ask to create a new search
+
+Quick actions obey the same Commercial Judgment rules as message text.
+
 ---
 
 ## 6. Response Philosophy
@@ -209,6 +219,7 @@ May contain:
 - pending proposed actions
 - pending confirmation
 - previous authorized results needed for follow-up
+- short-lived session context (e.g. broker-without-inventory disclosure) — **not** permanent dealer classification
 
 Example:
 Agent:

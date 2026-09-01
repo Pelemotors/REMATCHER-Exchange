@@ -88,6 +88,9 @@ describe("Agent 2.3 Golden Conversations — Phase A", () => {
     expect(response.message).toContain("אין משהו דחוף");
     expect(response.message).toContain("7 חיפושים פעילים");
     expect(response.message).not.toMatch(/דרישות פעילות/i);
+    expect(response.suggestions.map((s) => s.label).join(" ")).not.toMatch(
+      /פתח חיפוש|ליצור חיפוש/i
+    );
   });
 
   it("G-02: single urgent expiring demand", () => {
@@ -186,4 +189,140 @@ describe("Agent 2.3 Golden Conversations — Phase A", () => {
     expect(response.message).toContain("אין משהו חדש שדורש פעולה");
     expect(response.message).not.toMatch(/אימותים/i);
   });
+});
+
+const IDLE_FORBIDDEN = /להגביר פעילות|לנצל חיבורים|ליצור חיפוש|פתח חיפוש/i;
+
+function assertNoIdleCommercialPush(response: {
+  message: string;
+  suggestions: Array<{ label: string }>;
+}) {
+  expect(response.message).not.toMatch(IDLE_FORBIDDEN);
+  const labels = response.suggestions.map((s) => s.label).join(" ");
+  expect(labels).not.toMatch(IDLE_FORBIDDEN);
+}
+
+describe("Agent 2.3 Golden Conversations — Commercial Judgment (G-41–G-45)", () => {
+  it("G-41: no auto open-search CTA with healthy active searches", () => {
+    const response = buildDeterministicResponse(
+      {
+        getMyExchangeState: {
+          activeDemands: 5,
+          authorizedMatches: 0,
+          openOpportunities: 0,
+        },
+      },
+      "תעשה לי סדר",
+      { goal: "prioritize_actions" }
+    );
+    assertNoIdleCommercialPush(response);
+    expect(response.message).toContain("5 חיפושים פעילים");
+  });
+
+  it("G-42: no action is a valid recommendation — zero suggestions", () => {
+    const response = buildDeterministicResponse(
+      {
+        getMyExchangeState: {
+          activeDemands: 6,
+          authorizedMatches: 0,
+          openOpportunities: 0,
+        },
+      },
+      "תעשה לי סדר",
+      { goal: "prioritize_actions" }
+    );
+    expect(response.suggestions).toHaveLength(0);
+  });
+
+  it("G-43: allowance does not influence broad prioritization", () => {
+    const response = buildDeterministicResponse(
+      {
+        getMyExchangeState: {
+          activeDemands: 4,
+          authorizedMatches: 0,
+          openOpportunities: 0,
+          connectionsRemaining: 2,
+        },
+      },
+      "תעשה לי סדר",
+      { goal: "prioritize_actions" }
+    );
+    expect(response.message).not.toMatch(/חיבור|מכסה|חבילה/i);
+    assertNoIdleCommercialPush(response);
+  });
+
+  it("G-44: summarize absence — do not narrate zero categories", () => {
+    const response = buildDeterministicResponse(
+      {
+        getMyExchangeState: {
+          activeDemands: 3,
+          authorizedMatches: 0,
+          openOpportunities: 0,
+          pendingValidations: 0,
+        },
+      },
+      "מה מפספס?",
+      { goal: "prioritize_actions" }
+    );
+    expect(response.message).toMatch(/אין משהו/i);
+    expect(response.message).not.toMatch(/אימותים?\s*[:：]\s*0/i);
+    expect(response.message).not.toMatch(/התאמות?\s*[:：]\s*0/i);
+    expect(response.message).not.toMatch(/אין אימותים ממתינים/i);
+  });
+
+  it("G-45: broker without inventory — session context only", () => {
+    const response = buildDeterministicResponse(
+      { getMyExchangeState: { activeDemands: 0 } },
+      "אין לי בכלל מלאי ואני מתווך"
+    );
+    expect(response.message).toContain("מתווך");
+    expect(response.message).toContain("חיפוש");
+    expect(response.message).toContain("אין צורך לעדכן מלאי");
+    expect(response.suggestions.some((s) => /פתח חיפוש/i.test(s.label))).toBe(
+      true
+    );
+  });
+
+  it("G-45: broker follow-up skips inventory attention in prioritization", () => {
+    const response = buildDeterministicResponse(
+      {
+        getMyInventoryRequiringAttention: [
+          { id: "v1", title: "קיה ספורטאז'", freshnessState: "STALE" },
+        ],
+        getMyExchangeState: { activeDemands: 2 },
+      },
+      "תעשה לי סדר",
+      {
+        goal: "prioritize_actions",
+        sessionContext: { operatingMode: "broker_only" },
+      }
+    );
+    expect(response.message).not.toContain("ספורטאז'");
+    expect(response.message).toMatch(/אין משהו/i);
+  });
+});
+
+describe("Agent 2.3 — negative idle prioritization", () => {
+  const idleState = {
+    getMyExchangeState: {
+      activeDemands: 7,
+      authorizedMatches: 0,
+      openOpportunities: 0,
+    },
+  };
+
+  for (const message of [
+    "תעשה לי סדר",
+    "מה כדאי לי לעשות עכשיו?",
+    "יש משהו שאני מפספס?",
+  ]) {
+    it(`does not push idle commercial CTAs for "${message}"`, () => {
+      const response = buildDeterministicResponse(
+        idleState,
+        message,
+        { goal: "prioritize_actions" }
+      );
+      assertNoIdleCommercialPush(response);
+    });
+  }
 });
