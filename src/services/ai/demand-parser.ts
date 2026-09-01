@@ -137,6 +137,22 @@ function normalizeStatusField(field: StatusField): StatusField {
   };
 }
 
+const MAKE_CANONICAL: Record<string, string> = {
+  מאזדה: "Mazda",
+  mazda: "Mazda",
+  טויוטה: "Toyota",
+  toyota: "Toyota",
+};
+
+const COLOR_CANONICAL: Record<string, string> = {
+  אדום: "red",
+  red: "red",
+  לבן: "white",
+  white: "white",
+  שחור: "black",
+  black: "black",
+};
+
 function sanitizeParsedDemand(data: unknown): ParsedDemand {
   const copy = { ...(data as ParsedDemand) };
   const fields = [
