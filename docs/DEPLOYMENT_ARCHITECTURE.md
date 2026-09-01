@@ -33,6 +33,7 @@ See [`.env.example`](../.env.example). Never commit secrets.
 | `VAPID_*` | Server (+ public key via API) | Web Push |
 | `RESEND_API_KEY` | Server | Transactional email (signup/approval) |
 | `EMAIL_FROM` | Server | Resend sender address |
+| `EMAIL_REPLY_TO` | Server | Reply-To header (default: `exchange@rematcher.co.il`) |
 | `REMATCHER_ADMIN_APPROVAL_EMAIL` | Server | Admin notification on new dealer |
 | `SEED_DEMO` | Local only | Enable `npm run db:seed` |
 | `RUN_MIGRATIONS` | Production | Run `prisma migrate deploy` on build |

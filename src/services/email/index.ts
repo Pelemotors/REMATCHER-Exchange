@@ -13,14 +13,21 @@ function getResend(): Resend | null {
   return resendClient;
 }
 
+function normalizeRecipients(to: string | string[]): string[] {
+  return Array.isArray(to) ? to : [to];
+}
+
 export async function sendEmail(params: {
   to: string | string[];
   subject: string;
   html: string;
+  text: string;
   eventType?: string;
   dealerId?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; messageId?: string }> {
   const client = getResend();
+  const recipients = normalizeRecipients(params.to);
+
   if (!client) {
     await logAppEvent({
       eventType: "email_send_skipped",
@@ -31,37 +38,70 @@ export async function sendEmail(params: {
   }
 
   try {
-    const { error } = await client.emails.send({
+    const { data, error } = await client.emails.send({
       from: APP_CONFIG.emailFrom,
+      replyTo: APP_CONFIG.emailReplyTo,
       to: params.to,
       subject: params.subject,
       html: params.html,
+      text: params.text,
     });
 
     if (error) {
       await logAppEvent({
         eventType: "email_send_failed",
         dealerId: params.dealerId,
-        metadata: { subject: params.subject, error: error.message },
+        metadata: {
+          subject: params.subject,
+          recipient: recipients.join(","),
+          provider: "resend",
+          error: error.message,
+        },
       });
       return { ok: false, error: error.message };
+    }
+
+    const messageId = data?.id;
+    if (!messageId) {
+      await logAppEvent({
+        eventType: "email_send_failed",
+        dealerId: params.dealerId,
+        metadata: {
+          subject: params.subject,
+          recipient: recipients.join(","),
+          provider: "resend",
+          error: "missing_provider_message_id",
+        },
+      });
+      return { ok: false, error: "missing_provider_message_id" };
     }
 
     if (params.eventType) {
       await logAppEvent({
         eventType: params.eventType,
         dealerId: params.dealerId,
-        metadata: { subject: params.subject },
+        metadata: {
+          subject: params.subject,
+          recipient: recipients.join(","),
+          provider: "resend",
+          providerMessageId: messageId,
+          sentAt: new Date().toISOString(),
+        },
       });
     }
 
-    return { ok: true };
+    return { ok: true, messageId };
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown";
     await logAppEvent({
       eventType: "email_send_failed",
       dealerId: params.dealerId,
-      metadata: { subject: params.subject, error: message },
+      metadata: {
+        subject: params.subject,
+        recipient: recipients.join(","),
+        provider: "resend",
+        error: message,
+      },
     });
     return { ok: false, error: message };
   }
@@ -80,6 +120,10 @@ function ctaButton(href: string, label: string): string {
   return `<p style="margin-top:24px;"><a href="${href}" style="display:inline-block;background:#18C37E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">${label}</a></p>`;
 }
 
+function textFooter(): string {
+  return `\n\n—\n${BRAND.product}\n${APP_CONFIG.url}`;
+}
+
 export async function sendUserVerificationEmail(params: {
   to: string;
   name: string;
@@ -96,6 +140,14 @@ export async function sendUserVerificationEmail(params: {
 ${ctaButton(link, "אימות אימייל")}
 <p style="margin-top:16px;font-size:13px;color:#5F6B7A;">הקישור תקף ל-48 שעות.</p>
 `),
+    text: `שלום ${params.name},
+
+תודה שנרשמת ל-${BRAND.product}.
+
+לאימות כתובת האימייל שלך, פתח את הקישור הבא:
+${link}
+
+הקישור תקף ל-48 שעות.${textFooter()}`,
   });
 }
 
@@ -132,6 +184,19 @@ ${params.businessId ? `<tr><td style="padding:6px 0;color:#5F6B7A;">ח.פ./עו�
 ${ctaButton(reviewUrl, "בדיקת הסוחר")}
 <p style="margin-top:16px;font-size:13px;color:#5F6B7A;">האישור מתבצע רק לאחר כניסה למערכת — לא דרך קישור ישיר.</p>
 `),
+    text: `נרשם סוחר חדש ל-${BRAND.product} וממתין לאישור.
+
+שם העסק: ${params.businessName}
+איש קשר: ${params.contactName}
+טלפון: ${params.phone}
+אימייל: ${params.email}
+מיקום: ${location}
+${params.businessId ? `ח.פ./עוסק: ${params.businessId}\n` : ""}תאריך הרשמה: ${params.signedUpAt.toLocaleString("he-IL")}
+
+לבדיקת הסוחר (נדרשת כניסה למערכת):
+${reviewUrl}
+
+האישור מתבצע רק לאחר כניסה למערכת — לא דרך קישור ישיר.${textFooter()}`,
   });
 }
 
@@ -149,6 +214,12 @@ export async function sendDealerApprovedEmail(params: {
 <p>ההצטרפות שלך ל-${BRAND.product} אושרה. אפשר להתחיל להשתמש ברשת.</p>
 ${ctaButton(loginUrl, "כניסה ל-Exchange")}
 `),
+    text: `שלום ${params.name},
+
+ההצטרפות שלך ל-${BRAND.product} אושרה. אפשר להתחיל להשתמש ברשת.
+
+כניסה ל-Exchange:
+${loginUrl}${textFooter()}`,
   });
 }
 
@@ -165,6 +236,11 @@ export async function sendDealerRejectedEmail(params: {
 <p>תודה על פנייתך ל-${BRAND.product}. לאחר בדיקה, לא ניתן לאשר את הבקשה כרגע.</p>
 <p style="font-size:14px;color:#5F6B7A;">לשאלות נוספות ניתן לפנות אלינו.</p>
 `),
+    text: `שלום ${params.name},
+
+תודה על פנייתך ל-${BRAND.product}. לאחר בדיקה, לא ניתן לאשר את הבקשה כרגע.
+
+לשאלות נוספות ניתן לפנות אלינו.${textFooter()}`,
   });
 }
 
@@ -184,5 +260,13 @@ export async function sendPasswordResetEmail(params: {
 ${ctaButton(link, "איפוס סיסמה")}
 <p style="margin-top:16px;font-size:13px;color:#5F6B7A;">הקישור תקף לשעתיים. אם לא ביקשת איפוס — התעלם מהודעה זו.</p>
 `),
+    text: `שלום ${params.name},
+
+קיבלנו בקשה לאיפוס הסיסמה שלך.
+
+לאיפוס הסיסמה, פתח את הקישור הבא:
+${link}
+
+הקישור תקף לשעתיים. אם לא ביקשת איפוס — התעלם מהודעה זו.${textFooter()}`,
   });
 }
