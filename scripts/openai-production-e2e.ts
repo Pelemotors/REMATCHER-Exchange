@@ -2,7 +2,7 @@
  * OpenAI Production E2E — runs against live Vercel deployment.
  * Usage: npx tsx scripts/openai-production-e2e.ts
  */
-const BASE = process.env.E2E_BASE_URL ?? "https://rematcher-exchange.vercel.app";
+const BASE = process.env.E2E_BASE_URL ?? "https://exchange.rematcher.co.il";
 const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
 const TEST_INPUT =

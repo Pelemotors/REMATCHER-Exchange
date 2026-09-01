@@ -22,6 +22,14 @@ Follow the Master Decision Chain in [docs/AGENT_DECISION_CONSTITUTION.md](./docs
 - 5 free Reveals per **Dealer**
 - See [docs/COMMERCIAL_MODEL.md](./docs/COMMERCIAL_MODEL.md)
 
+## Production QA (LOCKED)
+
+**Canonical production URL for all new QA:** `https://exchange.rematcher.co.il`
+
+- Smoke tests, E2E, visual QA, manual checks → **exchange.rematcher.co.il**
+- `https://rematcher-exchange.vercel.app` — deployment/debug only; not the default QA target
+- Scripts: default `E2E_BASE_URL` = canonical URL; override only for Vercel troubleshooting
+
 ## סטטוס פרויקט
 
 **CORE MVP IMPLEMENTATION AUTHORIZED — CONTROLLED BUILD**

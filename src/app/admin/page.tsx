@@ -3,12 +3,15 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { AdminTestPushButton } from "@/components/admin/admin-test-push";
 import { verificationLabel } from "@/lib/brand-copy";
+import { countPendingDealersForApproval } from "@/services/admin/dealer-verification";
 
 export default async function AdminPage() {
   const session = await auth();
   if (session?.user?.role !== "ADMIN") {
     return null;
   }
+
+  const pendingDealerApprovals = await countPendingDealersForApproval();
 
   const [
     dealers,
@@ -80,6 +83,18 @@ export default async function AdminPage() {
       <p className="mb-6 text-sm text-text-secondary">
         מעקב תפעולי — לא BI מתקדם
       </p>
+
+      {pendingDealerApprovals > 0 && (
+        <Link
+          href="/admin/dealers"
+          className="card mb-6 flex items-center justify-between border-signal/30 bg-signal-soft/30 hover:shadow-elevated"
+        >
+          <span className="font-semibold">סוחרים שממתינים לאישור</span>
+          <span className="rounded-full bg-signal px-3 py-1 text-sm font-bold text-white">
+            {pendingDealerApprovals}
+          </span>
+        </Link>
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
         {[

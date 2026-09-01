@@ -1,6 +1,8 @@
 # Visual QA Checklist — REMATCHER Exchange
 
-Run after Vercel deployment on HTTPS.
+Run against **https://exchange.rematcher.co.il** after production deployment (HTTPS).
+
+> Vercel URL (`rematcher-exchange.vercel.app`) — deployment/debug only, not default QA.
 
 ## Viewports
 

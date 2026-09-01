@@ -16,6 +16,7 @@ model User {
   passwordHash  String
   name          String
   phone         String?
+  emailVerifiedAt DateTime?
   role          UserRole  @default(DEALER_USER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -27,6 +28,7 @@ model User {
   buyerInterests BuyerInterest[]
   sellerInterests SellerInterest[]
   aiLogs        AiOperationLog[]
+  verificationTokens VerificationToken[]
 }
 
 enum UserRole {
@@ -50,6 +52,8 @@ model Dealer {
   email           String?
   city            String?
   region          String?
+  businessId      String?
+  rejectionReason String?
   verificationStatus VerificationStatus @default(PENDING)
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
@@ -90,6 +94,20 @@ model DealerMembership {
 enum MembershipRole {
   OWNER
   MEMBER
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
 }
 
 // ─── Inventory ──────────────────────────────────────────────────
@@ -487,6 +505,7 @@ enum NotificationType {
   REVEAL
   DEMAND_EXPIRY
   FRESHNESS
+  DEALER_VERIFICATION
   SYSTEM
 }
 

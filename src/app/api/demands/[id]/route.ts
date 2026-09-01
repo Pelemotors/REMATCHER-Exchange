@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireDealerSession } from "@/lib/auth-guards";
+import { requireVerifiedDealer } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { runMatchingForDemand } from "@/services/domain/matching-flow";
@@ -10,7 +10,7 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireDealerSession();
+  const authResult = await requireVerifiedDealer();
   if ("error" in authResult) {
     return NextResponse.json(
       { error: authResult.error },
@@ -34,7 +34,7 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireDealerSession();
+  const authResult = await requireVerifiedDealer();
   if ("error" in authResult) {
     return NextResponse.json(
       { error: authResult.error },

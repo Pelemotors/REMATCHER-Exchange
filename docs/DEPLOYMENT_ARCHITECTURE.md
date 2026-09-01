@@ -30,6 +30,9 @@ See [`.env.example`](../.env.example). Never commit secrets.
 | `NEXT_PUBLIC_APP_URL` | Public | Absolute URLs / deep links |
 | `OPENAI_API_KEY` | Server only | AI parsing — never `NEXT_PUBLIC_` |
 | `VAPID_*` | Server (+ public key via API) | Web Push |
+| `RESEND_API_KEY` | Server | Transactional email (signup/approval) |
+| `EMAIL_FROM` | Server | Resend sender address |
+| `REMATCHER_ADMIN_APPROVAL_EMAIL` | Server | Admin notification on new dealer |
 | `SEED_DEMO` | Local only | Enable `npm run db:seed` |
 | `RUN_MIGRATIONS` | Production | Run `prisma migrate deploy` on build |
 
@@ -76,9 +79,11 @@ Use Supabase project backup settings (Point-in-Time Recovery per plan). No custo
 
 ## Domain
 
-Target: `exchange.<REMATCHER_DOMAIN>` → Vercel CNAME.
+**Production (user-facing + QA):** `https://exchange.rematcher.co.il` → Vercel CNAME.
 
-Until DNS is ready: use the Vercel deployment URL for `AUTH_URL` and `NEXT_PUBLIC_APP_URL`.
+Set `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the canonical domain in production.
+
+**Vercel deployment URL** (`https://rematcher-exchange.vercel.app`) — deployment verification and debug only; not the default target for Production QA.
 
 ## Integration Principle
 

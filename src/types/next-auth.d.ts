@@ -11,6 +11,7 @@ declare module "next-auth" {
       dealerId: string | null;
       dealerName: string | null;
       verificationStatus: string | null;
+      emailVerifiedAt: string | null;
     };
   }
 
@@ -19,6 +20,7 @@ declare module "next-auth" {
     dealerId?: string | null;
     dealerName?: string | null;
     verificationStatus?: string | null;
+    emailVerifiedAt?: string | null;
   }
 }
 
@@ -29,5 +31,6 @@ declare module "next-auth/jwt" {
     dealerId?: string | null;
     dealerName?: string | null;
     verificationStatus?: string | null;
+    emailVerifiedAt?: string | null;
   }
 }

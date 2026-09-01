@@ -18,6 +18,20 @@ export async function requireDealerSession() {
   return { session: result.session };
 }
 
+export async function requireVerifiedDealer() {
+  const result = await requireDealerSession();
+  if ("error" in result) return result;
+
+  const { session } = result;
+  if (!session.user.emailVerifiedAt) {
+    return { error: "Email not verified" as const, status: 403 as const };
+  }
+  if (session.user.verificationStatus !== "VERIFIED") {
+    return { error: "Dealer not verified" as const, status: 403 as const };
+  }
+  return { session };
+}
+
 export async function requireAdminSession() {
   const result = await requireSession();
   if ("error" in result) return result;

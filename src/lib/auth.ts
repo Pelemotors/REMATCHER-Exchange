@@ -42,6 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           dealerId: membership?.dealerId ?? null,
           dealerName: membership?.dealer.businessName ?? null,
           verificationStatus: membership?.dealer.verificationStatus ?? null,
+          emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
         };
       },
     }),
@@ -56,6 +57,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.verificationStatus = (
           user as { verificationStatus?: string | null }
         ).verificationStatus;
+        token.emailVerifiedAt = (
+          user as { emailVerifiedAt?: string | null }
+        ).emailVerifiedAt;
       }
       return token;
     },
@@ -68,6 +72,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.verificationStatus = token.verificationStatus as
           | string
           | null;
+        session.user.emailVerifiedAt = token.emailVerifiedAt as string | null;
       }
       return session;
     },

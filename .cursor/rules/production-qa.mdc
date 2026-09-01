@@ -1,0 +1,31 @@
+---
+description: Production QA — canonical URL exchange.rematcher.co.il (לא vercel.app)
+alwaysApply: true
+---
+
+# Production QA — REMATCHER Exchange
+
+## Canonical Production URL (LOCKED for QA)
+
+**כל Production QA חדש** — smoke tests, E2E, visual QA, manual checks, browser automation — מתבצע מול:
+
+**https://exchange.rematcher.co.il**
+
+## Vercel deployment URL — debug only
+
+`https://rematcher-exchange.vercel.app` נשאר לצורכי **deployment verification** ו-**debug** בלבד.
+
+❌ אל תשתמש ב-vercel.app כ-default ל-Production QA חדש  
+✅ השתמש ב-`exchange.rematcher.co.il` אלא אם המשתמש ביקש במפורש לבדוק deployment ישיר
+
+## Scripts & env
+
+- Default `E2E_BASE_URL`: `https://exchange.rematcher.co.il`
+- Override: `E2E_BASE_URL=...` רק כשצריך debug מול Vercel preview/deployment
+
+## Agent checklist
+
+1. Production QA → `exchange.rematcher.co.il`
+2. Smoke/E2E scripts → default BASE = canonical URL
+3. Visual QA checklist → canonical URL
+4. vercel.app → רק כשמדובר ב-deploy status / preview / troubleshooting

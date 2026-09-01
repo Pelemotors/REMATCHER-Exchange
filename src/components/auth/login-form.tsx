@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { BRAND } from "@/config/brand";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,7 +34,10 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/home");
+    const redirectPath = callbackUrl
+      ? `/auth/redirect?callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : "/auth/redirect";
+    router.push(redirectPath);
     router.refresh();
   }
 
@@ -82,8 +88,11 @@ export function LoginForm() {
         {loading ? "מתחבר..." : "כניסה"}
       </button>
 
-      <p className="text-center text-label text-text-muted">
-        Demo: buyer@demo.com / seller@demo.com — סיסמה: demo123
+      <p className="text-center text-sm text-text-secondary">
+        עדיין לא ב-Exchange?{" "}
+        <Link href="/signup" className="font-medium text-signal">
+          הצטרף לרשת
+        </Link>
       </p>
     </form>
   );

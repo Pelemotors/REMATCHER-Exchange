@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireDealerSession } from "@/lib/auth-guards";
+import { requireVerifiedDealer } from "@/lib/auth-guards";
 import { getEnrichedDemandsForDealer } from "@/services/demand/demand-queries";
 
 export async function GET(req: Request) {
-  const authResult = await requireDealerSession();
+  const authResult = await requireVerifiedDealer();
   if ("error" in authResult) {
     return NextResponse.json(
       { error: authResult.error },

@@ -29,6 +29,7 @@
     "openai": "^4.82.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "resend": "^6.25.0",
     "server-only": "^0.0.1",
     "tailwind-merge": "^2.6.0",
     "web-push": "^3.6.7",

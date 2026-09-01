@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireDealerSession } from "@/lib/auth-guards";
+import { requireVerifiedDealer } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
 import { findDuplicateDemand, confirmedFromParsed } from "@/services/demand/duplicate-detection";
 import { logAppEvent } from "@/services/notifications";
 
 export async function POST(req: Request) {
-  const authResult = await requireDealerSession();
+  const authResult = await requireVerifiedDealer();
   if ("error" in authResult) {
     return NextResponse.json(
       { error: authResult.error },

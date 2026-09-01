@@ -1,11 +1,21 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { PublicLayout } from "@/components/public/public-layout";
 import { LoginForm } from "@/components/auth/login-form";
+
+export const metadata: Metadata = {
+  title: "התחברות | REMATCHER Exchange",
+  robots: { index: false, follow: false },
+};
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-midnight p-4">
-      <div className="w-full max-w-md">
-        <LoginForm />
+    <PublicLayout>
+      <div className="container-app flex min-h-[70vh] items-center justify-center py-12">
+        <Suspense fallback={<div>טוען...</div>}>
+          <LoginForm />
+        </Suspense>
       </div>
-    </div>
+    </PublicLayout>
   );
 }
