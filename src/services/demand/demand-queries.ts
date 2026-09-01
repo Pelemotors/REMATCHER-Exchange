@@ -35,7 +35,7 @@ export interface EnrichedDemand {
 
 export async function getEnrichedDemandsForDealer(
   dealerId: string,
-  options?: { includeHistory?: boolean }
+  options?: { includeHistory?: boolean; lightweight?: boolean }
 ): Promise<EnrichedDemand[]> {
   const statuses: DemandStatus[] = options?.includeHistory
     ? ["ACTIVE", "EXPIRED", "CANCELLED", "PENDING_CONFIRMATION", "DRAFT"]
@@ -46,6 +46,22 @@ export async function getEnrichedDemandsForDealer(
     orderBy: { updatedAt: "desc" },
   });
 
+  const matchCountMap = new Map<string, number>();
+  if (!options?.lightweight && demands.length > 0) {
+    const counts = await prisma.candidateMatch.groupBy({
+      by: ["demandId"],
+      where: {
+        demandId: { in: demands.map((d) => d.id) },
+        status: "VALIDATED",
+        buyerInterests: { none: { dealerId } },
+      },
+      _count: { _all: true },
+    });
+    for (const row of counts) {
+      matchCountMap.set(row.demandId, row._count._all);
+    }
+  }
+
   const results: EnrichedDemand[] = [];
 
   for (const d of demands) {
@@ -53,13 +69,9 @@ export async function getEnrichedDemandsForDealer(
     const uxStatus = computeDemandUxStatus(d.status, d.expiresAt);
     const daysLeft = daysUntilExpiry(d.expiresAt);
 
-    const authorizedMatchCount = await prisma.candidateMatch.count({
-      where: {
-        demandId: d.id,
-        status: "VALIDATED",
-        buyerInterests: { none: { dealerId } },
-      },
-    });
+    const authorizedMatchCount = options?.lightweight
+      ? 0
+      : (matchCountMap.get(d.id) ?? 0);
 
     const hasAuthorizedMatch = authorizedMatchCount > 0;
     const matchHint = hasAuthorizedMatch
@@ -165,4 +177,32 @@ export async function getPendingActionsForDealer(dealerId: string) {
   }
 
   return { items, total: items.reduce((s, i) => s + i.count, 0) };
+}
+
+export async function getExpiringDemandsForDealer(dealerId: string) {
+  const demands = await prisma.demand.findMany({
+    where: {
+      dealerId,
+      status: "ACTIVE",
+      expiresAt: {
+        lte: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        gte: new Date(),
+      },
+    },
+    orderBy: { expiresAt: "asc" },
+  });
+
+  return demands.map((d) => {
+    const confirmed = confirmedFromJson(d.confirmedJson);
+    const uxStatus = computeDemandUxStatus(d.status, d.expiresAt);
+    const daysLeft = daysUntilExpiry(d.expiresAt);
+    return {
+      id: d.id,
+      title: demandTitle(confirmed),
+      subtitle: demandSubtitle(confirmed),
+      uxStatus,
+      daysLeft,
+      expiresAt: d.expiresAt?.toISOString() ?? null,
+    };
+  });
 }

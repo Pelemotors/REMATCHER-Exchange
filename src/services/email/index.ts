@@ -167,3 +167,22 @@ export async function sendDealerRejectedEmail(params: {
 `),
   });
 }
+
+export async function sendPasswordResetEmail(params: {
+  to: string;
+  name: string;
+  token: string;
+}) {
+  const link = `${APP_CONFIG.url}/reset-password?token=${encodeURIComponent(params.token)}`;
+  return sendEmail({
+    to: params.to,
+    subject: `איפוס סיסמה · ${BRAND.product}`,
+    eventType: "password_reset_email_sent",
+    html: emailLayout(`
+<p>שלום ${params.name},</p>
+<p>קיבלנו בקשה לאיפוס הסיסמה שלך. לחץ להמשך:</p>
+${ctaButton(link, "איפוס סיסמה")}
+<p style="margin-top:16px;font-size:13px;color:#5F6B7A;">הקישור תקף לשעתיים. אם לא ביקשת איפוס — התעלם מהודעה זו.</p>
+`),
+  });
+}

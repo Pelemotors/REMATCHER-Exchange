@@ -5,6 +5,8 @@ import {
 } from "@/services/email";
 import { logAppEvent } from "@/services/notifications";
 import { prisma } from "@/lib/prisma";
+import { getClientIp } from "@/lib/client-ip";
+import { checkResendVerification } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -79,8 +81,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
   }
 
+  const normalized = email.toLowerCase().trim();
+  const ip = getClientIp(req);
+  const limit = checkResendVerification(normalized, ip);
+  if (limit.blocked) {
+    return NextResponse.json(
+      { error: "בוצעו יותר מדי בקשות. נסה שוב מאוחר יותר." },
+      { status: 429 }
+    );
+  }
+
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: { email: normalized },
   });
 
   if (!user || user.emailVerifiedAt) {

@@ -13,10 +13,11 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const includeHistory = searchParams.get("history") === "true";
+  const lightweight = searchParams.get("lightweight") === "true";
 
   const demands = await getEnrichedDemandsForDealer(
     authResult.session.user.dealerId!,
-    { includeHistory }
+    { includeHistory, lightweight }
   );
 
   const active = demands.filter((d) =>

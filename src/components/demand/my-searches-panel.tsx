@@ -8,16 +8,18 @@ import type { EnrichedDemand } from "@/services/demand/demand-queries";
 
 interface Props {
   compact?: boolean;
+  lightweight?: boolean;
   limit?: number;
   onViewAll?: () => void;
 }
 
-export function MySearchesPanel({ compact, limit, onViewAll }: Props) {
+export function MySearchesPanel({ compact, lightweight, limit, onViewAll }: Props) {
   const [active, setActive] = useState<EnrichedDemand[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    const res = await fetch("/api/demands");
+    const query = lightweight ? "?lightweight=true" : "";
+    const res = await fetch(`/api/demands${query}`);
     const data = await res.json();
     setActive(data.active ?? []);
     setLoading(false);

@@ -7,6 +7,9 @@ import Link from "next/link";
 import { BRAND } from "@/config/brand";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
 
+const RATE_LIMIT_MSG =
+  "בוצעו יותר מדי ניסיונות התחברות. נסה שוב בעוד מספר דקות.";
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -21,6 +24,18 @@ export function LoginForm() {
     setLoading(true);
     setError("");
 
+    const check = await fetch("/api/auth/login-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    if (check.status === 429) {
+      setLoading(false);
+      setError(RATE_LIMIT_MSG);
+      return;
+    }
+
     const result = await signIn("credentials", {
       email,
       password,
@@ -30,7 +45,16 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("אימייל או סיסמה שגויים");
+      const recheck = await fetch("/api/auth/login-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (recheck.status === 429) {
+        setError(RATE_LIMIT_MSG);
+      } else {
+        setError("האימייל או הסיסמה אינם נכונים");
+      }
       return;
     }
 
@@ -70,9 +94,14 @@ export function LoginForm() {
       </div>
 
       <div>
-        <label className="label" htmlFor="password">
-          סיסמה
-        </label>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="label mb-0" htmlFor="password">
+            סיסמה
+          </label>
+          <Link href="/forgot-password" className="text-xs text-signal">
+            שכחת סיסמה?
+          </Link>
+        </div>
         <input
           id="password"
           type="password"

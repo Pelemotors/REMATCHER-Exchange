@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { getClientIp } from "@/lib/client-ip";
+import { checkSignup } from "@/lib/rate-limit";
 import { createEmailVerificationToken } from "@/services/auth/verification-tokens";
 import { sendUserVerificationEmail } from "@/services/email";
 import { logAppEvent } from "@/services/notifications";
@@ -37,6 +39,14 @@ export async function POST(req: Request) {
 
   const data = parsed.data;
   const email = data.email.toLowerCase().trim();
+  const ip = getClientIp(req);
+  const limit = checkSignup(email, ip);
+  if (limit.blocked) {
+    return NextResponse.json(
+      { error: "בוצעו יותר מדי ניסיונות הרשמה. נסה שוב מאוחר יותר." },
+      { status: 429 }
+    );
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {

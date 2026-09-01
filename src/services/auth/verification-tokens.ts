@@ -28,6 +28,52 @@ export async function createEmailVerificationToken(userId: string) {
   return raw;
 }
 
+export async function createPasswordResetToken(userId: string) {
+  const raw = randomBytes(32).toString("hex");
+  const tokenHash = hashToken(raw);
+  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+  await prisma.verificationToken.deleteMany({
+    where: { userId, type: "PASSWORD_RESET", usedAt: null },
+  });
+
+  await prisma.verificationToken.create({
+    data: {
+      userId,
+      type: "PASSWORD_RESET",
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  return raw;
+}
+
+export async function consumePasswordResetToken(token: string) {
+  const tokenHash = hashToken(token);
+  const record = await prisma.verificationToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!record || record.type !== "PASSWORD_RESET" || record.usedAt) {
+    return { ok: false as const, reason: "invalid" as const };
+  }
+
+  if (record.expiresAt < new Date()) {
+    return { ok: false as const, reason: "expired" as const };
+  }
+
+  return { ok: true as const, userId: record.userId, tokenId: record.id };
+}
+
+export async function markPasswordResetTokenUsed(tokenId: string) {
+  await prisma.verificationToken.update({
+    where: { id: tokenId },
+    data: { usedAt: new Date() },
+  });
+}
+
 export async function consumeEmailVerificationToken(token: string) {
   const tokenHash = hashToken(token);
   const record = await prisma.verificationToken.findUnique({

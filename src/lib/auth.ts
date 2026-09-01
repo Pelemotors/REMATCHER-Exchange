@@ -2,6 +2,11 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import {
+  clearLoginFailures,
+  isLoginBlocked,
+  recordFailedLogin,
+} from "@/lib/rate-limit";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
@@ -14,8 +19,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = (credentials.email as string).trim().toLowerCase();
+        if (isLoginBlocked(email)) return null;
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
           include: {
             memberships: {
               include: { dealer: true },
@@ -30,7 +38,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           credentials.password as string,
           user.passwordHash
         );
-        if (!valid) return null;
+        if (!valid) {
+          recordFailedLogin(email);
+          return null;
+        }
+
+        clearLoginFailures(email);
 
         const membership = user.memberships[0];
 
