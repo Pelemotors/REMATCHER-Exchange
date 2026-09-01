@@ -32,7 +32,20 @@ const RESPONSE_SCHEMA = {
     ambiguities: { type: "array", items: { type: "string" } },
     rawSummary: { type: "string" },
   },
-  required: ["ambiguities"],
+  required: [
+    "make",
+    "model",
+    "trim",
+    "year",
+    "mileage",
+    "color",
+    "ownershipHand",
+    "retailPrice",
+    "b2bPrice",
+    "region",
+    "ambiguities",
+    "rawSummary",
+  ],
   additionalProperties: false,
 } as const;
 
