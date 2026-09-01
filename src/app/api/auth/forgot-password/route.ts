@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
   const normalized = email.trim().toLowerCase();
   const ip = getClientIp(req);
-  const limit = checkForgotPassword(normalized, ip);
+  const limit = await checkForgotPassword(normalized, ip);
   if (limit.blocked) {
     return NextResponse.json(
       {

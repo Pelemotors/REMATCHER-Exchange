@@ -118,9 +118,9 @@ export function LoginForm() {
       </button>
 
       <p className="text-center text-sm text-text-secondary">
-        עדיין לא ב-Exchange?{" "}
+        עדיין אין לך חשבון?{" "}
         <Link href="/signup" className="font-medium text-signal">
-          הצטרף לרשת
+          יצירת חשבון / הצטרפות ל-Exchange
         </Link>
       </p>
     </form>

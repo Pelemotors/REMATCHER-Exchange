@@ -1,4 +1,4 @@
-const CACHE_NAME = "rematcher-exchange-v1";
+const CACHE_NAME = "rematcher-exchange-v3";
 const APP_NAME = "REMATCHER Exchange";
 const OFFLINE_URL = "/offline";
 
@@ -21,12 +21,23 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.mode === "navigate") {
+  const url = new URL(event.request.url);
+
+  // Never cache auth/public HTML shells — always fetch fresh from network
+  if (
+    event.request.mode === "navigate" ||
+    url.pathname === "/" ||
+    url.pathname.startsWith("/login") ||
+    url.pathname.startsWith("/signup") ||
+    url.pathname.startsWith("/forgot-password") ||
+    url.pathname.startsWith("/reset-password")
+  ) {
     event.respondWith(
       fetch(event.request).catch(() =>
         caches.match(OFFLINE_URL).then((r) => r ?? new Response("Offline"))
       )
     );
+    return;
   }
 });
 

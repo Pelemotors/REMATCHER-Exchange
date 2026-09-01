@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   const normalized = email.trim().toLowerCase();
   const ip = getClientIp(req);
 
-  if (isLoginBlocked(normalized, ip)) {
+  if (await isLoginBlocked(normalized, ip)) {
     return NextResponse.json(
       {
         blocked: true,

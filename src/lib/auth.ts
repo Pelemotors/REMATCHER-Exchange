@@ -20,7 +20,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = (credentials.email as string).trim().toLowerCase();
-        if (isLoginBlocked(email)) return null;
+        if (await isLoginBlocked(email)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -39,11 +39,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           user.passwordHash
         );
         if (!valid) {
-          recordFailedLogin(email);
+          await recordFailedLogin(email);
           return null;
         }
 
-        clearLoginFailures(email);
+        await clearLoginFailures(email);
 
         const membership = user.memberships[0];
 

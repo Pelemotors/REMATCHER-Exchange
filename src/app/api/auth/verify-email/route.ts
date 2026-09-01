@@ -83,7 +83,7 @@ export async function POST(req: Request) {
 
   const normalized = email.toLowerCase().trim();
   const ip = getClientIp(req);
-  const limit = checkResendVerification(normalized, ip);
+  const limit = await checkResendVerification(normalized, ip);
   if (limit.blocked) {
     return NextResponse.json(
       { error: "בוצעו יותר מדי בקשות. נסה שוב מאוחר יותר." },

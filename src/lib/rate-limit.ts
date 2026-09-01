@@ -1,11 +1,13 @@
 /**
- * In-memory rate limiter with separate buckets.
- * Production note: resets on cold start; sufficient for MVP pilot.
+ * Shared rate limiter — Postgres in production, in-memory in tests.
+ * Atomic increment with window expiry per bucket+key.
  */
+
+import { prisma } from "@/lib/prisma";
 
 type Entry = { count: number; resetAt: number };
 
-const stores = new Map<string, Map<string, Entry>>();
+const memoryStores = new Map<string, Map<string, Entry>>();
 
 const WINDOWS = {
   loginFail: 15 * 60 * 1000,
@@ -26,24 +28,35 @@ const LIMITS = {
 
 type Bucket = keyof typeof WINDOWS;
 
-function getStore(bucket: Bucket): Map<string, Entry> {
-  if (!stores.has(bucket)) stores.set(bucket, new Map());
-  return stores.get(bucket)!;
+function useMemoryStore(): boolean {
+  return (
+    process.env.RATE_LIMIT_BACKEND === "memory" ||
+    process.env.VITEST === "true" ||
+    process.env.NODE_ENV === "test"
+  );
 }
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function increment(bucket: Bucket, id: string): Entry {
-  const store = getStore(bucket);
+function getMemoryStore(bucket: Bucket): Map<string, Entry> {
+  if (!memoryStores.has(bucket)) memoryStores.set(bucket, new Map());
+  return memoryStores.get(bucket)!;
+}
+
+function memoryIncrement(
+  bucket: Bucket,
+  key: string
+): { count: number; resetAt: number } {
+  const store = getMemoryStore(bucket);
   const now = Date.now();
   const windowMs = WINDOWS[bucket];
-  const existing = store.get(id);
+  const existing = store.get(key);
 
   if (!existing || now > existing.resetAt) {
     const entry = { count: 1, resetAt: now + windowMs };
-    store.set(id, entry);
+    store.set(key, entry);
     return entry;
   }
 
@@ -51,61 +64,156 @@ function increment(bucket: Bucket, id: string): Entry {
   return existing;
 }
 
-function isOverLimit(entry: Entry | undefined, limit: number): boolean {
+function memoryClear(bucket: Bucket, key: string) {
+  getMemoryStore(bucket).delete(key);
+}
+
+async function postgresIncrement(
+  bucket: Bucket,
+  key: string
+): Promise<{ count: number; resetAt: number }> {
+  const windowMs = WINDOWS[bucket];
+  const resetAt = new Date(Date.now() + windowMs);
+
+  const rows = await prisma.$queryRaw<
+    Array<{ count: number; resetAt: Date }>
+  >`
+    INSERT INTO "RateLimitEntry" (bucket, key, count, "resetAt", "updatedAt")
+    VALUES (${bucket}, ${key}, 1, ${resetAt}, NOW())
+    ON CONFLICT (bucket, key) DO UPDATE SET
+      count = CASE
+        WHEN "RateLimitEntry"."resetAt" < NOW() THEN 1
+        ELSE "RateLimitEntry".count + 1
+      END,
+      "resetAt" = CASE
+        WHEN "RateLimitEntry"."resetAt" < NOW() THEN ${resetAt}
+        ELSE "RateLimitEntry"."resetAt"
+      END,
+      "updatedAt" = NOW()
+    RETURNING count, "resetAt"
+  `;
+
+  const row = rows[0];
+  return { count: row.count, resetAt: row.resetAt.getTime() };
+}
+
+async function postgresClear(bucket: Bucket, key: string) {
+  await prisma.rateLimitEntry.deleteMany({
+    where: { bucket, key },
+  });
+}
+
+async function increment(
+  bucket: Bucket,
+  key: string
+): Promise<{ count: number; resetAt: number }> {
+  if (useMemoryStore()) {
+    return memoryIncrement(bucket, key);
+  }
+  return postgresIncrement(bucket, key);
+}
+
+async function clear(bucket: Bucket, key: string) {
+  if (useMemoryStore()) {
+    memoryClear(bucket, key);
+    return;
+  }
+  await postgresClear(bucket, key);
+}
+
+function isOverLimit(
+  entry: { count: number; resetAt: number } | undefined,
+  limit: number
+): boolean {
   if (!entry) return false;
   if (Date.now() > entry.resetAt) return false;
   return entry.count >= limit;
 }
 
-function clear(bucket: Bucket, id: string) {
-  getStore(bucket).delete(id);
+export async function recordFailedLogin(email: string, ip?: string) {
+  const normalized = normalizeEmail(email);
+  await increment("loginFail", `email:${normalized}`);
+  if (ip) await increment("loginFail", `ip:${ip}`);
 }
 
-export function recordFailedLogin(email: string, ip?: string) {
+export async function clearLoginFailures(email: string, ip?: string) {
   const normalized = normalizeEmail(email);
-  increment("loginFail", `email:${normalized}`);
-  if (ip) increment("loginFail", `ip:${ip}`);
+  await clear("loginFail", `email:${normalized}`);
+  if (ip) await clear("loginFail", `ip:${ip}`);
 }
 
-export function clearLoginFailures(email: string, ip?: string) {
+export async function isLoginBlocked(
+  email: string,
+  ip?: string
+): Promise<boolean> {
   const normalized = normalizeEmail(email);
-  clear("loginFail", `email:${normalized}`);
-  if (ip) clear("loginFail", `ip:${ip}`);
-}
+  if (useMemoryStore()) {
+    const store = getMemoryStore("loginFail");
+    return (
+      isOverLimit(store.get(`email:${normalized}`), LIMITS.loginFailEmail) ||
+      (ip ? isOverLimit(store.get(`ip:${ip}`), LIMITS.loginFailIp) : false)
+    );
+  }
 
-export function isLoginBlocked(email: string, ip?: string): boolean {
-  const normalized = normalizeEmail(email);
-  const store = getStore("loginFail");
+  const keys = [`email:${normalized}`, ...(ip ? [`ip:${ip}`] : [])];
+  const entries = await prisma.rateLimitEntry.findMany({
+    where: { bucket: "loginFail", key: { in: keys } },
+  });
+
+  const byKey = new Map(entries.map((e) => [e.key, e]));
+  const emailEntry = byKey.get(`email:${normalized}`);
+  const ipEntry = ip ? byKey.get(`ip:${ip}`) : undefined;
+
   return (
-    isOverLimit(store.get(`email:${normalized}`), LIMITS.loginFailEmail) ||
-    (ip ? isOverLimit(store.get(`ip:${ip}`), LIMITS.loginFailIp) : false)
+    isOverLimit(
+      emailEntry
+        ? { count: emailEntry.count, resetAt: emailEntry.resetAt.getTime() }
+        : undefined,
+      LIMITS.loginFailEmail
+    ) ||
+    (ip
+      ? isOverLimit(
+          ipEntry
+            ? { count: ipEntry.count, resetAt: ipEntry.resetAt.getTime() }
+            : undefined,
+          LIMITS.loginFailIp
+        )
+      : false)
   );
 }
 
-export function checkAndRecord(
+export async function checkAndRecord(
   bucket: Bucket,
   id: string,
   limit: number
-): { blocked: boolean; retryAfterMs?: number } {
-  const store = getStore(bucket);
-  const entry = store.get(id);
-  const now = Date.now();
+): Promise<{ blocked: boolean; retryAfterMs?: number }> {
+  if (useMemoryStore()) {
+    const store = getMemoryStore(bucket);
+    const entry = store.get(id);
+    const now = Date.now();
 
-  if (entry && now <= entry.resetAt && entry.count >= limit) {
-    return { blocked: true, retryAfterMs: entry.resetAt - now };
+    if (entry && now <= entry.resetAt && entry.count >= limit) {
+      return { blocked: true, retryAfterMs: entry.resetAt - now };
+    }
+
+    const updated = memoryIncrement(bucket, id);
+    if (updated.count > limit) {
+      return { blocked: true, retryAfterMs: updated.resetAt - now };
+    }
+    return { blocked: false };
   }
 
-  const updated = increment(bucket, id);
+  const updated = await postgresIncrement(bucket, id);
+  const now = Date.now();
   if (updated.count > limit) {
     return { blocked: true, retryAfterMs: updated.resetAt - now };
   }
-
   return { blocked: false };
 }
 
-export function checkSignup(email: string, ip?: string) {
+export async function checkSignup(email: string, ip?: string) {
   const normalized = normalizeEmail(email);
-  const emailCheck = checkAndRecord(
+  const emailCheck = await checkAndRecord(
     "signup",
     `email:${normalized}`,
     LIMITS.signup
@@ -115,36 +223,59 @@ export function checkSignup(email: string, ip?: string) {
   return { blocked: false };
 }
 
-export function checkForgotPassword(email: string, ip?: string) {
+export async function checkForgotPassword(email: string, ip?: string) {
   const normalized = normalizeEmail(email);
-  const emailCheck = checkAndRecord(
+  const emailCheck = await checkAndRecord(
     "forgotPassword",
     `email:${normalized}`,
     LIMITS.forgotPassword
   );
   if (emailCheck.blocked) return emailCheck;
-  if (ip) return checkAndRecord("forgotPassword", `ip:${ip}`, LIMITS.forgotPassword);
+  if (ip) {
+    return checkAndRecord("forgotPassword", `ip:${ip}`, LIMITS.forgotPassword);
+  }
   return { blocked: false };
 }
 
-export function checkResendVerification(email: string, ip?: string) {
+export async function checkResendVerification(email: string, ip?: string) {
   const normalized = normalizeEmail(email);
-  const emailCheck = checkAndRecord(
+  const emailCheck = await checkAndRecord(
     "resendVerification",
     `email:${normalized}`,
     LIMITS.resendVerification
   );
   if (emailCheck.blocked) return emailCheck;
   if (ip) {
-    return checkAndRecord("resendVerification", `ip:${ip}`, LIMITS.resendVerification);
+    return checkAndRecord(
+      "resendVerification",
+      `ip:${ip}`,
+      LIMITS.resendVerification
+    );
   }
   return { blocked: false };
 }
 
-export function clearAllLoginBlocksForEmail(email: string) {
+export async function clearAllLoginBlocksForEmail(email: string) {
   const normalized = normalizeEmail(email);
-  const store = getStore("loginFail");
-  for (const key of [...store.keys()]) {
-    if (key.includes(normalized)) store.delete(key);
+  if (useMemoryStore()) {
+    const store = getMemoryStore("loginFail");
+    for (const key of [...store.keys()]) {
+      if (key.includes(normalized)) store.delete(key);
+    }
+    return;
   }
+  await prisma.rateLimitEntry.deleteMany({
+    where: {
+      bucket: "loginFail",
+      key: { contains: normalized },
+    },
+  });
+}
+
+/** Best-effort cleanup of expired entries (call from cron or admin) */
+export async function cleanupExpiredRateLimits() {
+  if (useMemoryStore()) return;
+  await prisma.rateLimitEntry.deleteMany({
+    where: { resetAt: { lt: new Date() } },
+  });
 }

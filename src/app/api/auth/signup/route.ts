@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   const data = parsed.data;
   const email = data.email.toLowerCase().trim();
   const ip = getClientIp(req);
-  const limit = checkSignup(email, ip);
+  const limit = await checkSignup(email, ip);
   if (limit.blocked) {
     return NextResponse.json(
       { error: "בוצעו יותר מדי ניסיונות הרשמה. נסה שוב מאוחר יותר." },

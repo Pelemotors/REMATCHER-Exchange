@@ -10,7 +10,13 @@ const shouldMigrate =
 
 if (shouldMigrate) {
   console.log("[migrate] Running prisma migrate deploy...");
-  execSync("npx prisma migrate deploy", { stdio: "inherit" });
+  try {
+    execSync("npx prisma migrate deploy", { stdio: "inherit" });
+    console.log("[migrate] Success");
+  } catch (error) {
+    console.error("[migrate] FAILED — build will abort. Check Supabase migration state.");
+    throw error;
+  }
 } else {
   console.log(
     "[migrate] Skipped (set RUN_MIGRATIONS=true or deploy to production to migrate)"

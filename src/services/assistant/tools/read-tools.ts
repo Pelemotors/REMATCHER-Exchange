@@ -7,16 +7,7 @@ import {
 } from "@/services/demand/demand-queries";
 import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
 import { confirmedFromJson, demandTitle } from "@/lib/demand-display";
-
-export type ReadToolName =
-  | "getMyExchangeState"
-  | "getMyActiveDemands"
-  | "getMyExpiringDemands"
-  | "getMyPendingActions"
-  | "getMyPendingValidations"
-  | "getMyCommercialStatus"
-  | "getMyOpportunities"
-  | "getMyAuthorizedMatches";
+import type { ReadToolName } from "./registry";
 
 export async function executeReadTool(
   tool: ReadToolName,
@@ -24,17 +15,36 @@ export async function executeReadTool(
 ): Promise<unknown> {
   switch (tool) {
     case "getMyExchangeState": {
-      const [pending, demands, usage] = await Promise.all([
-        getPendingActionsForDealer(dealerId),
-        getEnrichedDemandsForDealer(dealerId),
-        getDealerUsageSummary(dealerId),
-      ]);
+      const [pending, demands, usage, validations, matches, opportunities] =
+        await Promise.all([
+          getPendingActionsForDealer(dealerId),
+          getEnrichedDemandsForDealer(dealerId, { lightweight: true }),
+          getDealerUsageSummary(dealerId),
+          prisma.validationEvent.count({
+            where: { dealerId, status: "PENDING" },
+          }),
+          prisma.candidateMatch.count({
+            where: {
+              demand: { dealerId },
+              status: "VALIDATED",
+              buyerInterests: { none: { dealerId } },
+            },
+          }),
+          prisma.sellerOpportunity.count({
+            where: { vehicle: { dealerId }, status: "OPEN" },
+          }),
+        ]);
       const active = demands.filter((d) =>
         ["ACTIVE", "EXPIRING"].includes(d.uxStatus)
       );
+      const expiring = active.filter((d) => d.uxStatus === "EXPIRING");
       return {
         activeDemands: active.length,
+        expiringDemands: expiring.length,
         pendingActions: pending.total,
+        pendingValidations: validations,
+        authorizedMatches: matches,
+        openOpportunities: opportunities,
         connectionsRemaining:
           usage.planSlug === "onboarding"
             ? Math.max(0, usage.freeAllowance - usage.freeUsed)
@@ -42,7 +52,9 @@ export async function executeReadTool(
       };
     }
     case "getMyActiveDemands": {
-      const demands = await getEnrichedDemandsForDealer(dealerId);
+      const demands = await getEnrichedDemandsForDealer(dealerId, {
+        lightweight: true,
+      });
       return demands
         .filter((d) => ["ACTIVE", "EXPIRING"].includes(d.uxStatus))
         .map((d) => ({
@@ -89,6 +101,42 @@ export async function executeReadTool(
       });
       return { count, href: "/matches" };
     }
+    case "getMyInventoryRequiringAttention": {
+      const vehicles = await prisma.vehicle.findMany({
+        where: {
+          dealerId,
+          status: "ACTIVE",
+          OR: [
+            { freshnessState: { in: ["STALE", "VALIDATION_REQUIRED", "UNKNOWN"] } },
+          ],
+        },
+        select: {
+          id: true,
+          make: true,
+          model: true,
+          year: true,
+          freshnessState: true,
+        },
+        take: 10,
+        orderBy: { updatedAt: "desc" },
+      });
+      return vehicles.map((v) => ({
+        id: v.id,
+        title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
+        freshnessState: v.freshnessState,
+      }));
+    }
+    case "getMyStaleInventory": {
+      const vehicles = await prisma.vehicle.findMany({
+        where: { dealerId, status: "ACTIVE", freshnessState: "STALE" },
+        select: { id: true, make: true, model: true, year: true },
+        take: 10,
+      });
+      return vehicles.map((v) => ({
+        id: v.id,
+        title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
+      }));
+    }
     default:
       return null;
   }
@@ -106,4 +154,22 @@ export async function getDemandByIdForDealer(dealerId: string, demandId: string)
     status: demand.status,
     expiresAt: demand.expiresAt?.toISOString() ?? null,
   };
+}
+
+export async function executeToolsParallel(
+  tools: ReadToolName[],
+  dealerId: string
+): Promise<{ results: Record<string, unknown>; durations: Record<string, number> }> {
+  const results: Record<string, unknown> = {};
+  const durations: Record<string, number> = {};
+
+  await Promise.all(
+    tools.map(async (tool) => {
+      const start = Date.now();
+      results[tool] = await executeReadTool(tool, dealerId);
+      durations[tool] = Date.now() - start;
+    })
+  );
+
+  return { results, durations };
 }
