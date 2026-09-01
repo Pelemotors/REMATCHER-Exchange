@@ -1,11 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Link from "next/link";
-import { PageHeader } from "@/components/ui/common";
-import { HomeKpiGrid } from "@/components/home/home-kpi-grid";
-import { formatRelative } from "@/lib/utils";
+import { HomeV2 } from "@/components/home/home-v2";
 import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
-import { BRAND } from "@/config/brand";
 import {
   connectionsMonthlyUsedLabel,
   connectionsRemainingSecondary,
@@ -89,72 +85,16 @@ export default async function HomePage() {
   }>;
 
   return (
-    <div>
-      <PageHeader
-        title={`שלום, ${session!.user!.name}`}
-        subtitle={session!.user!.dealerName ?? BRAND.product}
-      />
-
-      {actionItems.length > 0 ? (
-        <section className="mb-6 space-y-3">
-          <h3 className="text-sm font-semibold text-text-secondary">דורש פעולה</h3>
-          {actionItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="card flex items-center justify-between hover:shadow-elevated"
-            >
-              <span className="font-medium">{item.label}</span>
-              <span
-                className={
-                  item.urgent ? "badge-validation" : "badge-neutral"
-                }
-              >
-                {item.count}
-              </span>
-            </Link>
-          ))}
-        </section>
-      ) : (
-        <div className="card mb-6 text-center text-sm text-text-secondary">
-          אין פעולות דחופות — {BRAND.parent} עובד ברקע
-        </div>
-      )}
-
-      <HomeKpiGrid
-        activeDemands={demands}
-        matches={matches}
-        opportunities={opps}
-        connectionsLabel={connectionsLabel}
-        connectionsSecondary={connectionsSecondary}
-      />
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold">פעילות אחרונה</h3>
-          <Link href="/activity" className="text-sm text-signal">
-            הכל
-          </Link>
-        </div>
-        <div className="space-y-2">
-          {recentNotifications.map((n) => (
-            <Link
-              key={n.id}
-              href={n.link ?? "/activity"}
-              className="card block hover:shadow-elevated"
-            >
-              <p className="font-medium">{n.title}</p>
-              <p className="text-sm text-text-secondary">{n.body}</p>
-              <p className="mt-1 text-xs text-text-muted">
-                {formatRelative(n.createdAt)}
-              </p>
-            </Link>
-          ))}
-          {recentNotifications.length === 0 && (
-            <p className="text-sm text-text-muted">אין פעילות עדיין</p>
-          )}
-        </div>
-      </section>
-    </div>
+    <HomeV2
+      userName={session!.user!.name ?? ""}
+      dealerName={session!.user!.dealerName ?? null}
+      actionItems={actionItems}
+      activeDemands={demands}
+      matches={matches}
+      opportunities={opps}
+      connectionsLabel={connectionsLabel}
+      connectionsSecondary={connectionsSecondary}
+      notifications={recentNotifications}
+    />
   );
 }

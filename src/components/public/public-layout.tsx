@@ -3,6 +3,7 @@ import { BrandWordmark } from "@/components/brand/brand-wordmark";
 
 interface Props {
   children: React.ReactNode;
+  showHeader?: boolean;
 }
 
 export function PublicHeader() {
@@ -28,10 +29,10 @@ export function PublicHeader() {
   );
 }
 
-export function PublicLayout({ children }: Props) {
+export function PublicLayout({ children, showHeader = true }: Props) {
   return (
     <div className="min-h-screen bg-canvas">
-      <PublicHeader />
+      {showHeader && <PublicHeader />}
       {children}
     </div>
   );

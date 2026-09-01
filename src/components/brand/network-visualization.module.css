@@ -1,0 +1,164 @@
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 0.92;
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+.atmosphere {
+  position: absolute;
+  inset: 5% 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 50%,
+    rgba(23, 74, 115, 0.14) 0%,
+    rgba(7, 12, 20, 0) 68%
+  );
+  pointer-events: none;
+}
+
+.ringOuter,
+.ringInner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 206, 211, 0.06);
+  pointer-events: none;
+}
+
+.ringOuter {
+  width: 88%;
+  height: 88%;
+}
+
+.ringInner {
+  width: 62%;
+  height: 62%;
+  border-color: rgba(45, 120, 168, 0.08);
+}
+
+.field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.labelSupply,
+.labelDemand {
+  position: absolute;
+  top: 8%;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.labelSupply {
+  left: 14%;
+  color: rgba(45, 120, 168, 0.75);
+}
+
+.labelDemand {
+  right: 14%;
+  color: rgba(201, 206, 211, 0.55);
+}
+
+.markWrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  z-index: 3;
+  width: 62%;
+  max-width: 280px;
+}
+
+.markWrap svg {
+  width: 100%;
+  height: auto;
+}
+
+/* Signal paths — thin, traveling toward center */
+.signalPathSupply,
+.signalPathDemand {
+  stroke-width: 0.35;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: signalTravel 2.8s ease-in-out infinite;
+}
+
+.signalPathSupply {
+  stroke: url(#signal-grad-supply);
+  stroke: rgba(45, 120, 168, 0.55);
+}
+
+.signalPathDemand {
+  stroke: rgba(201, 206, 211, 0.35);
+}
+
+.activeNodeSupply {
+  fill: rgba(23, 74, 115, 0.85);
+  stroke: rgba(45, 120, 168, 0.5);
+  stroke-width: 0.4;
+}
+
+.activeNodeDemand {
+  fill: rgba(60, 68, 76, 0.9);
+  stroke: rgba(201, 206, 211, 0.35);
+  stroke-width: 0.4;
+}
+
+.activeNodePulse {
+  animation: nodeActivate 2.8s ease-in-out infinite;
+}
+
+@keyframes signalTravel {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 40;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  55% {
+    opacity: 0.45;
+    stroke-dashoffset: 0;
+  }
+  85% {
+    opacity: 0;
+    stroke-dashoffset: -20;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes nodeActivate {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signalPathSupply,
+  .signalPathDemand,
+  .activeNodePulse {
+    animation: none !important;
+    opacity: 0.35;
+    stroke-dashoffset: 0;
+  }
+}

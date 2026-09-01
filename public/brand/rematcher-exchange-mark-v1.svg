@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="800" viewBox="0 0 1200 800"
+     role="img" aria-labelledby="title desc">
+  <title id="title">REMATCHER Exchange Mark</title>
+  <desc id="desc">Three-part Exchange mark: left blue half, right platinum half, center diamond.</desc>
+
+  <defs>
+    <linearGradient id="blueFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2D78A8"/>
+      <stop offset="42%" stop-color="#174A73"/>
+      <stop offset="100%" stop-color="#0D2740"/>
+    </linearGradient>
+
+    <linearGradient id="blueEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6DBBEE"/>
+      <stop offset="100%" stop-color="#174A73"/>
+    </linearGradient>
+
+    <linearGradient id="platinumFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F3F1EC"/>
+      <stop offset="38%" stop-color="#C9CED3"/>
+      <stop offset="100%" stop-color="#747D87"/>
+    </linearGradient>
+
+    <linearGradient id="platinumEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#8C949C"/>
+    </linearGradient>
+
+    <linearGradient id="diamondFace" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#72C8FF"/>
+      <stop offset="50%" stop-color="#2D78A8"/>
+      <stop offset="100%" stop-color="#174A73"/>
+    </linearGradient>
+
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000814" flood-opacity="0.50"/>
+    </filter>
+
+    <filter id="diamondGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feFlood flood-color="#2D78A8" flood-opacity="0.50" result="flood"/>
+      <feComposite in="flood" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!--
+    APPROVED ANIMATION GROUPS
+    Cursor should animate only transform / opacity on these groups.
+    Do not alter their path geometry.
+  -->
+
+  <g id="exchange-mark" transform="translate(600 400)">
+    <g id="left-half" filter="url(#softShadow)">
+      <!-- front face -->
+      <path id="left-face"
+            d="M -330 -250
+               L -180 -250
+               L -30 -95
+               L -92 -28
+               L -215 -155
+               L -330 -155
+               Z
+
+               M -330 250
+               L -180 250
+               L -30 95
+               L -92 28
+               L -215 155
+               L -330 155
+               Z"
+            fill="url(#blueFace)"
+            fill-rule="evenodd"/>
+
+      <!-- outer highlight -->
+      <path id="left-highlight"
+            d="M -330 -250
+               L -180 -250
+               L -30 -95
+               M -330 250
+               L -180 250
+               L -30 95"
+            fill="none"
+            stroke="url(#blueEdge)"
+            stroke-width="8"
+            stroke-linecap="square"
+            stroke-linejoin="miter"/>
+
+      <!-- inner edge -->
+      <path id="left-inner-edge"
+            d="M -30 -95 L -92 -28
+               M -30 95 L -92 28"
+            fill="none"
+            stroke="#4D9DCE"
+            stroke-opacity="0.85"
+            stroke-width="5"/>
+    </g>
+
+    <g id="right-half" filter="url(#softShadow)">
+      <!-- front face -->
+      <path id="right-face"
+            d="M 330 -250
+               L 180 -250
+               L 30 -95
+               L 92 -28
+               L 215 -155
+               L 330 -155
+               Z
+
+               M 330 250
+               L 180 250
+               L 30 95
+               L 92 28
+               L 215 155
+               L 330 155
+               Z"
+            fill="url(#platinumFace)"
+            fill-rule="evenodd"/>
+
+      <!-- outer highlight -->
+      <path id="right-highlight"
+            d="M 330 -250
+               L 180 -250
+               L 30 -95
+               M 330 250
+               L 180 250
+               L 30 95"
+            fill="none"
+            stroke="url(#platinumEdge)"
+            stroke-width="8"
+            stroke-linecap="square"
+            stroke-linejoin="miter"/>
+
+      <!-- inner edge -->
+      <path id="right-inner-edge"
+            d="M 30 -95 L 92 -28
+               M 30 95 L 92 28"
+            fill="none"
+            stroke="#F7F8FA"
+            stroke-opacity="0.75"
+            stroke-width="5"/>
+    </g>
+
+    <g id="connection-diamond" filter="url(#diamondGlow)">
+      <rect x="-36" y="-36" width="72" height="72"
+            rx="2"
+            transform="rotate(45)"
+            fill="url(#diamondFace)"
+            stroke="#D7F0FF"
+            stroke-width="5"/>
+      <rect x="-22" y="-22" width="44" height="44"
+            rx="1"
+            transform="rotate(45)"
+            fill="#60BFFF"
+            fill-opacity="0.24"/>
+    </g>
+  </g>
+</svg>

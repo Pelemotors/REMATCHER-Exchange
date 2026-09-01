@@ -1,7 +1,8 @@
 import type { Config } from "tailwindcss";
-import { TOKENS } from "./src/config/brand";
+import { TOKENS, TOKENS_V2 } from "./src/config/brand";
 
 const c = TOKENS.color;
+const v2 = TOKENS_V2.color;
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
@@ -32,6 +33,32 @@ const config: Config = {
         warning: { DEFAULT: c.warning, soft: c.warningSoft },
         error: { DEFAULT: c.error, soft: c.errorSoft },
         info: { DEFAULT: c.info, soft: c.infoSoft },
+        /* Brand UI v2 — use inside [data-brand-ui="2"] */
+        "v2-midnight": v2.midnight,
+        "v2-graphite": v2.graphite,
+        "v2-deep-navy": v2.deepNavy,
+        "v2-exchange": v2.exchangeBlue,
+        "v2-signal": {
+          DEFAULT: v2.signalBlue,
+          soft: v2.signalBlueSoft,
+        },
+        "v2-platinum": v2.platinum,
+        "v2-warm": v2.warmWhite,
+        "v2-canvas": v2.canvas,
+        "v2-surface": {
+          DEFAULT: v2.surface,
+          raised: v2.surfaceRaised,
+          secondary: v2.surfaceSecondary,
+        },
+        "v2-border": {
+          DEFAULT: v2.border,
+          strong: v2.borderStrong,
+        },
+        "v2-text": {
+          primary: v2.textPrimary,
+          secondary: v2.textSecondary,
+          muted: v2.textMuted,
+        },
       },
       fontFamily: {
         sans: ["var(--font-heebo)", "Heebo", "Arial", "sans-serif"],
@@ -64,6 +91,18 @@ const config: Config = {
         label: [
           TOKENS.typography.label.size,
           { lineHeight: TOKENS.typography.label.lineHeight },
+        ],
+        section: [
+          TOKENS_V2.typography.section.size,
+          { lineHeight: TOKENS_V2.typography.section.lineHeight },
+        ],
+        title: [
+          TOKENS_V2.typography.title.size,
+          { lineHeight: TOKENS_V2.typography.title.lineHeight },
+        ],
+        "body-lg": [
+          TOKENS.typography.bodyLg.size,
+          { lineHeight: TOKENS.typography.bodyLg.lineHeight },
         ],
       },
       spacing: {

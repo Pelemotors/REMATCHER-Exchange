@@ -1,0 +1,178 @@
+.stage {
+  position: relative;
+  width: 100%;
+  min-height: min(72vh, 640px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.supplyLabel,
+.demandLabel {
+  position: absolute;
+  top: 12%;
+  z-index: 2;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.supplyLabel {
+  left: 6%;
+  color: rgba(45, 120, 168, 0.55);
+}
+
+.demandLabel {
+  right: 6%;
+  color: rgba(201, 206, 211, 0.4);
+}
+
+.markWrap {
+  position: relative;
+  z-index: 3;
+  width: min(100%, 680px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mark {
+  width: 100%;
+  height: auto;
+}
+
+.matchLabel {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 4;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: rgba(45, 120, 168, 0.7);
+  animation: matchFade 2.2s ease-out forwards;
+}
+
+.signalPath {
+  stroke: rgba(45, 120, 168, 0.5);
+  stroke-width: 0.28;
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 42;
+  stroke-dashoffset: 42;
+  animation: signalTravel 2.4s ease-in-out infinite;
+}
+
+.signalPathDemand {
+  stroke: rgba(201, 206, 211, 0.28);
+  stroke-width: 0.28;
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 42;
+  stroke-dashoffset: 42;
+  animation: signalTravel 2.4s ease-in-out infinite;
+}
+
+.activeNode {
+  fill: rgba(45, 120, 168, 0.85);
+  opacity: 0;
+  animation: nodeFlash 2.4s ease-in-out infinite;
+}
+
+.activeNodeDemand {
+  fill: rgba(201, 206, 211, 0.7);
+  opacity: 0;
+  animation: nodeFlash 2.4s ease-in-out infinite;
+}
+
+@keyframes signalTravel {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 42;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  55% {
+    stroke-dashoffset: 0;
+    opacity: 0.5;
+  }
+  85% {
+    opacity: 0;
+    stroke-dashoffset: -18;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes nodeFlash {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+@keyframes matchFade {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signalPath,
+  .signalPathDemand,
+  .activeNode,
+  .activeNodeDemand,
+  .matchLabel {
+    animation: none !important;
+  }
+
+  .signalPath,
+  .signalPathDemand {
+    opacity: 0.25;
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .stage {
+    min-height: 52vh;
+  }
+
+  .markWrap {
+    width: min(100%, 420px);
+  }
+
+  .supplyLabel,
+  .demandLabel {
+    top: 6%;
+    font-size: 0.625rem;
+  }
+}

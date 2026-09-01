@@ -1,0 +1,169 @@
+.mark {
+  display: block;
+  overflow: visible;
+  background: transparent;
+}
+
+.leftHalf,
+.rightHalf,
+.connectionDiamond {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ── Idle: halves separated, diamond hidden ── */
+.idle .leftHalf {
+  transform: translateX(-110px);
+}
+
+.idle .rightHalf {
+  transform: translateX(110px);
+}
+
+.idle .connectionDiamond {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+/* ── Searching: halves stay apart, subtle presence ── */
+.searching .leftHalf {
+  transform: translateX(-110px);
+  animation: halfPresence 3s ease-in-out infinite;
+}
+
+.searching .rightHalf {
+  transform: translateX(110px);
+  animation: halfPresence 3s ease-in-out infinite 0.45s;
+}
+
+.searching .connectionDiamond {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+@keyframes halfPresence {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── Converging: halves move toward matched position ── */
+.converging .leftHalf {
+  animation: convergeLeft 800ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.converging .rightHalf {
+  animation: convergeRight 800ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.converging .connectionDiamond {
+  animation: diamondReveal 450ms ease-out 720ms forwards;
+}
+
+@keyframes convergeLeft {
+  from {
+    transform: translateX(-110px);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes convergeRight {
+  from {
+    transform: translateX(110px);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes diamondReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── Matched: connected X, one restrained pulse then stable ── */
+.matched .leftHalf {
+  transform: translateX(0);
+}
+
+.matched .rightHalf {
+  transform: translateX(0);
+}
+
+.matched .connectionDiamond {
+  opacity: 1;
+  transform: scale(1);
+  animation: diamondPulse 550ms ease-out;
+}
+
+@keyframes diamondPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+    filter: none;
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .searching .leftHalf,
+  .searching .rightHalf,
+  .converging .leftHalf,
+  .converging .rightHalf,
+  .converging .connectionDiamond,
+  .matched .connectionDiamond {
+    animation: none !important;
+  }
+
+  .idle .leftHalf,
+  .searching .leftHalf {
+    transform: translateX(-110px);
+  }
+
+  .idle .rightHalf,
+  .searching .rightHalf {
+    transform: translateX(110px);
+  }
+
+  .matched .leftHalf,
+  .converging .leftHalf {
+    transform: translateX(0);
+  }
+
+  .matched .rightHalf,
+  .converging .rightHalf {
+    transform: translateX(0);
+  }
+
+  .matched .connectionDiamond,
+  .converging .connectionDiamond {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .idle .connectionDiamond,
+  .searching .connectionDiamond {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}

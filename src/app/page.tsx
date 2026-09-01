@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getPostAuthRedirect } from "@/lib/auth-routing";
 import { PublicLayout } from "@/components/public/public-layout";
+import { HeroV2 } from "@/components/landing/hero-v2";
 import { BRAND } from "@/config/brand";
 import { APP_CONFIG } from "@/config/app";
 
@@ -48,27 +49,10 @@ export default async function LandingPage() {
   }
 
   return (
-    <PublicLayout>
-      <section className="container-app py-16 md:py-24">
-        <div className="mx-auto max-w-3xl text-center">
-          <h1 className="text-display font-bold text-ink md:text-[2.5rem] md:leading-tight">
-            הרכב שאתה מחפש יכול כבר להיות אצל סוחר אחר.
-          </h1>
-          <p className="mt-6 text-body-lg text-text-secondary">
-            {BRAND.product} היא רשת פרטית לסוחרי רכב שמחברת בין המלאי שלך לבין
-            חיפושים אמיתיים של סוחרים אחרים — בלי לפתוח את המלאי שלך לכל השוק.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/signup" className="btn-primary w-full px-8 py-3 sm:w-auto">
-              הצטרפות ל-Exchange
-            </Link>
-            <Link href="/login" className="btn-secondary w-full px-8 py-3 sm:w-auto">
-              כבר רשום? התחבר
-            </Link>
-          </div>
-        </div>
-      </section>
+    <>
+      <HeroV2 />
 
+      <PublicLayout showHeader={false}>
       <section id="how-it-works" className="border-t border-border bg-surface py-16">
         <div className="container-app">
           <h2 className="mb-10 text-center text-h2 font-bold">איך Exchange עובד</h2>
@@ -116,6 +100,7 @@ export default async function LandingPage() {
           </Link>
         </p>
       </section>
-    </PublicLayout>
+      </PublicLayout>
+    </>
   );
 }
