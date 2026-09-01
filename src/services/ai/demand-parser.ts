@@ -13,6 +13,7 @@ const SYSTEM_PROMPT = `You parse Hebrew/English natural language vehicle demand 
 Rules (CRITICAL):
 - NEVER invent constraints the user did not state (I-08). Knowledge about vehicles must NOT become mandatory constraints.
 - If information is not stated, mark field status as "unknown" or list in ambiguities.
+- Field status must be exactly one of: "known", "unknown", "ambiguous". Never use other status labels.
 - Distinguish hardConstraints (explicit must-have), softPreferences (nice-to-have), exclusions (explicit not-wanted).
 - Budget in ILS unless stated otherwise.
 - Year "22" means 2022.
@@ -119,6 +120,42 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
   return parsedDemandSchema.parse(result);
 }
 
+type StatusField = { value?: unknown; status?: string; source?: string } | null | undefined;
+
+function normalizeStatusField(field: StatusField): StatusField {
+  if (!field || typeof field !== "object") return field;
+  const allowed = new Set(["known", "unknown", "ambiguous"]);
+  if (field.status && allowed.has(field.status)) return field;
+  return {
+    ...field,
+    status:
+      field.value != null && field.value !== ""
+        ? "known"
+        : "unknown",
+  };
+}
+
+function sanitizeParsedDemand(data: ParsedDemand): ParsedDemand {
+  const fields = [
+    "make",
+    "model",
+    "yearMin",
+    "yearMax",
+    "budgetMax",
+    "trimPreference",
+    "mileageMax",
+    "seatsMin",
+  ] as const;
+  const copy = { ...data };
+  for (const key of fields) {
+    const normalized = normalizeStatusField(copy[key]);
+    if (normalized !== undefined) {
+      (copy as Record<string, unknown>)[key] = normalized;
+    }
+  }
+  return copy;
+}
+
 async function logDemandParseFallback(
   reason: string,
   userId?: string
@@ -157,7 +194,7 @@ export async function parseDemand(
       userId,
     });
 
-    return parsedDemandSchema.parse(data);
+    return parsedDemandSchema.parse(sanitizeParsedDemand(data));
   } catch (error) {
     await logDemandParseFallback(
       `OpenAI demand parse failed — deterministic fallback: ${

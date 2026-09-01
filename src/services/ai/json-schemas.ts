@@ -8,7 +8,7 @@ export const JSON_SCHEMA_STATUS_FIELD = {
   type: ["object", "null"],
   properties: {
     value: JSON_SCHEMA_SCALAR,
-    status: { type: "string" },
+    status: { type: "string", enum: ["known", "unknown", "ambiguous"] },
   },
   required: ["value", "status"],
   additionalProperties: false,
