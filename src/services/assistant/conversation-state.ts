@@ -10,10 +10,16 @@ export interface PendingConfirmation {
   payload: Record<string, unknown>;
 }
 
+export interface SessionContext {
+  operatingMode?: "broker_only";
+}
+
 export interface ConversationState {
   lastList?: ConversationListItem[];
   pendingConfirmation?: PendingConfirmation;
   goal?: string;
+  /** Short-lived turn context — not persisted to dealer profile */
+  sessionContext?: SessionContext;
 }
 
 export interface AssistantCard {

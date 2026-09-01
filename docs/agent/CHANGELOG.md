@@ -200,6 +200,44 @@ Agent 2.3 implementation must conform to:
 
 ---
 
+## 2026-09-01 — Agent 2.3 Commercial Judgment (PR #1 fixes)
+
+### Changed
+- `commercial-judgment.ts` — centralized rules for when to recommend, suggest, or stay silent
+- Removed `general_inquiry` from `DETERMINISTIC_GOALS` — unknown queries may use OpenAI synthesizer when configured
+- No automatic "פתח חיפוש" when healthy active searches exist without explicit create intent (G-41)
+- Empty suggestions array is valid when nothing requires action (G-42)
+- Reveal allowance excluded from broad prioritization unless user asks or commercial blocks action (G-43)
+- Zero-category narration blocked; absence summarized instead (G-44)
+- Broker-without-inventory disclosure → short-lived `sessionContext` only, no DB classification (G-45)
+- Quick actions in `getAssistantContext` obey same Commercial Judgment rules
+- Privacy-block responses no longer auto-suggest "פתח חיפוש"
+- Dealer-facing copy: "דרישות החיפוש" → "תנאי החיפוש" in match explainer
+
+### Golden Conversations — Commercial Judgment
+| ID | Status |
+|----|--------|
+| G-41 | **PASS** |
+| G-42 | **PASS** |
+| G-43 | **PASS** |
+| G-44 | **PASS** |
+| G-45 | **PASS** |
+
+### Preserved
+- Per-tool error isolation
+- Privacy gate
+- No new mutation authority
+- No Interest/Reveal actions
+- Demand-driven retrieval
+
+### Tests
+- `tests/assistant-v2.test.ts` — G-41–G-45 + negative idle prioritization
+
+### `general_inquiry`
+Removed from deterministic bypass set. Heuristic planner still assigns `general_inquiry` goal with single `getMyExchangeState` tool for unknown messages; synthesizer may use OpenAI when configured instead of forcing deterministic output.
+
+---
+
 ## Documentation Rule
 Any future Agent behavior change must:
 1. Update relevant documentation.

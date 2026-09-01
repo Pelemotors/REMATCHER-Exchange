@@ -576,6 +576,80 @@ Do not append:
 
 ---
 
+## G-41 — No auto open-search CTA
+State:
+healthy active searches exist.
+No commercial action requires attention.
+No explicit user intent to create a new search.
+
+User:
+"תעשה לי סדר"
+
+Answer:
+Summarize that nothing urgent requires action.
+
+Forbidden suggestion:
+"פתח חיפוש"
+
+---
+
+## G-42 — No action is valid
+State:
+healthy active searches, nothing urgent.
+
+User:
+"תעשה לי סדר"
+
+Agent may return **zero** suggestions/CTA.
+
+No action is a valid recommendation.
+
+---
+
+## G-43 — Allowance not in broad prioritization
+State:
+connections remaining low, healthy active searches, no urgent items.
+
+User:
+"תעשה לי סדר"
+
+Answer must not mention allowance, package, or remaining connections.
+
+Allowance appears only when user explicitly asks about package/allowance
+or commercial status blocks a legitimate action.
+
+---
+
+## G-44 — No zero-category narration
+State:
+empty categories across validations, matches, opportunities.
+
+User:
+"מה מפספס?"
+
+Forbidden:
+"אימותים: 0, התאמות: 0"
+
+Good:
+Summarize absence of action — e.g. "כרגע אין משהו חדש שדורש פעולה."
+
+---
+
+## G-45 — Broker without inventory
+User:
+"אין לי בכלל מלאי ואני מתווך"
+
+Answer:
+Acknowledge broker-without-inventory operating mode.
+Focus on buyer-side searches, not inventory management.
+
+Store short-lived `sessionContext.operatingMode = broker_only` only.
+Do **not** create permanent dealer classification.
+
+Follow-up prioritization must skip inventory-attention items.
+
+---
+
 ## Eval Coverage (Agent 2.3 Phase A)
 
 | ID | Status | Coverage |
@@ -588,6 +662,11 @@ Do not append:
 | G-31 | **PASS** | `tests/assistant-v2.test.ts` — deterministic synthesis |
 | G-32 | **PASS** | `tests/assistant-v2.test.ts` — deterministic synthesis |
 | G-33 | **PASS** | `tests/assistant-v2.test.ts` — deterministic synthesis |
+| G-41 | **PASS** | `tests/assistant-v2.test.ts` — no auto open-search CTA |
+| G-42 | **PASS** | `tests/assistant-v2.test.ts` — zero suggestions valid |
+| G-43 | **PASS** | `tests/assistant-v2.test.ts` — allowance not in prioritization |
+| G-44 | **PASS** | `tests/assistant-v2.test.ts` — no zero-category narration |
+| G-45 | **PASS** | `tests/assistant-v2.test.ts` — broker session context |
 
 Remaining G-04–G-40: not yet automated (see `GAP_ANALYSIS_2.2.md`).
 
