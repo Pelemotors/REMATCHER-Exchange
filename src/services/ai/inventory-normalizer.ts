@@ -6,6 +6,7 @@ import {
   extractKnownString,
 } from "@/lib/schemas/ai";
 import { callOpenAIStructured, isOpenAIConfigured, logAiOperation } from "./client";
+import { JSON_SCHEMA_STATUS_FIELD } from "./json-schemas";
 
 const SYSTEM_PROMPT = `You normalize messy Hebrew/English vehicle inventory text into structured data.
 Rules (CRITICAL):
@@ -18,16 +19,16 @@ Rules (CRITICAL):
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
-    make: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    model: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    trim: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    year: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    mileage: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    color: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    ownershipHand: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    retailPrice: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    b2bPrice: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    region: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
+    make: JSON_SCHEMA_STATUS_FIELD,
+    model: JSON_SCHEMA_STATUS_FIELD,
+    trim: JSON_SCHEMA_STATUS_FIELD,
+    year: JSON_SCHEMA_STATUS_FIELD,
+    mileage: JSON_SCHEMA_STATUS_FIELD,
+    color: JSON_SCHEMA_STATUS_FIELD,
+    ownershipHand: JSON_SCHEMA_STATUS_FIELD,
+    retailPrice: JSON_SCHEMA_STATUS_FIELD,
+    b2bPrice: JSON_SCHEMA_STATUS_FIELD,
+    region: JSON_SCHEMA_STATUS_FIELD,
     ambiguities: { type: "array", items: { type: "string" } },
     rawSummary: { type: "string" },
   },

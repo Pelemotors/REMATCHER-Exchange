@@ -4,6 +4,10 @@ import {
   type ParsedDemand,
 } from "@/lib/schemas/ai";
 import { callOpenAIStructured, isOpenAIConfigured, logAiOperation } from "./client";
+import {
+  JSON_SCHEMA_CONSTRAINT_ITEM,
+  JSON_SCHEMA_STATUS_FIELD,
+} from "./json-schemas";
 
 const SYSTEM_PROMPT = `You parse Hebrew/English natural language vehicle demand for a B2B dealer exchange.
 Rules (CRITICAL):
@@ -17,54 +21,27 @@ Rules (CRITICAL):
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
-    make: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    model: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    yearMin: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    yearMax: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    budgetMax: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    trimPreference: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    mileageMax: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
-    seatsMin: { type: ["object", "null"], properties: { value: {}, status: { type: "string" } }, required: ["value", "status"], additionalProperties: false },
+    make: JSON_SCHEMA_STATUS_FIELD,
+    model: JSON_SCHEMA_STATUS_FIELD,
+    yearMin: JSON_SCHEMA_STATUS_FIELD,
+    yearMax: JSON_SCHEMA_STATUS_FIELD,
+    budgetMax: JSON_SCHEMA_STATUS_FIELD,
+    trimPreference: JSON_SCHEMA_STATUS_FIELD,
+    mileageMax: JSON_SCHEMA_STATUS_FIELD,
+    seatsMin: JSON_SCHEMA_STATUS_FIELD,
     colorExclusions: { type: "array", items: { type: "string" } },
     colorPreferences: { type: "array", items: { type: "string" } },
     hardConstraints: {
       type: "array",
-      items: {
-        type: "object",
-        properties: {
-          field: { type: "string" },
-          description: { type: "string" },
-          value: {},
-        },
-        required: ["field", "description", "value"],
-        additionalProperties: false,
-      },
+      items: JSON_SCHEMA_CONSTRAINT_ITEM,
     },
     softPreferences: {
       type: "array",
-      items: {
-        type: "object",
-        properties: {
-          field: { type: "string" },
-          description: { type: "string" },
-          value: {},
-        },
-        required: ["field", "description", "value"],
-        additionalProperties: false,
-      },
+      items: JSON_SCHEMA_CONSTRAINT_ITEM,
     },
     exclusions: {
       type: "array",
-      items: {
-        type: "object",
-        properties: {
-          field: { type: "string" },
-          description: { type: "string" },
-          value: {},
-        },
-        required: ["field", "description", "value"],
-        additionalProperties: false,
-      },
+      items: JSON_SCHEMA_CONSTRAINT_ITEM,
     },
     ambiguities: { type: "array", items: { type: "string" } },
     rawSummary: { type: "string" },
