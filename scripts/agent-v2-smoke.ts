@@ -86,7 +86,7 @@ async function main() {
   });
   if (ctxRes.ok) {
     const ctx = await ctxRes.json();
-    if (ctx.agentVersion === "2.2" || ctx.agentVersion === "2.1") {
+    if (ctx.agentVersion === "2.3" || ctx.agentVersion === "2.2" || ctx.agentVersion === "2.1") {
       pass("Context API agentVersion", ctx.agentVersion);
     } else {
       fail("Context API agentVersion", `got ${ctx.agentVersion}`);

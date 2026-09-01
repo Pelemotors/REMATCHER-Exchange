@@ -39,6 +39,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ...response,
-    agentVersion: response.meta?.agentVersion ?? "2.2",
+    agentVersion: response.meta?.agentVersion ?? "2.3",
   });
 }

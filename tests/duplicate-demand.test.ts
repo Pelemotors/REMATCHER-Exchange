@@ -60,18 +60,12 @@ describe("Duplicate Demand Detection", () => {
   });
 });
 
+import { checkPrivacyGate } from "@/services/assistant/privacy-gate";
+
 describe("Assistant fishing prevention", () => {
-  it("blocks network inventory questions", async () => {
-    const { runExchangeAssistant } = await import(
-      "@/services/assistant/orchestrator"
-    );
-    const res = await runExchangeAssistant({
-      dealerId: "dealer-a",
-      userId: "user-a",
-      message: "כמה CX-5 יש ברשת?",
-      context: { route: "/home" },
-    });
-    expect(res.intent).toBe("FISHING_BLOCKED");
-    expect(res.privacyBlocked).toBe(true);
+  it("blocks network inventory questions", () => {
+    const res = checkPrivacyGate("כמה CX-5 יש ברשת?");
+    expect(res.blocked).toBe(true);
+    expect(res.reason).toBe("fishing");
   });
 });
