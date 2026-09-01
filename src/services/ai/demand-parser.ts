@@ -165,13 +165,39 @@ function sanitizeParsedDemand(data: unknown): ParsedDemand {
     "mileageMax",
     "seatsMin",
   ] as const;
-  const copy = { ...data };
   for (const key of fields) {
     const normalized = normalizeStatusField(copy[key]);
     if (normalized !== undefined) {
       (copy as Record<string, unknown>)[key] = normalized;
     }
   }
+
+  if (copy.make?.value && typeof copy.make.value === "string") {
+    const canonical =
+      MAKE_CANONICAL[copy.make.value] ??
+      MAKE_CANONICAL[copy.make.value.toLowerCase()];
+    if (canonical) {
+      copy.make = { ...copy.make, value: canonical, status: "known" };
+    }
+  }
+
+  const colorExclusions = (copy.colorExclusions ?? []).map((c) => {
+    const lower = c.toLowerCase();
+    return COLOR_CANONICAL[c] ?? COLOR_CANONICAL[lower] ?? c;
+  });
+  copy.colorExclusions = colorExclusions;
+
+  if (
+    colorExclusions.length > 0 &&
+    (!copy.exclusions || copy.exclusions.length === 0)
+  ) {
+    copy.exclusions = colorExclusions.map((c) => ({
+      field: "color",
+      description: `לא ${c}`,
+      value: c,
+    }));
+  }
+
   return copy;
 }
 
