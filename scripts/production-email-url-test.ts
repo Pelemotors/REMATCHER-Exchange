@@ -60,11 +60,9 @@ async function main() {
   if (!user) throw new Error("User not found in DB");
 
   const verifyToken = await createVerifyToken(user.id);
-  const verifyRes = await fetch(`${BASE}/api/auth/verify-email`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: verifyToken }),
-  });
+  const verifyRes = await fetch(
+    `${BASE}/api/auth/verify-email?token=${encodeURIComponent(verifyToken)}`
+  );
   if (!verifyRes.ok) {
     const body = await verifyRes.text();
     throw new Error(`Verify failed ${verifyRes.status}: ${body}`);
