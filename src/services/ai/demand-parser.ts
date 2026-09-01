@@ -14,6 +14,8 @@ Rules (CRITICAL):
 - NEVER invent constraints the user did not state (I-08). Knowledge about vehicles must NOT become mandatory constraints.
 - If information is not stated, mark field status as "unknown" or list in ambiguities.
 - Field status must be exactly one of: "known", "unknown", "ambiguous". Never use other status labels.
+- Normalize make to English canonical manufacturer name (מאזדה → Mazda, טויוטה → Toyota).
+- Color exclusions must use exclusions[] with field "color", description in Hebrew, value in English (e.g. red, white, black). Also list English value in colorExclusions.
 - Distinguish hardConstraints (explicit must-have), softPreferences (nice-to-have), exclusions (explicit not-wanted).
 - Budget in ILS unless stated otherwise.
 - Year "22" means 2022.
