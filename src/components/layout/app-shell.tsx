@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { ExchangeAssistant } from "@/components/assistant/exchange-assistant";
 
 const navItems = [
   { href: "/home", label: "בית", icon: Home },
@@ -138,6 +139,7 @@ export function AppShell({
         )}
 
         <main className="container-app flex-1 py-4 md:py-8">{children}</main>
+        <ExchangeAssistant />
       </div>
 
       {/* Mobile bottom nav */}
