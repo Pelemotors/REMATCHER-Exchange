@@ -11,7 +11,11 @@ const shouldMigrate =
 if (shouldMigrate) {
   console.log("[migrate] Running prisma migrate deploy...");
   try {
-    execSync("npx prisma migrate deploy", { stdio: "inherit" });
+    // Use direct connection for DDL when pooler URL is set (Supabase)
+    const migrateEnv = process.env.DIRECT_URL
+      ? { ...process.env, DATABASE_URL: process.env.DIRECT_URL }
+      : process.env;
+    execSync("npx prisma migrate deploy", { stdio: "inherit", env: migrateEnv });
     console.log("[migrate] Success");
   } catch (error) {
     console.error("[migrate] FAILED — build will abort. Check Supabase migration state.");
