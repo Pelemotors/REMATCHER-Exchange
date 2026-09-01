@@ -38,7 +38,11 @@ async function main() {
 
   if (landingRes.status >= 300 && landingRes.status < 400) {
     fail("Anonymous / no redirect", `redirected ${landingRes.status}`);
-  } else if (landingHtml.includes("הצטרפות ל-Exchange")) {
+  } else {
+    pass("Anonymous / no redirect");
+  }
+
+  if (landingHtml.includes("הצטרפות ל-Exchange")) {
     pass("Landing hero CTA visible");
   } else {
     fail("Landing hero CTA visible", "missing הצטרפות ל-Exchange");
@@ -66,7 +70,13 @@ async function main() {
 
   const loginRes = await fetch(`${BASE}/login`);
   const loginHtml = await loginRes.text();
-  if (loginRes.ok && loginHtml.includes("כניסה")) {
+  const hasLoginForm =
+    loginRes.ok &&
+    (loginHtml.includes("התחבר") ||
+      loginHtml.includes('type="email"') ||
+      loginHtml.includes('name="email"') ||
+      loginHtml.includes("/forgot-password"));
+  if (hasLoginForm) {
     pass("/login accessible");
   } else {
     fail("/login accessible", `status ${loginRes.status}`);

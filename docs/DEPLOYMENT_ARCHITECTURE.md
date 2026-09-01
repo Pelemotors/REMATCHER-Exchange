@@ -23,8 +23,9 @@ See [`.env.example`](../.env.example). Never commit secrets.
 
 | Variable | Scope | Purpose |
 |----------|-------|---------|
-| `DATABASE_URL` | Server | Supabase pooler connection (runtime) |
-| `DIRECT_URL` | Server | Supabase direct connection (migrations) |
+| `DATABASE_URL` | Server | Supabase pooler connection (runtime, `rematcher_prisma`) |
+| `DIRECT_URL` | Server | Supabase direct session connection (runtime fallback) |
+| `MIGRATION_DATABASE_URL` | Production only | Dedicated migration connection with DDL authority (`postgres` role recommended) |
 | `AUTH_SECRET` | Server | NextAuth JWT signing |
 | `AUTH_URL` | Server | Production/preview canonical URL |
 | `NEXT_PUBLIC_APP_URL` | Public | Absolute URLs / deep links |
@@ -43,6 +44,34 @@ See [`.env.example`](../.env.example). Never commit secrets.
 **Production:** `prisma migrate deploy` runs automatically when `VERCEL_ENV=production` or `RUN_MIGRATIONS=true` (see `scripts/migrate-if-production.js`).
 
 **Do not** use `prisma db push` in production.
+
+### Runtime vs Migration Connections
+
+| Purpose | Env var | Role | Notes |
+|---------|---------|------|-------|
+| Application runtime | `DATABASE_URL` | `rematcher_prisma` | Pooled (port 6543), minimum DML permissions |
+| Direct reads/writes | `DIRECT_URL` | `rematcher_prisma` | Session mode (port 5432) |
+| Schema migrations | `MIGRATION_DATABASE_URL` | `postgres` (recommended) | Production Vercel only; DDL authority |
+
+`scripts/migrate-if-production.js` uses `MIGRATION_DATABASE_URL` → `DIRECT_URL` → `DATABASE_URL` (in that order).
+
+**Important:** `GRANT ALL` does **not** allow `ALTER TABLE` on tables you do not own. Application tables must be owned by the migration role, or migrations must run as `postgres`.
+
+Verify migration role before deploy:
+
+```bash
+npx tsx scripts/migration-role-proof.ts
+```
+
+### Recovery Policy
+
+Normal path:
+
+```
+versioned migration → prisma migrate deploy → recorded in _prisma_migrations
+```
+
+Manual `_prisma_migrations` SQL updates are **recovery only** — never the default workflow. Document any manual repair in commit/deploy notes.
 
 ### Preview Safety
 
