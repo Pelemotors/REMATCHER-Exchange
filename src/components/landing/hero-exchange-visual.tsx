@@ -1,7 +1,6 @@
 import styles from "./hero-exchange-visual.module.css";
 import { cn } from "@/lib/utils";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
-import type { ExchangeMarkState } from "@/config/brand-v2";
 
 /** Nearly invisible ambient nodes — open space, not a diagram */
 const AMBIENT = [
@@ -15,39 +14,20 @@ const AMBIENT = [
   { x: 68, y: 82, o: 0.03 },
 ];
 
-const SUPPLY_ACTIVE = [
-  { x: 18, y: 38, delay: 0 },
-  { x: 12, y: 58, delay: 0.35 },
-  { x: 24, y: 68, delay: 0.7 },
+/** 2–3 signal nodes only — synced to searching phase via CSS */
+const SUPPLY_SIGNALS = [
+  { x: 18, y: 38 },
+  { x: 12, y: 58 },
 ];
 
-const DEMAND_ACTIVE = [
-  { x: 82, y: 34, delay: 0.15 },
-  { x: 88, y: 56, delay: 0.5 },
-  { x: 76, y: 66, delay: 0.85 },
-];
+const DEMAND_SIGNALS = [{ x: 82, y: 34 }];
 
-export function HeroExchangeVisual({
-  markState,
-  className,
-}: {
-  markState: ExchangeMarkState;
-  className?: string;
-}) {
-  const signalsActive =
-    markState === "searching" || markState === "converging";
-  const showMatch = markState === "matched";
-
+export function HeroExchangeVisual({ className }: { className?: string }) {
   return (
-    <div
-      className={cn(styles.stage, className)}
-      data-mark-state={markState}
-      aria-hidden
-    >
+    <div className={cn(styles.stage, className)} aria-hidden>
       <span className={styles.supplyLabel}>SUPPLY</span>
       <span className={styles.demandLabel}>DEMAND</span>
 
-      {/* Atmospheric field — no circles, no graph lines */}
       <svg
         viewBox="0 0 100 100"
         className={styles.field}
@@ -64,61 +44,43 @@ export function HeroExchangeVisual({
           />
         ))}
 
-        {signalsActive &&
-          SUPPLY_ACTIVE.map((n, i) => (
+        {SUPPLY_SIGNALS.map((n, i) => (
+          <g key={`ss-${i}`} className={styles.signalGroup}>
             <line
-              key={`ss-${i}`}
               x1={n.x}
               y1={n.y}
               x2="50"
               y2="50"
               className={styles.signalPath}
-              style={{ animationDelay: `${n.delay}s` }}
             />
-          ))}
-        {signalsActive &&
-          DEMAND_ACTIVE.map((n, i) => (
+            <circle cx={n.x} cy={n.y} r="1.1" className={styles.activeNode} />
+          </g>
+        ))}
+
+        {DEMAND_SIGNALS.map((n, i) => (
+          <g key={`ds-${i}`} className={styles.signalGroup}>
             <line
-              key={`ds-${i}`}
               x1={n.x}
               y1={n.y}
               x2="50"
               y2="50"
               className={styles.signalPathDemand}
-              style={{ animationDelay: `${n.delay + 0.12}s` }}
             />
-          ))}
-
-        {signalsActive &&
-          SUPPLY_ACTIVE.map((n, i) => (
             <circle
-              key={`sn-${i}`}
-              cx={n.x}
-              cy={n.y}
-              r="1.1"
-              className={styles.activeNode}
-              style={{ animationDelay: `${n.delay}s` }}
-            />
-          ))}
-        {signalsActive &&
-          DEMAND_ACTIVE.map((n, i) => (
-            <circle
-              key={`dn-${i}`}
               cx={n.x}
               cy={n.y}
               r="1.1"
               className={styles.activeNodeDemand}
-              style={{ animationDelay: `${n.delay}s` }}
             />
-          ))}
+          </g>
+        ))}
       </svg>
 
-      {/* Dominant Exchange mark — transparent, no container */}
       <div className={styles.markWrap}>
-        <ExchangeMark state={markState} variant="hero" className={styles.mark} />
+        <ExchangeMark loop variant="hero" className={styles.mark} />
       </div>
 
-      {showMatch && <span className={styles.matchLabel}>MATCH</span>}
+      <span className={styles.matchLabel}>MATCH</span>
     </div>
   );
 }

@@ -5,6 +5,8 @@ import type { ExchangeMarkState } from "@/config/brand-v2";
 
 export interface ExchangeMarkProps {
   state?: ExchangeMarkState;
+  /** Hero demo — runs the 5.5s CSS choreography loop */
+  loop?: boolean;
   size?: number;
   variant?: "full" | "hero";
   className?: string;
@@ -22,6 +24,7 @@ const VIEW_HERO = { w: 760, h: 600, x: 220, y: 100 };
  */
 export function ExchangeMark({
   state = "idle",
+  loop = false,
   size = 480,
   variant = "full",
   className,
@@ -51,7 +54,11 @@ export function ExchangeMark({
       height={variant === "hero" ? undefined : height}
       viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       xmlns="http://www.w3.org/2000/svg"
-      className={cn(styles.mark, styles[state], className)}
+      className={cn(
+        styles.mark,
+        loop ? styles.heroLoop : styles[state],
+        className,
+      )}
       role={decorative ? undefined : "img"}
       aria-hidden={decorative}
       aria-label={decorative ? undefined : label}
