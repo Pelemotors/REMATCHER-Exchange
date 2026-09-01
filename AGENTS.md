@@ -117,6 +117,7 @@ WhatsApp/SMS/Email — **Accelerators עתידיים** בלבד.
 | Matching / Constraints | PRD §27–33 |
 | Interested / Validation | PRD §12, §14; I-04, I-18 |
 | Push | PRD §48–52, §77; I-14 |
+| **Exchange Agent** | `docs/agent/` — Playbook, Privacy, Tools, Language, Golden Conversations |
 | OPEN decision | [OPEN_DECISIONS.md](./docs/OPEN_DECISIONS.md) |
 | Discovery / gaps | [DISCOVERY_WALKTHROUGH.md](./docs/DISCOVERY_WALKTHROUGH.md) |
 | Non-MVP | PRD §67–68 |

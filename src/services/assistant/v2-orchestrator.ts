@@ -258,7 +258,7 @@ export async function runExchangeAssistantV2(params: {
   );
   meta.tools = tools;
 
-  const { results, durations } = await executeToolsParallel(
+  const { results, durations, errors, partialFailure } = await executeToolsParallel(
     tools,
     params.dealerId
   );
@@ -273,6 +273,7 @@ export async function runExchangeAssistantV2(params: {
   } = await synthesizeResponse({
     userMessage: params.message,
     toolResults: results,
+    toolErrors: errors,
     userId: params.userId,
     goal: plan.goal,
   });
@@ -298,6 +299,8 @@ export async function runExchangeAssistantV2(params: {
       synthesizerUsed,
       goal: plan.goal,
       cardCount: response.cards.length,
+      partialToolFailure: partialFailure,
+      toolErrors: Object.keys(errors),
     },
   });
 
