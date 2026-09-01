@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { APP_CONFIG, isEmailConfigured } from "@/config/app";
+import { APP_CONFIG, getTransactionalEmailBaseUrl, isEmailConfigured } from "@/config/app";
 import { BRAND } from "@/config/brand";
 import { logAppEvent } from "@/services/notifications";
 
@@ -121,7 +121,7 @@ function ctaButton(href: string, label: string): string {
 }
 
 function textFooter(): string {
-  return `\n\n—\n${BRAND.product}\n${APP_CONFIG.url}`;
+  return `\n\n—\n${BRAND.product}\n${getTransactionalEmailBaseUrl()}`;
 }
 
 export async function sendUserVerificationEmail(params: {
@@ -129,7 +129,8 @@ export async function sendUserVerificationEmail(params: {
   name: string;
   token: string;
 }) {
-  const link = `${APP_CONFIG.url}/verify-email?token=${encodeURIComponent(params.token)}`;
+  const base = getTransactionalEmailBaseUrl();
+  const link = `${base}/verify-email?token=${encodeURIComponent(params.token)}`;
   return sendEmail({
     to: params.to,
     subject: `אימות כתובת אימייל · ${BRAND.product}`,
@@ -162,7 +163,8 @@ export async function sendAdminDealerPendingEmail(params: {
   dealerId: string;
   signedUpAt: Date;
 }) {
-  const reviewUrl = `${APP_CONFIG.url}/admin/dealers/${params.dealerId}`;
+  const base = getTransactionalEmailBaseUrl();
+  const reviewUrl = `${base}/admin/dealers/${params.dealerId}`;
   const location = [params.city, params.region].filter(Boolean).join(" · ") || "—";
 
   return sendEmail({
@@ -204,7 +206,8 @@ export async function sendDealerApprovedEmail(params: {
   to: string;
   name: string;
 }) {
-  const loginUrl = `${APP_CONFIG.url}/login`;
+  const base = getTransactionalEmailBaseUrl();
+  const loginUrl = `${base}/login`;
   return sendEmail({
     to: params.to,
     subject: `החשבון שלך אושר · ${BRAND.product}`,
@@ -249,7 +252,8 @@ export async function sendPasswordResetEmail(params: {
   name: string;
   token: string;
 }) {
-  const link = `${APP_CONFIG.url}/reset-password?token=${encodeURIComponent(params.token)}`;
+  const base = getTransactionalEmailBaseUrl();
+  const link = `${base}/reset-password?token=${encodeURIComponent(params.token)}`;
   return sendEmail({
     to: params.to,
     subject: `איפוס סיסמה · ${BRAND.product}`,

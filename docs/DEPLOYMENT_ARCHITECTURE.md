@@ -113,6 +113,8 @@ Use Supabase project backup settings (Point-in-Time Recovery per plan). No custo
 
 Set `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the canonical domain in production.
 
+**Transactional emails** always link to `https://exchange.rematcher.co.il` in production (`getTransactionalEmailBaseUrl()`), even if `NEXT_PUBLIC_APP_URL` still points at a Vercel alias.
+
 **Vercel deployment URL** (`https://rematcher-exchange.vercel.app`) — deployment verification and debug only; not the default target for Production QA.
 
 ## Integration Principle
