@@ -135,7 +135,8 @@ function normalizeStatusField(field: StatusField): StatusField {
   };
 }
 
-function sanitizeParsedDemand(data: ParsedDemand): ParsedDemand {
+function sanitizeParsedDemand(data: unknown): ParsedDemand {
+  const copy = { ...(data as ParsedDemand) };
   const fields = [
     "make",
     "model",
