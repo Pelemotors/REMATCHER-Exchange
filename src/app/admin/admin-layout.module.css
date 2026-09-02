@@ -4,6 +4,26 @@
   color: var(--rm2-text-primary, #f3f1ec);
 }
 
+/* Safety net: unstyled text fields in Admin inherit light text but browser-default white bg */
+.root :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  textarea,
+  select
+) {
+  color: var(--rm2-text-primary, #f3f1ec);
+  background-color: var(--rm2-surface-secondary, #1a2535);
+  border-color: var(--rm2-border-strong, rgba(201, 206, 211, 0.22));
+}
+
+.root :where(input, textarea)::placeholder {
+  color: var(--rm2-text-muted, rgba(243, 241, 236, 0.48));
+}
+
+.root :where(input, textarea, select):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(7, 12, 20, 0.92);

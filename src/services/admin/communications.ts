@@ -7,6 +7,11 @@ import {
 } from "@/services/notifications/push";
 import { createNotification } from "@/services/notifications";
 
+export type PushEligibilityStatus =
+  | "eligible"
+  | "no_subscription"
+  | "invalidated_only";
+
 export interface AudienceUser {
   id: string;
   email: string;
@@ -16,6 +21,8 @@ export interface AudienceUser {
   dealerStatuses: string[];
   hasPushSubscription: boolean;
   subscriptionCount: number;
+  pushEligibilityStatus: PushEligibilityStatus;
+  eligibilityLabel: string;
 }
 
 export interface AudienceResolution {
@@ -25,17 +32,60 @@ export interface AudienceResolution {
   notSubscribedCount: number;
 }
 
+export function getPushEligibilityStatus(
+  activeSubscriptionCount: number,
+  totalSubscriptionCount: number
+): PushEligibilityStatus {
+  if (activeSubscriptionCount > 0) return "eligible";
+  if (totalSubscriptionCount > 0) return "invalidated_only";
+  return "no_subscription";
+}
+
+export function eligibilityLabelFor(status: PushEligibilityStatus): string {
+  switch (status) {
+    case "eligible":
+      return "זכאי ל-Push";
+    case "invalidated_only":
+      return "מנוי Push לא זמין";
+    default:
+      return "ללא מנוי Push פעיל";
+  }
+}
+
+export function dedupeAudienceUsers(users: AudienceUser[]): AudienceUser[] {
+  const seen = new Set<string>();
+  return users.filter((u) => {
+    if (seen.has(u.id)) return false;
+    seen.add(u.id);
+    return true;
+  });
+}
+
+function buildNameSearchClauses(query: string) {
+  const tokens = query.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return [];
+
+  return tokens.flatMap((token) => [
+    { name: { contains: token, mode: "insensitive" as const } },
+    { email: { contains: token, mode: "insensitive" as const } },
+  ]);
+}
+
 function mapUserRow(
   user: {
     id: string;
     email: string;
     name: string;
     role: string;
-    pushSubs: { id: string }[];
+    pushSubs: { id: string; invalidatedAt: Date | null }[];
     memberships: { dealer: { businessName: string; verificationStatus: string } }[];
   }
 ): AudienceUser {
-  const activeSubs = user.pushSubs.filter(Boolean);
+  const activeSubs = user.pushSubs.filter((s) => !s.invalidatedAt);
+  const pushEligibilityStatus = getPushEligibilityStatus(
+    activeSubs.length,
+    user.pushSubs.length
+  );
   return {
     id: user.id,
     email: user.email,
@@ -45,18 +95,23 @@ function mapUserRow(
     dealerStatuses: user.memberships.map((m) => m.dealer.verificationStatus),
     hasPushSubscription: activeSubs.length > 0,
     subscriptionCount: activeSubs.length,
+    pushEligibilityStatus,
+    eligibilityLabel: eligibilityLabelFor(pushEligibilityStatus),
   };
 }
 
 export async function searchAudienceUsers(query: string): Promise<AudienceUser[]> {
   const q = query.trim();
-  if (!q) return [];
+  if (!q || q.length < 1) return [];
+
+  const nameClauses = buildNameSearchClauses(q);
 
   const users = await prisma.user.findMany({
     where: {
       OR: [
         { email: { contains: q, mode: "insensitive" } },
         { name: { contains: q, mode: "insensitive" } },
+        ...nameClauses,
         {
           memberships: {
             some: {
@@ -73,14 +128,14 @@ export async function searchAudienceUsers(query: string): Promise<AudienceUser[]
       ],
     },
     include: {
-      pushSubs: { where: { invalidatedAt: null } },
+      pushSubs: true,
       memberships: { include: { dealer: true } },
     },
     take: 50,
     orderBy: { name: "asc" },
   });
 
-  return users.map(mapUserRow);
+  return dedupeAudienceUsers(users.map(mapUserRow));
 }
 
 export async function resolveAudience(input: {
@@ -98,7 +153,7 @@ export async function resolveAudience(input: {
         },
       },
       include: {
-        pushSubs: { where: { invalidatedAt: null } },
+        pushSubs: true,
         memberships: { include: { dealer: true } },
       },
     });
@@ -107,13 +162,13 @@ export async function resolveAudience(input: {
     users = await prisma.user.findMany({
       where: { id: { in: ids } },
       include: {
-        pushSubs: { where: { invalidatedAt: null } },
+        pushSubs: true,
         memberships: { include: { dealer: true } },
       },
     });
   }
 
-  const selected = users.map(mapUserRow);
+  const selected = dedupeAudienceUsers(users.map(mapUserRow));
   const eligibleCount = selected.filter((u) => u.hasPushSubscription).length;
 
   return {
