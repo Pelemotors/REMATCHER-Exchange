@@ -45,6 +45,13 @@ export async function executeReadTool(
         pendingValidations: validations,
         authorizedMatches: matches,
         openOpportunities: opportunities,
+        pendingOutcomes: await prisma.reveal.count({
+          where: {
+            OR: [{ buyerDealerId: dealerId }, { sellerDealerId: dealerId }],
+            outcome: null,
+            revealedAt: { lte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
         connectionsRemaining:
           usage.planSlug === "onboarding"
             ? Math.max(0, usage.freeAllowance - usage.freeUsed)
@@ -135,6 +142,40 @@ export async function executeReadTool(
       return vehicles.map((v) => ({
         id: v.id,
         title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
+      }));
+    }
+    case "getMyReveals": {
+      const reveals = await prisma.reveal.findMany({
+        where: {
+          OR: [{ buyerDealerId: dealerId }, { sellerDealerId: dealerId }],
+        },
+        orderBy: { revealedAt: "desc" },
+        take: 5,
+        include: { outcome: true },
+      });
+      return reveals.map((r) => ({
+        id: r.id,
+        href: `/reveals/${r.id}`,
+        hasOutcome: Boolean(r.outcome),
+        revealedAt: r.revealedAt.toISOString(),
+      }));
+    }
+    case "getMyPendingOutcomes": {
+      const reveals = await prisma.reveal.findMany({
+        where: {
+          OR: [{ buyerDealerId: dealerId }, { sellerDealerId: dealerId }],
+          outcome: null,
+          revealedAt: { lte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+        orderBy: { revealedAt: "asc" },
+        take: 5,
+      });
+      return reveals.map((r) => ({
+        id: r.id,
+        href: `/reveals/${r.id}`,
+        daysOpen: Math.floor(
+          (Date.now() - r.revealedAt.getTime()) / (24 * 60 * 60 * 1000)
+        ),
       }));
     }
     default:

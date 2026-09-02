@@ -23,15 +23,31 @@ interface Notification {
 export default function ActivityPage() {
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => {
+    setFilter(new URLSearchParams(window.location.search).get("filter"));
+  }, []);
+
+  useEffect(() => {
+    if (filter === null && typeof window !== "undefined") return;
     fetch("/api/notifications")
       .then((r) => r.json())
       .then((data) => {
-        setItems(data);
+        const list = Array.isArray(data) ? data : [];
+        setItems(
+          filter === "outcomes"
+            ? list.filter(
+                (n: Notification) =>
+                  n.type === "OUTCOME_REMINDER" ||
+                  n.type === "MUTUAL_INTEREST" ||
+                  n.link?.includes("/reveals/")
+              )
+            : list
+        );
         setLoading(false);
       });
-  }, []);
+  }, [filter]);
 
   async function markAllRead() {
     await fetch("/api/notifications", {

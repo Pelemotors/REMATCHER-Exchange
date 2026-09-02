@@ -21,6 +21,20 @@ interface DealerReview {
   verificationStatus: string;
   createdAt: string;
   commercial: { freeRevealAllowance: number; freeRevealUsed: number } | null;
+  onboardingState?: { completedAt: string | null; dismissedAt: string | null } | null;
+  metrics?: {
+    activeInventory: number;
+    activeDemands: number;
+    validatedMatches: number;
+    reveals: number;
+    outcomes: number;
+    pushSubscriptions: number;
+  };
+  recentEvents?: Array<{
+    eventType: string;
+    entityType: string | null;
+    createdAt: string;
+  }>;
   owner: {
     name: string;
     email: string;
@@ -115,6 +129,41 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
             </p>
           )}
         </Surface>
+
+        {dealer.metrics && (
+          <Surface depth="raised" as="section" className="space-y-3 p-4 md:col-span-2">
+            <h2 className="font-semibold text-v2-text-primary">פעילות Exchange</h2>
+            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+              <p>רכבים: {dealer.metrics.activeInventory}</p>
+              <p>חיפושים: {dealer.metrics.activeDemands}</p>
+              <p>התאמות: {dealer.metrics.validatedMatches}</p>
+              <p>חיבורים: {dealer.metrics.reveals}</p>
+              <p>תוצאות: {dealer.metrics.outcomes}</p>
+              <p>Push: {dealer.metrics.pushSubscriptions}</p>
+            </div>
+            {dealer.onboardingState && (
+              <p className="text-sm text-v2-text-muted">
+                Onboarding:{" "}
+                {dealer.onboardingState.completedAt
+                  ? "הושלם"
+                  : dealer.onboardingState.dismissedAt
+                    ? "דולג"
+                    : "בתהליך / לא הושלם"}
+              </p>
+            )}
+          </Surface>
+        )}
+
+        {dealer.recentEvents && dealer.recentEvents.length > 0 && (
+          <Surface depth="raised" as="section" className="space-y-2 p-4 md:col-span-2">
+            <h2 className="font-semibold text-v2-text-primary">אירועים אחרונים</h2>
+            {dealer.recentEvents.map((e, i) => (
+              <p key={i} className="text-sm text-v2-text-secondary">
+                {e.eventType} · {new Date(e.createdAt).toLocaleString("he-IL")}
+              </p>
+            ))}
+          </Surface>
+        )}
       </div>
 
       {dealer.verificationStatus === "PENDING" && (

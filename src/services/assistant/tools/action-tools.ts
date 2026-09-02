@@ -139,3 +139,48 @@ export async function markMyVehicleSold(dealerId: string, vehicleId: string) {
 
   return { ok: true as const };
 }
+
+export async function prepareConfirmValidation(
+  dealerId: string,
+  validationId: string
+) {
+  const validation = await prisma.validationEvent.findFirst({
+    where: { id: validationId, dealerId, status: "PENDING" },
+    include: { vehicle: { select: { make: true, model: true, year: true } } },
+  });
+  if (!validation) return { ok: false as const, error: "not_found" };
+  const title = `${validation.vehicle.make ?? ""} ${validation.vehicle.model ?? ""} ${validation.vehicle.year ?? ""}`.trim();
+  return {
+    ok: true as const,
+    action: "confirm_validation",
+    label: `לאשר ש"${title || "הרכב"}" זמין?`,
+    payload: { validationId },
+  };
+}
+
+export async function executeConfirmValidation(
+  dealerId: string,
+  validationId: string,
+  available: boolean
+) {
+  const { confirmAvailabilityValidation } = await import(
+    "@/services/domain/matching-flow"
+  );
+  await confirmAvailabilityValidation(validationId, dealerId, available);
+  return { ok: true as const, available };
+}
+
+export async function prepareMarkSold(dealerId: string, vehicleId: string) {
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, dealerId },
+    select: { id: true, make: true, model: true, year: true },
+  });
+  if (!vehicle) return { ok: false as const, error: "not_found" };
+  const title = `${vehicle.make ?? ""} ${vehicle.model ?? ""} ${vehicle.year ?? ""}`.trim();
+  return {
+    ok: true as const,
+    action: "mark_sold",
+    label: `לסמן את "${title || "הרכב"}" כנמכר?`,
+    payload: { vehicleId },
+  };
+}

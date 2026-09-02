@@ -23,7 +23,13 @@ const STATUS_LABEL: Record<PushDisplayStatus, string> = {
   ios_needs_install: "נדרשת התקנה למסך הבית",
 };
 
-export function PushSettings({ userId }: { userId?: string }) {
+export function PushSettings({
+  userId,
+  compact = false,
+}: {
+  userId?: string;
+  compact?: boolean;
+}) {
   const [snapshot, setSnapshot] = useState<PushClientSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,16 +94,30 @@ export function PushSettings({ userId }: { userId?: string }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className={compact ? "space-y-2" : "space-y-3"}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-v2-text-primary">התראות Push</p>
-          <p className="mt-0.5 text-sm text-v2-text-secondary">
-            קבלת עדכונים על התאמות ופעולות חשובות
-          </p>
-          <p className="mt-2 text-sm font-medium text-v2-warm">
-            {STATUS_LABEL[displayStatus]}
-          </p>
+          {!compact && (
+            <>
+              <p className="font-medium text-v2-text-primary">התראות Push</p>
+              <p className="mt-0.5 text-sm text-v2-text-secondary">
+                קבלת עדכונים על התאמות ופעולות חשובות
+              </p>
+            </>
+          )}
+          {compact && (
+            <p className="text-sm text-v2-text-secondary">
+              סטטוס התראות:{" "}
+              <span className="font-medium text-v2-warm">
+                {STATUS_LABEL[displayStatus]}
+              </span>
+            </p>
+          )}
+          {!compact && (
+            <p className="mt-2 text-sm font-medium text-v2-warm">
+              {STATUS_LABEL[displayStatus]}
+            </p>
+          )}
         </div>
         {canToggle && (
           <label className="relative inline-flex shrink-0 cursor-pointer items-center">

@@ -25,6 +25,14 @@ export default function AccountPage() {
   const [verificationStatus, setVerificationStatus] = useState<string>(
     session?.user?.verificationStatus ?? "PENDING"
   );
+  const [profile, setProfile] = useState({
+    city: "",
+    region: "",
+    phone: "",
+    businessId: "",
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/commercial/usage")
@@ -36,8 +44,28 @@ export default function AccountPage() {
         if (ctx?.verificationStatus) {
           setVerificationStatus(ctx.verificationStatus);
         }
+        if (ctx) {
+          setProfile({
+            city: ctx.city ?? "",
+            region: ctx.region ?? "",
+            phone: ctx.phone ?? "",
+            businessId: ctx.businessId ?? "",
+          });
+        }
       });
   }, []);
+
+  async function saveProfile() {
+    setProfileSaving(true);
+    setProfileMsg(null);
+    const res = await fetch("/api/account/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    });
+    setProfileSaving(false);
+    setProfileMsg(res.ok ? "נשמר" : "שגיאה בשמירה");
+  }
 
   return (
     <div>
@@ -64,6 +92,41 @@ export default function AccountPage() {
             {verificationLabel(verificationStatus)}
           </BadgeV2>
         </div>
+      </Surface>
+
+      <Surface depth="raised" className="mb-4 space-y-3 p-4">
+        <h3 className="font-semibold text-v2-text-primary">פרטי העסק</h3>
+        <label className="label">עיר</label>
+        <input
+          className="input"
+          value={profile.city}
+          onChange={(e) => setProfile({ ...profile, city: e.target.value })}
+        />
+        <label className="label">אזור</label>
+        <input
+          className="input"
+          value={profile.region}
+          onChange={(e) => setProfile({ ...profile, region: e.target.value })}
+        />
+        <label className="label">טלפון</label>
+        <input
+          className="input"
+          dir="ltr"
+          value={profile.phone}
+          onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+        />
+        <label className="label">ח.פ./עוסק</label>
+        <input
+          className="input"
+          value={profile.businessId}
+          onChange={(e) => setProfile({ ...profile, businessId: e.target.value })}
+        />
+        <ButtonV2 variant="secondary" disabled={profileSaving} onClick={saveProfile}>
+          {profileSaving ? "שומר..." : "שמור פרטים"}
+        </ButtonV2>
+        {profileMsg && (
+          <p className="text-sm text-v2-text-secondary">{profileMsg}</p>
+        )}
       </Surface>
 
       {usage && (
@@ -107,7 +170,7 @@ export default function AccountPage() {
         </Surface>
       )}
 
-      <Surface depth="raised" className="mb-4 p-4">
+      <Surface depth="raised" className="mb-4 p-4" id="push">
         <h3 className="mb-3 font-semibold text-v2-text-primary">התראות</h3>
         <PushSettings userId={session?.user?.id} />
       </Surface>

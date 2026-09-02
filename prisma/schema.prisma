@@ -69,6 +69,24 @@ model Dealer {
   revealsAsSeller Reveal[]         @relation("SellerDealer")
   commercial      DealerCommercial?
   revealUsages    RevealUsage[]
+  onboardingState DealerOnboardingState?
+}
+
+model DealerOnboardingState {
+  id                 String    @id @default(cuid())
+  dealerId           String    @unique
+  introCompletedAt   DateTime?
+  profileCompletedAt DateTime?
+  inventorySeenAt    DateTime?
+  demandSeenAt       DateTime?
+  pushPromptedAt     DateTime?
+  completedAt        DateTime?
+  dismissedAt        DateTime?
+  currentStep        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  dealer             Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
 }
 
 enum VerificationStatus {
@@ -506,6 +524,7 @@ enum NotificationType {
   DEMAND_EXPIRY
   FRESHNESS
   DEALER_VERIFICATION
+  OUTCOME_REMINDER
   SYSTEM
 }
 
@@ -558,6 +577,8 @@ model AppEvent {
   createdAt   DateTime @default(now())
 
   @@index([eventType, createdAt])
+  @@index([dealerId, createdAt])
+  @@index([entityType, entityId])
 }
 
 // ─── Rate Limiting (shared across serverless instances) ───────────

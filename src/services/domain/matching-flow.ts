@@ -11,6 +11,7 @@ import {
   logAppEvent,
   notifyDealerUsers,
 } from "@/services/notifications";
+import { notifyExpiringDemands, notifyFreshnessAttention } from "@/services/notifications/product-events";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { addDays } from "date-fns";
 import {
@@ -30,6 +31,7 @@ export async function runMatchingForDemand(demandId: string) {
   if (!demand || !demand.confirmedJson) return [];
 
   await expireStaleDemands(demand.dealerId);
+  await notifyExpiringDemands(demand.dealerId);
 
   const profile = demandProfileFromConstraints(
     demand.constraints,
@@ -53,6 +55,13 @@ export async function runMatchingForDemand(demandId: string) {
         data: { freshnessState },
       });
       vehicle.freshnessState = freshnessState;
+      if (
+        freshnessState === "STALE" ||
+        freshnessState === "VALIDATION_REQUIRED"
+      ) {
+        const title = `${vehicle.make ?? ""} ${vehicle.model ?? ""} ${vehicle.year ?? ""}`.trim();
+        await notifyFreshnessAttention(vehicle.dealerId, vehicle.id, title || "רכב");
+      }
     }
 
     const evaluation = evaluateMatch(vehicle, profile);
@@ -117,7 +126,7 @@ export async function runMatchingForDemand(demandId: string) {
           type: "VALIDATION_REQUEST",
           title: COPY.validationContext,
           body: "יש ביקוש רלוונטי לרכב שלך — הוא עדיין זמין?",
-          link: `/validations`,
+          link: `/validations?focus=${match.id}`,
           entityType: "validation",
           entityId: match.id,
         });
@@ -151,7 +160,7 @@ export async function runMatchingForDemand(demandId: string) {
           type: "VALIDATION_REQUEST",
           title: COPY.validationContext,
           body: "נדרש מחיר B2B להמשך התאמה",
-          link: `/validations`,
+          link: `/validations?focus=${match.id}`,
           entityType: "validation",
           entityId: match.id,
         });
@@ -173,9 +182,15 @@ export async function runMatchingForDemand(demandId: string) {
             ? "נמצאה התאמה גבוהה לחיפוש שלך"
             : COPY.matchPossible,
         body: explanation.summary,
-        link: `/matches`,
+        link: `/matches?focus=${match.id}`,
         entityType: "match",
         entityId: match.id,
+      });
+      await logAppEvent({
+        eventType: "match_validated",
+        entityType: "CandidateMatch",
+        entityId: match.id,
+        dealerId: demand.dealerId,
       });
     }
 
@@ -277,7 +292,7 @@ export async function confirmAvailabilityValidation(
           type: "BUYER_MATCH",
           title: "נמצאה התאמה גבוהה לחיפוש שלך",
           body: "התאמה מאומתת זמינה לצפייה",
-          link: `/matches`,
+          link: `/matches?focus=${match.id}`,
           entityType: "match",
           entityId: match.id,
         });
@@ -361,7 +376,7 @@ export async function recordBuyerInterest(params: {
         type: "SELLER_OPPORTUNITY",
         title: COPY.opportunity,
         body: "סוחר מאומת ברשת הביע עניין ברכב שלך",
-        link: `/opportunities`,
+        link: `/opportunities?focus=${opp.id}`,
         entityType: "opportunity",
         entityId: opp.id,
       });
@@ -425,6 +440,18 @@ export async function recordSellerInterest(params: {
     },
   });
 
+  await logAppEvent({
+    eventType:
+      params.status === "INTERESTED"
+        ? "seller_interested"
+        : params.status === "REJECTED"
+          ? "seller_rejected"
+          : "seller_no_response",
+    entityType: "SellerInterest",
+    entityId: sellerInterest.id,
+    dealerId: params.dealerId,
+  });
+
   // Mutual Interest → Reveal (deterministic gate §39-40)
   if (
     params.status === "INTERESTED" &&
@@ -475,6 +502,14 @@ export async function expireStaleDemands(dealerId?: string) {
     await prisma.demand.update({
       where: { id: d.id },
       data: { status: "EXPIRED" },
+    });
+    await notifyDealerUsers(d.dealerId, {
+      type: "DEMAND_EXPIRY",
+      title: "חיפוש פג תוקף",
+      body: "חיפוש פעיל הסתיים — אפשר לחדש או לפתוח חדש",
+      link: `/demand?edit=${d.id}`,
+      entityType: "demand",
+      entityId: d.id,
     });
     await logAppEvent({
       eventType: "demand_expired",
