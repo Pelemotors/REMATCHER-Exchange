@@ -62,7 +62,7 @@ export function isBrokerNoInventoryDisclosure(message: string): boolean {
 }
 
 export function mergeSessionContext(
-  existing?: SessionContext,
+  existing: SessionContext | undefined,
   message: string
 ): SessionContext {
   if (isBrokerNoInventoryDisclosure(message)) {
@@ -98,7 +98,8 @@ export function filterSuggestions(
     );
     if (!shouldSuggestNewSearch(input)) {
       filtered = filtered.filter(
-        (s) => CREATE_SEARCH_SUGGESTION.test(s.label) || /ליצור חיפוש/i.test(s.label)
+        (s) =>
+          !CREATE_SEARCH_SUGGESTION.test(s.label) && !/ליצור חיפוש/i.test(s.label)
       );
     }
   }
