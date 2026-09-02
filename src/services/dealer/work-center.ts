@@ -45,7 +45,6 @@ export async function getWorkCenterSnapshot(
   const [
     pendingActions,
     usage,
-    setupStatus,
     inventoryCount,
     activeDemands,
     pendingOutcomes,
@@ -54,7 +53,6 @@ export async function getWorkCenterSnapshot(
   ] = await Promise.all([
     getPendingActionsForDealer(dealerId),
     getDealerUsageSummary(dealerId),
-    getDealerSetupStatus(dealerId),
     prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
     prisma.demand.count({ where: { dealerId, status: "ACTIVE" } }),
     prisma.reveal.count({
@@ -74,8 +72,20 @@ export async function getWorkCenterSnapshot(
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: 5,
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        link: true,
+        createdAt: true,
+      },
     }),
   ]);
+
+  const setupStatus = await getDealerSetupStatus(dealerId, {
+    vehicleCount: inventoryCount,
+    demandCount: activeDemands,
+  });
 
   const actionItems: WorkCenterActionItem[] = [];
 
@@ -136,7 +146,7 @@ export async function getWorkCenterSnapshot(
           false
         );
 
-  await processOutcomeReminders(dealerId).catch(() => {});
+  void processOutcomeReminders(dealerId).catch(() => {});
 
   const matches =
     pendingActions.items.find((i) => i.type === "match")?.count ?? 0;

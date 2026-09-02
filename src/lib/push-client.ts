@@ -53,7 +53,10 @@ export function getClientPushSupport(): PushSupportKind {
 }
 
 export async function ensureServiceWorkerReady() {
-  await navigator.serviceWorker.register("/sw.js");
+  const existing = await navigator.serviceWorker.getRegistration();
+  if (!existing) {
+    await navigator.serviceWorker.register("/sw.js");
+  }
   return withTimeout(navigator.serviceWorker.ready, ACTIVATE_TIMEOUT_MS);
 }
 

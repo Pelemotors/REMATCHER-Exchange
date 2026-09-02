@@ -22,11 +22,18 @@ function isProfileComplete(dealer: {
   return Boolean(dealer.city && dealer.region && dealer.phone && dealer.businessName);
 }
 
-export async function syncOnboardingFromActivity(dealerId: string) {
+export async function syncOnboardingFromActivity(
+  dealerId: string,
+  preloadedCounts?: { vehicleCount: number; demandCount: number }
+) {
   const [dealer, vehicleCount, demandCount, state] = await Promise.all([
     prisma.dealer.findUnique({ where: { id: dealerId } }),
-    prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
-    prisma.demand.count({ where: { dealerId, status: "ACTIVE" } }),
+    preloadedCounts
+      ? Promise.resolve(preloadedCounts.vehicleCount)
+      : prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
+    preloadedCounts
+      ? Promise.resolve(preloadedCounts.demandCount)
+      : prisma.demand.count({ where: { dealerId, status: "ACTIVE" } }),
     prisma.dealerOnboardingState.findUnique({ where: { dealerId } }),
   ]);
 
@@ -80,17 +87,26 @@ export async function syncOnboardingFromActivity(dealerId: string) {
   });
 }
 
-export async function getDealerSetupStatus(dealerId: string): Promise<DealerSetupStatus> {
-  const state = await syncOnboardingFromActivity(dealerId);
+export async function getDealerSetupStatus(
+  dealerId: string,
+  preloadedCounts?: { vehicleCount: number; demandCount: number }
+): Promise<DealerSetupStatus> {
+  const counts: { vehicleCount: number; demandCount: number } =
+    preloadedCounts ??
+    (await Promise.all([
+      prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
+      prisma.demand.count({ where: { dealerId, status: "ACTIVE" } }),
+    ]).then(([vehicleCount, demandCount]) => ({ vehicleCount, demandCount })));
 
-  const [dealer, vehicleCount, demandCount, pushCount] = await Promise.all([
+  const [state, dealer, pushCount] = await Promise.all([
+    syncOnboardingFromActivity(dealerId, counts),
     prisma.dealer.findUnique({ where: { id: dealerId } }),
-    prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
-    prisma.demand.count({ where: { dealerId, status: "ACTIVE" } }),
     prisma.pushSubscription.count({
       where: { user: { memberships: { some: { dealerId } } } },
     }),
   ]);
+
+  const { vehicleCount, demandCount } = counts;
 
   const profileComplete = dealer ? isProfileComplete(dealer) : false;
   const onboardingComplete = Boolean(state?.completedAt || state?.dismissedAt);

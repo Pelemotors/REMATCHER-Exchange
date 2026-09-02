@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { getPostAuthRedirect } from "@/lib/auth-routing";
 
 const RATE_LIMIT_MSG =
   "בוצעו יותר מדי ניסיונות התחברות. נסה שוב בעוד מספר דקות.";
@@ -22,20 +23,9 @@ export function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
-
-    const check = await fetch("/api/auth/login-check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-
-    if (check.status === 429) {
-      setLoading(false);
-      setError(RATE_LIMIT_MSG);
-      return;
-    }
 
     const result = await signIn("credentials", {
       email,
@@ -43,14 +33,13 @@ export function LoginForm() {
       redirect: false,
     });
 
-    setLoading(false);
-
     if (result?.error) {
       const recheck = await fetch("/api/auth/login-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
+      setLoading(false);
       if (recheck.status === 429) {
         setError(RATE_LIMIT_MSG);
       } else {
@@ -59,11 +48,11 @@ export function LoginForm() {
       return;
     }
 
-    const redirectPath = callbackUrl
-      ? `/auth/redirect?callbackUrl=${encodeURIComponent(callbackUrl)}`
-      : "/auth/redirect";
-    router.push(redirectPath);
-    router.refresh();
+    const session = await getSession();
+    const destination = session?.user
+      ? getPostAuthRedirect(session.user, callbackUrl)
+      : "/home";
+    router.replace(destination);
   }
 
   return (
@@ -92,6 +81,7 @@ export function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             dir="ltr"
+            autoComplete="email"
           />
         </div>
 
@@ -112,6 +102,7 @@ export function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             dir="ltr"
+            autoComplete="current-password"
           />
         </div>
 

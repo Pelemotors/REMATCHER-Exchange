@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -14,10 +15,24 @@ import {
 } from "lucide-react";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
 import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
-import { ExchangeAssistant } from "@/components/assistant/exchange-assistant";
-import { PushOnboardingPrompt } from "@/components/pwa/push-onboarding-prompt";
 import { BRAND } from "@/config/brand";
 import styles from "./app-shell-v2.module.css";
+
+const ExchangeAssistant = dynamic(
+  () =>
+    import("@/components/assistant/exchange-assistant").then((m) => ({
+      default: m.ExchangeAssistant,
+    })),
+  { ssr: false }
+);
+
+const PushOnboardingPrompt = dynamic(
+  () =>
+    import("@/components/pwa/push-onboarding-prompt").then((m) => ({
+      default: m.PushOnboardingPrompt,
+    })),
+  { ssr: false }
+);
 
 const navItems = [
   { href: "/home", label: "בית", icon: Home },
