@@ -167,6 +167,8 @@ describe("push server subscriptions", () => {
       p256dh: "k1",
       auth: "a1",
       createdAt: new Date(),
+      lastUsedAt: null,
+      invalidatedAt: null,
     });
 
     await savePushSubscription("u1", {
@@ -191,6 +193,8 @@ describe("push server subscriptions", () => {
       p256dh: "k",
       auth: "a",
       createdAt: new Date(),
+      lastUsedAt: null,
+      invalidatedAt: null,
     });
     vi.mocked(prisma.pushSubscription.delete).mockResolvedValue({} as never);
 
@@ -209,6 +213,8 @@ describe("push server subscriptions", () => {
       p256dh: "k",
       auth: "a",
       createdAt: new Date(),
+      lastUsedAt: null,
+      invalidatedAt: null,
     });
 
     const ok = await removePushSubscription("u1", "ep1");
@@ -224,6 +230,8 @@ describe("push server subscriptions", () => {
       p256dh: "k",
       auth: "a",
       createdAt: new Date(),
+      lastUsedAt: null,
+      invalidatedAt: null,
     });
     expect(await isDeviceSubscribed("u1", "ep1")).toBe(true);
     expect(await isDeviceSubscribed("u2", "ep1")).toBe(false);

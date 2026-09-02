@@ -25,6 +25,9 @@ model User {
   sessions      Session[]
   pushSubs      PushSubscription[]
   notifications Notification[]
+  pushCampaigns PushCampaign[]     @relation("PushCampaignCreator")
+  pushDeliveries PushDelivery[]
+  notificationPreference NotificationPreference?
   buyerInterests BuyerInterest[]
   sellerInterests SellerInterest[]
   aiLogs        AiOperationLog[]
@@ -507,12 +510,22 @@ model Notification {
   link        String?
   entityType  String?
   entityId    String?
+  sourceCategory NotificationSourceCategory @default(PRODUCT)
   readAt      DateTime?
   createdAt   DateTime         @default(now())
 
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushDeliveries PushDelivery[]
 
   @@index([userId, readAt])
+  @@index([userId, sourceCategory, createdAt])
+}
+
+enum NotificationSourceCategory {
+  PRODUCT
+  REMINDER
+  ADMIN
+  SYSTEM
 }
 
 enum NotificationType {
@@ -535,8 +548,125 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+  lastUsedAt DateTime?
+  invalidatedAt DateTime?
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries PushDelivery[]
+}
+
+model NotificationPreference {
+  userId              String   @id
+  criticalProduct     Boolean  @default(true)
+  reminders           Boolean  @default(true)
+  adminCommunications Boolean  @default(true)
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum PushSource {
+  PRODUCT
+  ADMIN_CAMPAIGN
+  ADMIN_DIRECT
+  ADMIN_TEST
+  SMART_REMINDER
+  SYSTEM
+}
+
+enum PushTriggerType {
+  MATCH_CREATED
+  MATCH_NOTIFIED
+  MUTUAL_INTEREST
+  REVEAL_CREATED
+  DEMAND_EXPIRING
+  OUTCOME_PENDING
+  VALIDATION_REQUEST
+  FRESHNESS
+  ADMIN_MANUAL
+  SYSTEM
+}
+
+enum PushDeliveryStatus {
+  CREATED
+  SEND_ATTEMPTED
+  SENT
+  DELIVERY_FAILED
+  RECEIVED
+  CLICKED
+  DESTINATION_OPENED
+}
+
+enum PushAudienceType {
+  ALL
+  SINGLE
+  MULTIPLE
+  FILTER
+}
+
+model PushCampaign {
+  id                     String           @id @default(cuid())
+  internalName           String?
+  title                  String
+  body                   String
+  destinationLink        String?
+  source                 PushSource
+  audienceType           PushAudienceType
+  audienceDefinitionJson Json?
+  createdByUserId        String
+  createdAt              DateTime         @default(now())
+  sentAt                 DateTime?
+  selectedCount          Int              @default(0)
+  eligibleCount          Int              @default(0)
+  sendAttemptedCount     Int              @default(0)
+  sentCount              Int              @default(0)
+  failedCount            Int              @default(0)
+  receivedCount          Int              @default(0)
+  clickedCount           Int              @default(0)
+  destinationOpenedCount Int              @default(0)
+
+  createdBy User @relation("PushCampaignCreator", fields: [createdByUserId], references: [id])
+  deliveries PushDelivery[]
+
+  @@index([createdByUserId, createdAt])
+  @@index([source, createdAt])
+}
+
+model PushDelivery {
+  id                 String             @id @default(cuid())
+  campaignId         String?
+  notificationId     String?
+  userId             String
+  pushSubscriptionId String?
+  dealerId           String?
+  source             PushSource
+  triggerType        PushTriggerType?
+  status             PushDeliveryStatus @default(CREATED)
+  title              String
+  body               String
+  link               String?
+  idempotencyKey     String?            @unique
+  failureCategory    String?
+  createdAt          DateTime           @default(now())
+  sendAttemptedAt    DateTime?
+  sentAt             DateTime?
+  failedAt           DateTime?
+  receivedAt         DateTime?
+  clickedAt          DateTime?
+  destinationOpenedAt DateTime?
+  metadataJson       Json?
+
+  campaign         PushCampaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushSubscription PushSubscription? @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
+  notification     Notification?     @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+  @@index([notificationId])
+  @@index([dealerId, createdAt])
 }
 
 // ─── Product Config & AI Logs ───────────────────────────────────
@@ -570,15 +700,21 @@ model AiOperationLog {
 model AppEvent {
   id          String   @id @default(cuid())
   eventType   String
+  eventVersion Int     @default(1)
   entityType  String?
   entityId    String?
   dealerId    String?
+  userId      String?
+  source      String?
+  idempotencyKey String? @unique
   metadataJson Json?
   createdAt   DateTime @default(now())
 
   @@index([eventType, createdAt])
   @@index([dealerId, createdAt])
   @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([source, createdAt])
 }
 
 // ─── Rate Limiting (shared across serverless instances) ───────────

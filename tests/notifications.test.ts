@@ -3,15 +3,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     notification: { create: vi.fn() },
+    notificationPreference: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/services/notifications/push", () => ({
-  sendPushToUser: vi.fn(),
+  deliverPushToUser: vi.fn().mockResolvedValue({ sent: 1, failed: 0, deliveries: [] }),
 }));
 
 import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/services/notifications/push";
+import { deliverPushToUser } from "@/services/notifications/push";
 import { createNotification } from "@/services/notifications";
 
 describe("Notification orchestration", () => {
@@ -23,7 +24,7 @@ describe("Notification orchestration", () => {
   });
 
   it("creates activity even when push fails", async () => {
-    vi.mocked(sendPushToUser).mockRejectedValueOnce(new Error("push down"));
+    vi.mocked(deliverPushToUser).mockRejectedValueOnce(new Error("push down"));
 
     const notification = await createNotification({
       userId: "user-1",
@@ -34,6 +35,6 @@ describe("Notification orchestration", () => {
 
     expect(notification.id).toBe("n1");
     expect(prisma.notification.create).toHaveBeenCalledOnce();
-    expect(sendPushToUser).toHaveBeenCalledOnce();
+    expect(deliverPushToUser).toHaveBeenCalledOnce();
   });
 });
