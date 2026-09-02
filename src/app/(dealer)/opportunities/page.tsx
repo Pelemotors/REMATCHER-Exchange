@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, LoadingSpinner, EmptyState } from "@/components/ui/common";
+import {
+  EmptyStateV2,
+  MatchCardSkeletonV2,
+  PageHeaderV2,
+} from "@/components/ui/brand-v2";
 import { OpportunityCard } from "@/components/cards/match-card";
 import { COPY } from "@/config/brand";
 import type { MatchExplanation } from "@/lib/schemas/ai";
@@ -42,21 +46,28 @@ export default function OpportunitiesPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <LoadingSpinner />
+      <div>
+        <PageHeaderV2
+          title={COPY.opportunity}
+          subtitle="סוחר מאומת הביע עניין — ללא חשיפת זהות"
+        />
+        <div className="space-y-4">
+          <MatchCardSkeletonV2 />
+          <MatchCardSkeletonV2 />
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader
+      <PageHeaderV2
         title={COPY.opportunity}
         subtitle="סוחר מאומת הביע עניין — ללא חשיפת זהות"
       />
 
       {opps.length === 0 ? (
-        <EmptyState
+        <EmptyStateV2
           title={COPY.emptyOpportunities.title}
           description={COPY.emptyOpportunities.description}
         />

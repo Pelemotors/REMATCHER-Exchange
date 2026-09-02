@@ -4,8 +4,9 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
-import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { ExchangeMark } from "@/components/brand/exchange-mark";
 
 const RATE_LIMIT_MSG =
   "בוצעו יותר מדי ניסיונות התחברות. נסה שוב בעוד מספר דקות.";
@@ -66,63 +67,65 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card mx-auto w-full max-w-md space-y-6">
-      <div className="flex flex-col items-center text-center">
-        <BrandWordmark />
-        <p className="mt-3 text-body text-text-secondary">{BRAND.tagline}</p>
-      </div>
-
-      {error && (
-        <div className="rounded-sm bg-error-soft px-3 py-2 text-small text-error">
-          {error}
+    <form onSubmit={handleSubmit}>
+      <Surface depth="raised" className="mx-auto w-full max-w-md space-y-6 p-6">
+        <div className="flex flex-col items-center text-center">
+          <ExchangeMark state="idle" size={56} decorative />
+          <p className="mt-3 text-body text-v2-text-secondary">{BRAND.tagline}</p>
         </div>
-      )}
 
-      <div>
-        <label className="label" htmlFor="email">
-          אימייל
-        </label>
-        <input
-          id="email"
-          type="email"
-          className="input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          dir="ltr"
-        />
-      </div>
+        {error && (
+          <div className="rounded-sm bg-error-soft px-3 py-2 text-small text-error">
+            {error}
+          </div>
+        )}
 
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <label className="label mb-0" htmlFor="password">
-            סיסמה
+        <div>
+          <label className="label" htmlFor="email">
+            אימייל
           </label>
-          <Link href="/forgot-password" className="text-xs text-signal">
-            שכחת סיסמה?
-          </Link>
+          <input
+            id="email"
+            type="email"
+            className="input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            dir="ltr"
+          />
         </div>
-        <input
-          id="password"
-          type="password"
-          className="input"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          dir="ltr"
-        />
-      </div>
 
-      <button type="submit" className="btn-primary w-full" disabled={loading}>
-        {loading ? "מתחבר..." : "כניסה"}
-      </button>
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="label mb-0" htmlFor="password">
+              סיסמה
+            </label>
+            <Link href="/forgot-password" className="text-xs text-v2-signal">
+              שכחת סיסמה?
+            </Link>
+          </div>
+          <input
+            id="password"
+            type="password"
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            dir="ltr"
+          />
+        </div>
 
-      <p className="text-center text-sm text-text-secondary">
-        עדיין אין לך חשבון?{" "}
-        <Link href="/signup" className="font-medium text-signal">
-          יצירת חשבון / הצטרפות ל-Exchange
-        </Link>
-      </p>
+        <ButtonV2 type="submit" variant="signal" className="w-full" disabled={loading}>
+          {loading ? "מתחבר..." : "כניסה"}
+        </ButtonV2>
+
+        <p className="text-center text-sm text-v2-text-secondary">
+          עדיין אין לך חשבון?{" "}
+          <Link href="/signup" className="font-medium text-v2-signal">
+            יצירת חשבון / הצטרפות ל-Exchange
+          </Link>
+        </p>
+      </Surface>
     </form>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LoadingSpinner } from "@/components/ui/common";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import type { ParsedDemand } from "@/lib/schemas/ai";
 import { extractKnownNumber, extractKnownString } from "@/lib/schemas/ai";
 import type { DuplicateCheckResult } from "@/services/demand/duplicate-detection";
@@ -85,35 +85,37 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
 
   if (step === "input") {
     return (
-      <form onSubmit={handleParse} className="card space-y-4">
-        <div className="rounded-lg border border-signal/20 bg-signal-soft/50 px-4 py-3">
-          <p className="text-sm font-medium text-ink">Exchange Assistant</p>
-          <p className="mt-1 text-sm text-text-secondary">
-            תאר בשפה טבעית מה אתה מחפש — נשקף לך את החיפוש לאישור לפני הפעלה.
-          </p>
-        </div>
-        <label className="label" htmlFor="demand-input">
-          מה אתה מחפש?
-        </label>
-        <textarea
-          id="demand-input"
-          className="input min-h-[120px]"
-          placeholder="לדוגמה: מחפש מאזדה CX-5 מ-2022 ומעלה, תקציב עד 130,000, לא אדום"
-          value={rawText}
-          onChange={(e) => setRawText(e.target.value)}
-          required
-        />
-        <div className="flex gap-3">
-          <button type="submit" className="btn-primary flex-1" disabled={loading}>
-            {loading ? "מנתח..." : "המשך לאישור"}
-          </button>
-          {onCancel && (
-            <button type="button" className="btn-secondary" onClick={onCancel}>
-              ביטול
-            </button>
-          )}
-        </div>
-        {parseError && <p className="text-sm text-error">{parseError}</p>}
+      <form onSubmit={handleParse}>
+        <Surface depth="raised" className="space-y-4 p-4">
+          <Surface depth="secondary" className="border border-v2-signal/20 px-4 py-3">
+            <p className="text-sm font-medium text-v2-text-primary">Exchange Assistant</p>
+            <p className="mt-1 text-sm text-v2-text-secondary">
+              תאר בשפה טבעית מה אתה מחפש — נשקף לך את החיפוש לאישור לפני הפעלה.
+            </p>
+          </Surface>
+          <label className="label" htmlFor="demand-input">
+            מה אתה מחפש?
+          </label>
+          <textarea
+            id="demand-input"
+            className="input min-h-[120px]"
+            placeholder="לדוגמה: מחפש מאזדה CX-5 מ-2022 ומעלה, תקציב עד 130,000, לא אדום"
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+            required
+          />
+          <div className="flex gap-3">
+            <ButtonV2 type="submit" variant="signal" className="flex-1" disabled={loading}>
+              {loading ? "מנתח..." : "המשך לאישור"}
+            </ButtonV2>
+            {onCancel && (
+              <ButtonV2 variant="secondary" onClick={onCancel}>
+                ביטול
+              </ButtonV2>
+            )}
+          </div>
+          {parseError && <p className="text-sm text-error">{parseError}</p>}
+        </Surface>
       </form>
     );
   }
@@ -121,42 +123,37 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
   if (step === "duplicate" && duplicate) {
     const isNearly = duplicate.level === "NEARLY_IDENTICAL";
     return (
-      <div className="card space-y-4">
-        <h3 className="font-semibold">
+      <Surface depth="raised" className="space-y-4 p-4">
+        <h3 className="font-semibold text-v2-text-primary">
           {isNearly ? "יש לך כבר חיפוש פעיל כמעט זהה" : "יש לך חיפוש פעיל דומה"}
         </h3>
         {!isNearly && duplicate.differences.length > 0 && (
           <ul className="space-y-2 text-sm">
             {duplicate.differences.map((d) => (
               <li key={d.field}>
-                <span className="text-text-muted">{d.field}:</span>{" "}
+                <span className="text-v2-text-muted">{d.field}:</span>{" "}
                 {d.from} → {d.to}
               </li>
             ))}
           </ul>
         )}
         <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            className="btn-primary"
+          <ButtonV2
+            variant="signal"
             onClick={() => {
               window.location.href = `/demand?edit=${duplicate.existingDemandId}`;
             }}
           >
             {isNearly ? "עבור לחיפוש הקיים" : "עדכן את הקיים"}
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setStep("confirm")}
-          >
+          </ButtonV2>
+          <ButtonV2 variant="secondary" onClick={() => setStep("confirm")}>
             פתח חיפוש נוסף
-          </button>
-          <button type="button" className="text-sm text-text-muted" onClick={() => setStep("input")}>
+          </ButtonV2>
+          <button type="button" className="text-sm text-v2-text-muted" onClick={() => setStep("input")}>
             חזור
           </button>
         </div>
-      </div>
+      </Surface>
     );
   }
 
@@ -182,19 +179,19 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="card space-y-4 border-signal/30">
-        <div className="rounded-lg border border-border bg-surface-secondary px-4 py-3">
-          <p className="text-xs font-medium text-text-muted">מה שכתבת</p>
-          <p className="mt-1 text-sm text-text-primary">&ldquo;{rawText}&rdquo;</p>
-        </div>
-        <div className="rounded-lg bg-signal-soft/50 px-4 py-3">
-          <p className="text-sm font-medium text-ink">כך הבנו את החיפוש שלך</p>
-          <p className="mt-2 text-body text-text-primary">{reflectionText}</p>
+      <Surface depth="raised" className="space-y-4 border border-v2-signal/30 p-4">
+        <Surface depth="secondary" className="px-4 py-3">
+          <p className="text-xs font-medium text-v2-text-muted">מה שכתבת</p>
+          <p className="mt-1 text-sm text-v2-text-primary">&ldquo;{rawText}&rdquo;</p>
+        </Surface>
+        <Surface depth="secondary" className="bg-v2-signal-soft/30 px-4 py-3">
+          <p className="text-sm font-medium text-v2-text-primary">כך הבנו את החיפוש שלך</p>
+          <p className="mt-2 text-body text-v2-text-primary">{reflectionText}</p>
           {parsed.rawSummary && (
-            <p className="mt-2 text-xs text-text-muted">{parsed.rawSummary}</p>
+            <p className="mt-2 text-xs text-v2-text-muted">{parsed.rawSummary}</p>
           )}
-        </div>
-        <p className="text-sm text-text-secondary">
+        </Surface>
+        <p className="text-sm text-v2-text-secondary">
           בדוק שהבנו נכון את החיפוש שלך. החיפוש יופעל רק לאחר אישורך.
         </p>
 
@@ -215,7 +212,7 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
               onChange={(e) => setConfirmed({ ...confirmed, model: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">שנתון מינימום</label>
               <input
@@ -246,19 +243,20 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
             </div>
           </div>
         </div>
-      </div>
+      </Surface>
 
       <div className="flex gap-3">
-        <button
-          className="btn-primary flex-1"
+        <ButtonV2
+          variant="signal"
+          className="flex-1"
           onClick={handleConfirm}
           disabled={loading}
         >
           {loading ? "מפעיל..." : "אשר וחפש התאמות"}
-        </button>
-        <button className="btn-secondary" onClick={() => setStep("input")}>
+        </ButtonV2>
+        <ButtonV2 variant="secondary" onClick={() => setStep("input")}>
           חזור
-        </button>
+        </ButtonV2>
       </div>
     </div>
   );

@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { LoadingSpinner } from "@/components/ui/common";
+import {
+  ButtonV2,
+  SkeletonBlockV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import { COPY } from "@/config/brand";
 import { ConnectionMotif } from "@/components/brand/brand-wordmark";
 import { Phone, Copy, Check, MessageCircle } from "lucide-react";
@@ -84,20 +87,20 @@ export default function RevealPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <LoadingSpinner label="טוען חיבור..." />
+      <div className="mx-auto max-w-lg py-12">
+        <SkeletonBlockV2 lines={6} />
       </div>
     );
   }
 
   if (forbidden || !data) {
     return (
-      <div className="card text-center">
-        <p className="text-body text-text-secondary">לא ניתן לצפות בחיבור זה</p>
-        <Link href="/activity" className="btn-primary mt-4 inline-block">
+      <Surface depth="raised" className="mx-auto max-w-lg p-6 text-center">
+        <p className="text-body text-v2-text-secondary">לא ניתן לצפות בחיבור זה</p>
+        <ButtonV2 variant="signal" href="/activity" className="mt-4">
           חזרה לפעילות
-        </Link>
-      </div>
+        </ButtonV2>
+      </Surface>
     );
   }
 
@@ -105,39 +108,42 @@ export default function RevealPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <div className="reveal-hero card border border-signal/30 bg-surface text-center">
+      <Surface
+        depth="raised"
+        className="reveal-hero border border-v2-signal/30 p-6 text-center"
+      >
         <ConnectionMotif className="mb-4" />
-        <h2 className="text-h1 font-bold text-ink">{COPY.revealHeadline}</h2>
-        <p className="mt-2 text-body text-text-secondary">{COPY.revealSub}</p>
-      </div>
+        <h2 className="text-h1 font-bold text-v2-warm">{COPY.revealHeadline}</h2>
+        <p className="mt-2 text-body text-v2-text-secondary">{COPY.revealSub}</p>
+      </Surface>
 
       {data.matchSummary && (
-        <div className="card">
-          <p className="text-label text-text-muted">סיכום התאמה</p>
-          <p className="mt-1 text-h3 font-semibold text-ink">
+        <Surface depth="raised" className="p-4">
+          <p className="text-label text-v2-text-muted">סיכום התאמה</p>
+          <p className="mt-1 text-h3 font-semibold text-v2-warm">
             {[data.matchSummary.make, data.matchSummary.model]
               .filter(Boolean)
               .join(" ")}{" "}
             {data.matchSummary.year}
           </p>
-        </div>
+        </Surface>
       )}
 
-      <div className="card space-y-4">
-        <h3 className="text-h3 font-semibold text-ink">
+      <Surface depth="raised" className="space-y-4 p-4">
+        <h3 className="text-h3 font-semibold text-v2-warm">
           {data.isBuyer ? "פרטי המוכר" : "פרטי הקונה"}
         </h3>
         <div>
-          <p className="text-label text-text-muted">עסק</p>
-          <p className="font-medium text-ink">{data.counterparty.businessName}</p>
+          <p className="text-label text-v2-text-muted">עסק</p>
+          <p className="font-medium text-v2-text-primary">{data.counterparty.businessName}</p>
         </div>
         <div>
-          <p className="text-label text-text-muted">איש קשר</p>
-          <p className="font-medium text-ink">{data.counterparty.contactName}</p>
+          <p className="text-label text-v2-text-muted">איש קשר</p>
+          <p className="font-medium text-v2-text-primary">{data.counterparty.contactName}</p>
         </div>
         <div>
-          <p className="text-label text-text-muted">טלפון</p>
-          <p className="text-h2 font-bold text-ink" dir="ltr">
+          <p className="text-label text-v2-text-muted">טלפון</p>
+          <p className="text-h2 font-bold text-v2-warm" dir="ltr">
             {data.counterparty.phone}
           </p>
         </div>
@@ -147,7 +153,7 @@ export default function RevealPage() {
             <>
               <a
                 href={`tel:${phone}`}
-                className="btn-primary flex flex-1 items-center justify-center gap-2"
+                className="v2-btn-signal flex flex-1 items-center justify-center gap-2"
               >
                 <Phone className="h-4 w-4" strokeWidth={1.75} />
                 התקשר
@@ -156,13 +162,14 @@ export default function RevealPage() {
                 href={`https://wa.me/972${phone.replace(/^0/, "")}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-secondary flex items-center gap-2 px-4"
+                className="v2-btn-secondary flex items-center gap-2 px-4"
                 aria-label="WhatsApp"
               >
                 <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
               </a>
               <button
-                className="btn-secondary flex items-center gap-2 px-4"
+                type="button"
+                className="v2-btn-secondary flex items-center gap-2 px-4"
                 onClick={copyPhone}
                 aria-label="העתק מספר"
               >
@@ -175,34 +182,35 @@ export default function RevealPage() {
             </>
           )}
         </div>
-      </div>
+      </Surface>
 
       {!data.outcome ? (
-        <div className="card space-y-4">
-          <h3 className="text-h3 font-semibold text-ink">{COPY.outcome}</h3>
-          <p className="text-small text-text-secondary">{COPY.outcomeBillingNote}</p>
+        <Surface depth="raised" className="space-y-4 p-4">
+          <h3 className="text-h3 font-semibold text-v2-warm">{COPY.outcome}</h3>
+          <p className="text-small text-v2-text-secondary">{COPY.outcomeBillingNote}</p>
           <div className="grid gap-2">
             {OUTCOME_OPTIONS.map((opt) => (
-              <button
+              <ButtonV2
                 key={opt.value}
-                className="btn-secondary w-full justify-start text-right"
+                variant="secondary"
+                className="w-full justify-start text-right"
                 disabled={submitting}
                 onClick={() => submitOutcome(opt.value)}
               >
                 {opt.label}
-              </button>
+              </ButtonV2>
             ))}
           </div>
-        </div>
+        </Surface>
       ) : (
-        <div className="card text-center text-small text-text-secondary">
+        <Surface depth="raised" className="p-4 text-center text-small text-v2-text-secondary">
           תודה על העדכון — זה עוזר לנו לשפר התאמות
-        </div>
+        </Surface>
       )}
 
-      <Link href="/activity" className="btn-ghost block w-full text-center">
+      <ButtonV2 variant="ghost" href="/activity" className="block w-full text-center">
         חזרה לפעילות
-      </Link>
+      </ButtonV2>
     </div>
   );
 }

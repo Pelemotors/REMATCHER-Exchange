@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { PublicLayout } from "@/components/public/public-layout";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 
 export const metadata: Metadata = {
   title: "עדכון לגבי הבקשה | REMATCHER Exchange",
@@ -17,16 +17,16 @@ export default async function RejectedPage() {
   return (
     <PublicLayout>
       <div className="container-app py-16">
-        <div className="card mx-auto max-w-lg text-center">
-          <h1 className="text-h2 font-bold">הבקשה לא אושרה</h1>
-          <p className="mt-4 text-text-secondary">
+        <Surface depth="raised" className="mx-auto max-w-lg p-8 text-center">
+          <h1 className="text-h2 font-bold text-v2-warm">הבקשה לא אושרה</h1>
+          <p className="mt-4 text-v2-text-secondary">
             תודה על פנייתך. לאחר בדיקה, לא ניתן לאשר את הבקשה כרגע. לשאלות
             נוספות ניתן לפנות אלינו.
           </p>
-          <Link href="/login" className="btn-secondary mt-8 inline-block">
+          <ButtonV2 variant="secondary" href="/login" className="mt-8">
             חזרה להתחברות
-          </Link>
-        </div>
+          </ButtonV2>
+        </Surface>
       </div>
     </PublicLayout>
   );

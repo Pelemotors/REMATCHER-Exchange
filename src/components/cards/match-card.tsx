@@ -1,5 +1,11 @@
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { COPY } from "@/config/brand";
+import {
+  BadgeV2,
+  DataValue,
+  StatusBadgeV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import { Check, Minus, ShieldCheck } from "lucide-react";
 
 interface MatchCardProps {
@@ -53,35 +59,41 @@ export function MatchCard({
     : headline || COPY.matchPossible;
 
   return (
-    <article
-      className={cn("card space-y-4", isStrong && "card-signal")}
+    <Surface
+      depth="raised"
+      as="article"
+      className={cn(
+        "space-y-4 p-4",
+        isStrong && "border border-v2-signal/30",
+        loading && "pointer-events-none opacity-65"
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <span
-            className={cn(
-              isStrong ? "badge-signal" : gaps.length > 0 ? "badge-warning" : "badge-neutral"
-            )}
-          >
-            {displayHeadline}
-          </span>
-          <h3 className="mt-2 text-h3 font-bold text-ink">
+          <StatusBadgeV2 band={band} />
+          {!isStrong && displayHeadline !== COPY.matchPossible && (
+            <BadgeV2 variant="neutral" className="mr-2">
+              {displayHeadline}
+            </BadgeV2>
+          )}
+          <h3 className="mt-2 text-h3 font-bold text-v2-warm">
             {[vehicle.make, vehicle.model].filter(Boolean).join(" ") || "רכב"}
           </h3>
-          <p className="vehicle-meta mt-1">{vehicleMetaLine(vehicle)}</p>
+          <p className="vehicle-meta mt-1 text-v2-text-secondary">{vehicleMetaLine(vehicle)}</p>
         </div>
         <div className="shrink-0 text-left">
-          <p className="text-price">{formatCurrency(vehicle.b2bPrice)}</p>
-          <p className="text-label text-text-muted">לסוחר</p>
+          <DataValue size="sm" label="לסוחר">
+            {formatCurrency(vehicle.b2bPrice)}
+          </DataValue>
         </div>
       </div>
 
       {summary && (
-        <p className="text-body text-text-secondary">{summary}</p>
+        <p className="text-body text-v2-text-secondary">{summary}</p>
       )}
 
       {fits.length > 0 && (
-        <ul className="space-y-1.5 text-small text-text-primary">
+        <ul className="space-y-1.5 text-small text-v2-text-primary">
           {fits.map((f) => (
             <li key={f} className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" strokeWidth={2} />
@@ -91,7 +103,7 @@ export function MatchCard({
         </ul>
       )}
       {gaps.length > 0 && (
-        <ul className="space-y-1.5 text-small text-text-secondary">
+        <ul className="space-y-1.5 text-small text-v2-text-secondary">
           {gaps.map((g) => (
             <li key={g} className="flex items-start gap-2">
               <Minus className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
@@ -101,8 +113,8 @@ export function MatchCard({
         </ul>
       )}
 
-      <div className="flex items-start gap-2 rounded-sm bg-surface-secondary px-3 py-2 text-small text-text-secondary">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" strokeWidth={1.75} />
+      <div className="flex items-start gap-2 rounded-sm bg-v2-surface-secondary px-3 py-2 text-small text-v2-text-secondary">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-v2-text-muted" strokeWidth={1.75} />
         <span>
           {COPY.verifiedDealer} · {COPY.privacyNote}
         </span>
@@ -111,14 +123,14 @@ export function MatchCard({
       {showActions && (
         <div className="flex gap-3 pt-1">
           <button
-            className="btn-primary flex-1"
+            className="v2-btn-signal flex-1"
             onClick={onInterested}
             disabled={loading}
           >
             {COPY.interested}
           </button>
           <button
-            className="btn-secondary flex-1"
+            className="v2-btn-secondary flex-1"
             onClick={onReject}
             disabled={loading}
           >
@@ -126,7 +138,7 @@ export function MatchCard({
           </button>
         </div>
       )}
-    </article>
+    </Surface>
   );
 }
 
@@ -150,15 +162,22 @@ export function OpportunityCard({
   loading?: boolean;
 }) {
   return (
-    <article className="card-signal space-y-4">
-      <span className="badge-signal">{COPY.opportunity}</span>
+    <Surface
+      depth="raised"
+      as="article"
+      className={cn(
+        "space-y-4 border border-v2-signal/30 p-4",
+        loading && "pointer-events-none opacity-65"
+      )}
+    >
+      <BadgeV2 variant="signal">{COPY.opportunity}</BadgeV2>
       <div>
-        <p className="text-label text-text-muted">מחפשים</p>
-        <h3 className="text-h3 font-bold text-ink">
+        <p className="text-label text-v2-text-muted">מחפשים</p>
+        <h3 className="text-h3 font-bold text-v2-warm">
           {String(demandSummary.make ?? "")}{" "}
           {String(demandSummary.model ?? "")}
         </h3>
-        <p className="vehicle-meta mt-1">
+        <p className="vehicle-meta mt-1 text-v2-text-secondary">
           {[
             demandSummary.yearMin && `${demandSummary.yearMin} ומעלה`,
             demandSummary.trimPreference === "high_trim" && "עדיפות לגרסה מפוארת",
@@ -168,9 +187,9 @@ export function OpportunityCard({
         </p>
       </div>
 
-      <div className="rounded-md bg-surface-secondary p-3">
-        <p className="text-label text-text-muted">הרכב שלך</p>
-        <p className="mt-1 font-semibold text-ink">
+      <Surface depth="secondary" className="p-3">
+        <p className="text-label text-v2-text-muted">הרכב שלך</p>
+        <p className="mt-1 font-semibold text-v2-text-primary">
           {[vehicleSummary.make, vehicleSummary.model]
             .filter(Boolean)
             .join(" ")}{" "}
@@ -180,38 +199,38 @@ export function OpportunityCard({
         {headline && (
           <p className="mt-2 text-small font-semibold text-success">{headline}</p>
         )}
-      </div>
+      </Surface>
 
-      {summary && <p className="text-body text-text-secondary">{summary}</p>}
+      {summary && <p className="text-body text-v2-text-secondary">{summary}</p>}
 
       {gaps.map((g) => (
-        <p key={g} className="flex items-start gap-2 text-small text-text-secondary">
+        <p key={g} className="flex items-start gap-2 text-small text-v2-text-secondary">
           <Minus className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
           {g}
         </p>
       ))}
 
-      <div className="flex items-start gap-2 text-small text-text-muted">
+      <div className="flex items-start gap-2 text-small text-v2-text-muted">
         <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         {COPY.verifiedDealer} — {COPY.privacyNote}
       </div>
 
       <div className="flex gap-3">
         <button
-          className="btn-primary flex-1"
+          className="v2-btn-signal flex-1"
           onClick={onInterested}
           disabled={loading}
         >
           {COPY.interested}
         </button>
         <button
-          className="btn-secondary flex-1"
+          className="v2-btn-secondary flex-1"
           onClick={onReject}
           disabled={loading}
         >
           {COPY.notRelevant}
         </button>
       </div>
-    </article>
+    </Surface>
   );
 }

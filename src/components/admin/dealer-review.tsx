@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 
 interface DealerReview {
   id: string;
@@ -68,22 +69,21 @@ export function DealerReviewActions({ dealer }: { dealer: DealerReview }) {
 
   return (
     <div className="space-y-3">
-      <button
-        type="button"
-        className="btn-primary w-full sm:w-auto"
+      <ButtonV2
+        className="w-full sm:w-auto"
         onClick={approve}
         disabled={loading !== null}
       >
         {loading === "approve" ? "מאשר..." : "אשר סוחר"}
-      </button>
+      </ButtonV2>
       {!showReject ? (
-        <button
-          type="button"
-          className="btn-secondary w-full sm:w-auto"
+        <ButtonV2
+          variant="secondary"
+          className="w-full sm:w-auto"
           onClick={() => setShowReject(true)}
         >
           דחה בקשה
-        </button>
+        </ButtonV2>
       ) : (
         <div className="space-y-2">
           <textarea
@@ -92,14 +92,13 @@ export function DealerReviewActions({ dealer }: { dealer: DealerReview }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
-          <button
-            type="button"
-            className="btn-secondary"
+          <ButtonV2
+            variant="secondary"
             onClick={reject}
             disabled={loading !== null}
           >
             {loading === "reject" ? "דוחה..." : "אשר דחייה"}
-          </button>
+          </ButtonV2>
         </div>
       )}
     </div>
@@ -108,13 +107,13 @@ export function DealerReviewActions({ dealer }: { dealer: DealerReview }) {
 
 export function DealerReviewCard({ dealer }: { dealer: DealerReview }) {
   return (
-    <div className="card space-y-6">
+    <Surface depth="raised" className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-h2 font-bold">{dealer.businessName}</h1>
-          <p className="text-sm text-text-muted">Dealer ID: {dealer.id}</p>
+          <h1 className="text-h2 font-bold text-v2-warm">{dealer.businessName}</h1>
+          <p className="text-sm text-v2-text-muted">Dealer ID: {dealer.id}</p>
         </div>
-        <Link href="/admin/dealers" className="text-sm text-signal">
+        <Link href="/admin/dealers" className="text-sm text-v2-signal">
           חזרה לתור
         </Link>
       </div>
@@ -151,6 +150,6 @@ export function DealerReviewCard({ dealer }: { dealer: DealerReview }) {
       )}
 
       <DealerReviewActions dealer={dealer} />
-    </div>
+    </Surface>
   );
 }

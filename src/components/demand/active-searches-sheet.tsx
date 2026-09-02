@@ -19,14 +19,14 @@ export function ActiveSearchesSheet({ open, onClose }: Props) {
         <div className="flex gap-2">
           <Link
             href="/demand"
-            className="btn-secondary flex-1 text-center"
+            className="v2-btn-secondary flex-1 text-center"
             onClick={onClose}
           >
             כל החיפושים
           </Link>
           <Link
             href="/demand?new=1"
-            className="btn-primary flex-1 text-center"
+            className="v2-btn-signal flex-1 text-center"
             onClick={onClose}
           >
             + חיפוש חדש
