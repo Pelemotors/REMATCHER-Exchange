@@ -1,44 +1,78 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
 import { BRAND } from "@/config/brand";
+import styles from "./public-header-v2.module.css";
 
 export function PublicHeaderV2() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
-    <header className="absolute inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-[#070C14]/75 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[1280px] items-center justify-between px-5 py-4 md:px-8 lg:px-12">
-        <Link href="/" className="flex items-center gap-3">
-          <ExchangeMark state="idle" variant="hero" size={44} decorative />
-          <div className="leading-tight">
-            <p className="text-[0.625rem] font-semibold uppercase tracking-[0.16em] text-white/45">
-              {BRAND.parent}
-            </p>
-            <p className="text-sm font-medium text-white/75">
-              {BRAND.productShort}
-            </p>
+    <header className={styles.header}>
+      <div className={styles.inner}>
+        <Link href="/" className={styles.lockup}>
+          <ExchangeMark
+            state="idle"
+            variant="hero"
+            className={styles.markIcon}
+            decorative
+          />
+          <div className={styles.lockupText}>
+            <p className={styles.brandParent}>{BRAND.parent}</p>
+            <p className={styles.brandProduct}>{BRAND.productShort}</p>
           </div>
         </Link>
 
-        <nav className="flex items-center gap-2 sm:gap-3">
+        <nav className={styles.desktopNav} aria-label="ניווט ראשי">
+          <a href="#how-it-works" className={styles.navLink}>
+            איך זה עובד
+          </a>
+          <Link href="/login" className={styles.navLink}>
+            התחבר
+          </Link>
+          <Link href="/signup" className={styles.navCta}>
+            הצטרפות
+          </Link>
+        </nav>
+
+        <button
+          type="button"
+          className={styles.menuButton}
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? "סגור תפריט" : "פתח תפריט"}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span className={styles.menuIcon} />
+        </button>
+      </div>
+
+      {menuOpen && (
+        <nav className={styles.mobileMenu} aria-label="תפריט מובייל">
           <a
             href="#how-it-works"
-            className="hidden px-3 py-2 text-sm text-white/50 transition hover:text-white/75 sm:inline"
+            className={styles.mobileMenuLink}
+            onClick={() => setMenuOpen(false)}
           >
             איך זה עובד
           </a>
           <Link
             href="/login"
-            className="rounded-md px-4 py-2 text-sm text-white/60 transition hover:text-white/85"
+            className={styles.mobileMenuLink}
+            onClick={() => setMenuOpen(false)}
           >
             התחבר
           </Link>
           <Link
             href="/signup"
-            className="rounded-md border border-[#163A5F] bg-[#163A5F] px-4 py-2 text-sm font-medium text-[#F3F1EC] transition hover:border-[#2D78A8] hover:bg-[#174A73]"
+            className={styles.mobileMenuLink}
+            onClick={() => setMenuOpen(false)}
           >
             הצטרפות
           </Link>
         </nav>
-      </div>
+      )}
     </header>
   );
 }
