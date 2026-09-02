@@ -1,0 +1,124 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .page {
+    gap: 2rem;
+  }
+}
+
+.actionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: 6px;
+  transition: background-color 150ms;
+}
+
+.actionRow:hover {
+  background: var(--rm2-surface-secondary);
+}
+
+.opportunitySection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Mobile: stacked opportunity cards with clear hierarchy */
+.opportunityGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.opportunityCard {
+  display: block;
+  padding: 1rem 1.125rem;
+  border-radius: 6px;
+  transition: background-color 150ms;
+}
+
+.opportunityCard:hover {
+  background: var(--rm2-surface-secondary);
+}
+
+.opportunityCardStrong {
+  border: 1px solid rgba(45, 120, 168, 0.28);
+}
+
+.opportunityTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.opportunityValue {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--rm2-warm-white);
+}
+
+.opportunityValueSignal {
+  color: var(--rm2-signal-blue);
+}
+
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.activityItem {
+  display: block;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--rm2-border);
+  border-radius: 6px;
+  transition: background-color 150ms;
+}
+
+.activityItem:hover {
+  background: var(--rm2-surface-secondary);
+}
+
+.networkGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .opportunityGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .networkGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}
+
+.idlePanel {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 6px;
+}

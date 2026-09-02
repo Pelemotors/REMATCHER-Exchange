@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { canAccessExchange } from "@/lib/auth-routing";
-import { AppShell } from "@/components/layout/app-shell";
+import { BrandV2Scope } from "@/components/ui/brand-v2";
+import { AppShellV2 } from "@/components/layout/app-shell-v2";
 
 export default async function DealerLayout({
   children,
@@ -31,5 +32,9 @@ export default async function DealerLayout({
     redirect("/pending-approval");
   }
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <BrandV2Scope className="min-h-screen">
+      <AppShellV2>{children}</AppShellV2>
+    </BrandV2Scope>
+  );
 }

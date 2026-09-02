@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
 import {
-  BrandV2Scope,
+  BadgeV2,
   DataValue,
+  PageHeaderV2,
   SectionHeader,
   Surface,
 } from "@/components/ui/brand-v2";
@@ -13,6 +13,7 @@ import { ActiveSearchesSheet } from "@/components/demand/active-searches-sheet";
 import { formatRelative } from "@/lib/utils";
 import { BRAND } from "@/config/brand";
 import { ChevronLeft } from "lucide-react";
+import styles from "./home-v2.module.css";
 
 export interface HomeV2ActionItem {
   href: string;
@@ -56,44 +57,33 @@ export function HomeV2({
   const hasOpportunities = matches > 0 || opportunities > 0;
 
   return (
-    <BrandV2Scope className="-mx-4 -mt-4 px-4 pt-4 md:-mx-6 md:px-6">
-      {/* Page header */}
-      <header className="mb-8">
-        <p className="text-label text-v2-text-muted">{dealerName ?? BRAND.product}</p>
-        <h1 className="mt-1 text-title font-semibold text-v2-warm">
-          שלום, {userName}
-        </h1>
-      </header>
+    <div className={styles.page}>
+      <PageHeaderV2
+        eyebrow={dealerName ?? BRAND.product}
+        title={`שלום, ${userName}`}
+      />
 
       {/* 1. Requires action */}
       {actionItems.length > 0 ? (
-        <section className="mb-8">
+        <section>
           <SectionHeader title="דורש פעולה" />
-          <div className="space-y-2">
+          <div className={styles.actionList}>
             {actionItems.map((item) => (
               <Link key={item.href} href={item.href} className="block">
-                <Surface
-                  depth="raised"
-                  className="flex items-center justify-between px-4 py-3.5 transition hover:bg-v2-surface-secondary"
-                >
+                <Surface depth="raised" className={styles.actionRow}>
                   <span className="font-medium text-v2-text-primary">
                     {item.label}
                   </span>
-                  <span
-                    className={
-                      item.urgent ? "v2-badge-match" : "v2-badge-neutral"
-                    }
-                  >
+                  <BadgeV2 variant={item.urgent ? "signal" : "neutral"}>
                     {item.count}
-                  </span>
+                  </BadgeV2>
                 </Surface>
               </Link>
             ))}
           </div>
         </section>
       ) : (
-        <Surface depth="secondary" className="mb-8 flex items-center gap-4 px-5 py-6">
-          <ExchangeMark state="idle" size={48} />
+        <Surface depth="secondary" className={styles.idlePanel}>
           <div>
             <p className="font-medium text-v2-text-primary">
               אין פעולות דחופות
@@ -106,26 +96,32 @@ export function HomeV2({
       )}
 
       {/* 2. Opportunities */}
-      <section className="mb-8">
+      <section className={styles.opportunitySection}>
         <SectionHeader
           title="הזדמנויות"
           subtitle="התאמות ועניין ברכבים שלך"
         />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={styles.opportunityGrid}>
           <Link href="/matches" className="block">
             <Surface
               depth="raised"
-              className={`px-5 py-5 transition hover:bg-v2-surface-secondary ${
-                matches > 0 ? "ring-1 ring-v2-signal/30" : ""
+              className={`${styles.opportunityCard} ${
+                matches > 0 ? styles.opportunityCardStrong : ""
               }`}
             >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-label text-v2-text-muted">התאמות חדשות</span>
-                {matches > 0 && (
-                  <ExchangeMark state="matched" size={28} />
-                )}
+              <div className={styles.opportunityTop}>
+                <span className="text-label text-v2-text-muted">
+                  התאמות חדשות
+                </span>
+                {matches > 0 && <BadgeV2 variant="signal">חדש</BadgeV2>}
               </div>
-              <DataValue signal={matches > 0}>{matches}</DataValue>
+              <p
+                className={`${styles.opportunityValue} ${
+                  matches > 0 ? styles.opportunityValueSignal : ""
+                }`}
+              >
+                {matches}
+              </p>
               {matches > 0 && (
                 <p className="mt-2 text-small text-v2-signal">
                   יש התאמות שמחכות לך
@@ -137,19 +133,25 @@ export function HomeV2({
           <Link href="/opportunities" className="block">
             <Surface
               depth="raised"
-              className={`px-5 py-5 transition hover:bg-v2-surface-secondary ${
-                opportunities > 0 ? "ring-1 ring-v2-signal/30" : ""
+              className={`${styles.opportunityCard} ${
+                opportunities > 0 ? styles.opportunityCardStrong : ""
               }`}
             >
-              <div className="mb-3 flex items-center justify-between">
+              <div className={styles.opportunityTop}>
                 <span className="text-label text-v2-text-muted">
                   עניין ברכבים שלך
                 </span>
                 {opportunities > 0 && (
-                  <ExchangeMark state="converging" size={28} />
+                  <BadgeV2 variant="signal">חדש</BadgeV2>
                 )}
               </div>
-              <DataValue signal={opportunities > 0}>{opportunities}</DataValue>
+              <p
+                className={`${styles.opportunityValue} ${
+                  opportunities > 0 ? styles.opportunityValueSignal : ""
+                }`}
+              >
+                {opportunities}
+              </p>
               {opportunities > 0 && (
                 <p className="mt-2 text-small text-v2-signal">
                   סוחרים מתעניינים ברכב שלך
@@ -160,14 +162,14 @@ export function HomeV2({
         </div>
 
         {!hasOpportunities && (
-          <p className="mt-3 text-small text-v2-text-muted">
+          <p className="text-small text-v2-text-muted">
             כרגע אין הזדמנויות חדשות — הרשת ממשיכה לחפש
           </p>
         )}
       </section>
 
       {/* 3. Recent activity */}
-      <section className="mb-8">
+      <section>
         <SectionHeader
           title="מה קרה"
           action={
@@ -181,13 +183,10 @@ export function HomeV2({
           }
         />
         {notifications.length > 0 ? (
-          <div className="space-y-2">
+          <div className={styles.activityList}>
             {notifications.map((n) => (
               <Link key={n.id} href={n.link ?? "/activity"} className="block">
-                <Surface
-                  depth="base"
-                  className="border border-v2-border px-4 py-3 transition hover:bg-v2-surface-secondary"
-                >
+                <Surface depth="base" className={styles.activityItem}>
                   <p className="font-medium text-v2-text-primary">{n.title}</p>
                   {n.body && (
                     <p className="mt-0.5 text-small text-v2-text-secondary">
@@ -206,10 +205,10 @@ export function HomeV2({
         )}
       </section>
 
-      {/* 4. Network (quiet) */}
+      {/* 4. Network */}
       <section>
         <SectionHeader title="הרשת שלך" />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={styles.networkGrid}>
           <button
             type="button"
             onClick={() => setSearchesOpen(true)}
@@ -244,6 +243,6 @@ export function HomeV2({
         open={searchesOpen}
         onClose={() => setSearchesOpen(false)}
       />
-    </BrandV2Scope>
+    </div>
   );
 }

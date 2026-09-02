@@ -1,0 +1,107 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+@media (min-width: 768px) {
+  .card {
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+  }
+}
+
+.cardStrong {
+  border: 1px solid rgba(45, 120, 168, 0.28);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}
+
+.vehicleBlock {
+  min-width: 0;
+}
+
+.vehicleTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--rm2-warm-white);
+}
+
+@media (min-width: 768px) {
+  .vehicleTitle {
+    font-size: 1.25rem;
+  }
+}
+
+.commercial {
+  flex-shrink: 0;
+  text-align: start;
+}
+
+@media (min-width: 768px) {
+  .commercial {
+    text-align: end;
+  }
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--rm2-text-secondary);
+}
+
+.fitList,
+.gapList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-top: 1px solid var(--rm2-border);
+  padding-top: 0.875rem;
+  font-size: 0.875rem;
+  color: var(--rm2-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+@media (min-width: 480px) {
+  .actions {
+    flex-direction: row;
+  }
+}
+
+.loadingOverlay {
+  opacity: 0.65;
+  pointer-events: none;
+}

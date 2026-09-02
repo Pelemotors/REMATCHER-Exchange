@@ -1,9 +1,13 @@
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { COPY } from "@/config/brand";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
-import { Surface } from "@/components/ui/brand-v2";
-import { DataValue } from "@/components/ui/brand-v2/data-value";
+import {
+  BadgeV2,
+  DataValue,
+  StatusBadgeV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import { Check, Minus, ShieldCheck } from "lucide-react";
+import styles from "./match-card-v2.module.css";
 
 export interface MatchCardV2Props {
   headline: string;
@@ -35,6 +39,8 @@ function vehicleMetaLine(vehicle: MatchCardV2Props["vehicle"]) {
     parts.push(`${formatNumber(vehicle.mileage)} ק״מ`);
   if (vehicle.ownershipHand) parts.push(`יד ${vehicle.ownershipHand}`);
   if (vehicle.trim) parts.push(vehicle.trim);
+  if (vehicle.color) parts.push(vehicle.color);
+  if (vehicle.region) parts.push(vehicle.region);
   return parts.join(" · ");
 }
 
@@ -51,70 +57,50 @@ export function MatchCardV2({
   showActions = true,
 }: MatchCardV2Props) {
   const isStrong = band === "STRONG";
-  const displayHeadline = isStrong
-    ? COPY.matchStrong
-    : headline || COPY.matchPossible;
+  const displayHeadline = headline || COPY.matchPossible;
 
   return (
     <Surface
       depth="raised"
       as="article"
       className={cn(
-        "space-y-5 p-5",
-        isStrong && "ring-1 ring-v2-signal/40"
+        styles.card,
+        isStrong && styles.cardStrong,
+        loading && styles.loadingOverlay,
       )}
     >
-      {/* MATCH header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {isStrong ? (
-            <ExchangeMark state="matched" size={32} />
-          ) : (
-            <ExchangeMark state="idle" size={32} />
-          )}
-          <div>
-            <span
-              className={cn(
-                isStrong
-                  ? "v2-badge-match"
-                  : gaps.length > 0
-                    ? "v2-badge-warning"
-                    : "v2-badge-neutral"
-              )}
-            >
-              {isStrong ? "MATCH" : displayHeadline}
-            </span>
-            {!isStrong && (
-              <p className="mt-1 text-label text-v2-text-muted">
-                {displayHeadline}
-              </p>
+      {/* Vehicle first — primary hierarchy */}
+      <div className={styles.header}>
+        <div className={styles.vehicleBlock}>
+          <h3 className={styles.vehicleTitle}>
+            {[vehicle.make, vehicle.model].filter(Boolean).join(" ") || "רכב"}
+          </h3>
+          <p className="mt-1 text-small text-v2-text-secondary">
+            {vehicleMetaLine(vehicle)}
+          </p>
+          <div className={cn(styles.metaRow, "mt-2")}>
+            <StatusBadgeV2 band={band} />
+            {!isStrong && displayHeadline !== COPY.matchPossible && (
+              <BadgeV2 variant="neutral">{displayHeadline}</BadgeV2>
+            )}
+            {gaps.length > 0 && band !== "STRONG" && (
+              <BadgeV2 variant="warning">פערים</BadgeV2>
             )}
           </div>
         </div>
-        <DataValue size="sm" label="לסוחר">
-          {formatCurrency(vehicle.b2bPrice)}
-        </DataValue>
+        <div className={styles.commercial}>
+          <DataValue size="sm" label="לסוחר">
+            {formatCurrency(vehicle.b2bPrice)}
+          </DataValue>
+        </div>
       </div>
 
-      {/* Vehicle */}
-      <div>
-        <h3 className="text-h3 font-semibold text-v2-warm">
-          {[vehicle.make, vehicle.model].filter(Boolean).join(" ") || "רכב"}
-        </h3>
-        <p className="mt-1 text-small text-v2-text-secondary">
-          {vehicleMetaLine(vehicle)}
-        </p>
-      </div>
-
-      {/* Why the match */}
-      {summary && (
-        <p className="text-body text-v2-text-secondary">{summary}</p>
-      )}
+      {summary && <p className={styles.summary}>{summary}</p>}
 
       {fits.length > 0 && (
-        <ul className="space-y-1.5 text-small text-v2-text-primary">
+        <ul className={styles.fitList}>
           {fits.map((f) => (
-            <li key={f} className="flex items-start gap-2">
+            <li key={f} className="flex items-start gap-2 text-v2-text-primary">
               <Check
                 className="mt-0.5 h-4 w-4 shrink-0 text-success"
                 strokeWidth={2}
@@ -126,9 +112,9 @@ export function MatchCardV2({
       )}
 
       {gaps.length > 0 && (
-        <ul className="space-y-1.5 text-small text-v2-text-secondary">
+        <ul className={styles.gapList}>
           {gaps.map((g) => (
-            <li key={g} className="flex items-start gap-2">
+            <li key={g} className="flex items-start gap-2 text-v2-text-secondary">
               <Minus
                 className="mt-0.5 h-4 w-4 shrink-0 text-warning"
                 strokeWidth={2}
@@ -139,23 +125,22 @@ export function MatchCardV2({
         </ul>
       )}
 
-      {/* Privacy */}
-      <div className="flex items-start gap-2 border-t border-v2-border pt-4 text-small text-v2-text-muted">
+      <div className={styles.privacy}>
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
         <span>
           {COPY.verifiedDealer} · {COPY.privacyNote}
         </span>
       </div>
 
-      {/* Actions */}
       {showActions && (
-        <div className="flex gap-3">
+        <div className={styles.actions}>
           <button
             className="v2-btn-signal flex-1"
             onClick={onInterested}
             disabled={loading}
+            aria-busy={loading}
           >
-            {COPY.interested}
+            {loading ? "שולח..." : COPY.interested}
           </button>
           <button
             className="v2-btn-secondary flex-1"

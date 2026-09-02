@@ -253,6 +253,10 @@ body {
     @apply v2-badge bg-warning-soft text-warning;
   }
 
+  .v2-badge-success {
+    @apply v2-badge bg-success-soft text-success;
+  }
+
   .v2-text-data {
     @apply text-[1.75rem] font-semibold leading-tight tabular-nums text-v2-warm;
   }
