@@ -130,7 +130,25 @@ export async function submitOutcome(params: {
   });
 
   if (!reveal) throw new Error("FORBIDDEN");
-  if (reveal.outcome) return reveal.outcome;
+  if (reveal.outcome) {
+    const updated = await prisma.outcome.update({
+      where: { id: reveal.outcome.id },
+      data: {
+        status: params.status,
+        notes: params.notes,
+        reportedByDealerId: params.dealerId,
+        reportedAt: new Date(),
+      },
+    });
+    await logAppEvent({
+      eventType: "outcome_updated",
+      entityType: "Outcome",
+      entityId: updated.id,
+      dealerId: params.dealerId,
+      metadata: { revealId: params.revealId, status: params.status },
+    });
+    return updated;
+  }
 
   const match =
     reveal.mutualInterest.sellerInterest.opportunity.candidateMatch;

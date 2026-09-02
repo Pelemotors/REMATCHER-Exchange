@@ -22,10 +22,14 @@ import {
 } from "@/services/assistant/tools/registry";
 import {
   createDemandDraft,
+  executeConfirmValidation,
   executeDemandClosure,
   executeDemandRenewal,
+  markMyVehicleSold,
+  prepareConfirmValidation,
   prepareDemandClosure,
   prepareDemandRenewal,
+  prepareMarkSold,
 } from "@/services/assistant/tools/action-tools";
 import { planAgentTurn } from "@/services/assistant/planner";
 import { mergeSessionContext } from "@/services/assistant/commercial-judgment";
@@ -132,6 +136,46 @@ export async function runExchangeAssistantV2(params: {
           intent: "CLOSE_DEMAND",
           message: `סגרתי את החיפוש "${demand?.title ?? ""}".`,
           conversation: {},
+          meta,
+        };
+      }
+      if (pending.action === "confirm_validation") {
+        const validationId = pending.payload.validationId as string;
+        const result = await executeConfirmValidation(
+          params.dealerId,
+          validationId,
+          true
+        );
+        meta.responseType = "mutation_validation";
+        if (!result.ok) {
+          return {
+            intent: "UNKNOWN",
+            message: "לא הצלחתי לאשר את הזמינות.",
+            meta,
+          };
+        }
+        return {
+          intent: "VALIDATION",
+          message: "אישרת זמינות. Exchange ממשיך לבדוק התאמות.",
+          suggestions: [{ label: "לאימותים", href: "/validations" }],
+          meta,
+        };
+      }
+      if (pending.action === "mark_sold") {
+        const vehicleId = pending.payload.vehicleId as string;
+        const result = await markMyVehicleSold(params.dealerId, vehicleId);
+        meta.responseType = "mutation_sold";
+        if (!result.ok) {
+          return {
+            intent: "UNKNOWN",
+            message: "לא הצלחתי לסמן את הרכב כנמכר.",
+            meta,
+          };
+        }
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "סימנתי את הרכב כנמכר.",
+          suggestions: [{ label: "למלאי", href: "/inventory" }],
           meta,
         };
       }
@@ -258,6 +302,69 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
+  if (plan.actionIntent === "confirm_validation" && plan.referencedObjectId) {
+    const prep = await prepareConfirmValidation(
+      params.dealerId,
+      plan.referencedObjectId
+    );
+    if (!prep.ok) {
+      return {
+        intent: "VALIDATION",
+        message: "לא מצאתי אימות ממתין. בדוק במסך האימותים.",
+        suggestions: [{ label: "לאימותים", href: "/validations" }],
+        meta,
+      };
+    }
+    meta.responseType = "confirmation_validation";
+    return {
+      intent: "VALIDATION",
+      message: prep.label,
+      requiresConfirmation: {
+        action: prep.action,
+        label: prep.label,
+        payload: prep.payload,
+      },
+      conversation: {
+        pendingConfirmation: {
+          action: prep.action,
+          label: prep.label,
+          payload: prep.payload,
+        },
+      },
+      meta,
+    };
+  }
+
+  if (plan.actionIntent === "mark_sold" && plan.referencedObjectId) {
+    const prep = await prepareMarkSold(params.dealerId, plan.referencedObjectId);
+    if (!prep.ok) {
+      return {
+        intent: "UPDATE_INVENTORY",
+        message: "לא מצאתי את הרכב במלאי שלך.",
+        suggestions: [{ label: "פתח מלאי", href: "/inventory" }],
+        meta,
+      };
+    }
+    meta.responseType = "confirmation_sold";
+    return {
+      intent: "UPDATE_INVENTORY",
+      message: prep.label,
+      requiresConfirmation: {
+        action: prep.action,
+        label: prep.label,
+        payload: prep.payload,
+      },
+      conversation: {
+        pendingConfirmation: {
+          action: prep.action,
+          label: prep.label,
+          payload: prep.payload,
+        },
+      },
+      meta,
+    };
+  }
+
   // --- Execute only planner-selected tools ---
   const tools = uniqueTools(
     plan.tools.length > 0 ? plan.tools : (["getMyExchangeState"] as ReadToolName[])
@@ -364,6 +471,15 @@ export async function getAssistantContext(dealerId: string) {
     suggestions.push({
       label: `${state.openOpportunities} הזדמנויות פתוחות`,
       href: "/opportunities",
+    });
+  }
+
+  const pendingOutcomes = (state as { pendingOutcomes?: number } | undefined)
+    ?.pendingOutcomes;
+  if (pendingOutcomes) {
+    suggestions.push({
+      label: `${pendingOutcomes} חיבורים ממתינים לעדכון`,
+      href: "/activity?filter=outcomes",
     });
   }
 

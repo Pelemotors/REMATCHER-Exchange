@@ -35,12 +35,17 @@ export default function OpportunitiesPage() {
 
   async function handleAction(id: string, action: string) {
     setActionLoading(id);
-    await fetch("/api/opportunities", {
+    const res = await fetch("/api/opportunities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ opportunityId: id, action }),
     });
+    const data = await res.json();
     setActionLoading(null);
+    if (action === "interested" && data.reveal?.id) {
+      window.location.href = `/reveals/${data.reveal.id}`;
+      return;
+    }
     load();
   }
 

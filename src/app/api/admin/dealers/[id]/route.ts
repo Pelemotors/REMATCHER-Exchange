@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth-guards";
-import { getDealerForReview } from "@/services/admin/dealer-verification";
+import { getDealer360 } from "@/services/admin/control-center";
 
 export async function GET(
   _req: Request,
@@ -15,11 +15,12 @@ export async function GET(
   }
 
   const { id } = await params;
-  const dealer = await getDealerForReview(id);
-  if (!dealer) {
+  const data = await getDealer360(id);
+  if (!data) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const { dealer, metrics, recentEvents } = data;
   const owner = dealer.memberships[0]?.user;
 
   return NextResponse.json({
@@ -34,6 +35,14 @@ export async function GET(
     verificationStatus: dealer.verificationStatus,
     createdAt: dealer.createdAt,
     commercial: dealer.commercial,
+    onboardingState: dealer.onboardingState,
+    metrics,
+    recentEvents: recentEvents.map((e) => ({
+      eventType: e.eventType,
+      entityType: e.entityType,
+      entityId: e.entityId,
+      createdAt: e.createdAt,
+    })),
     owner: owner
       ? {
           id: owner.id,

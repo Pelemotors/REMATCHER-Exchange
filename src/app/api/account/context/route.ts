@@ -10,12 +10,17 @@ export async function GET() {
 
   const membership = await prisma.dealerMembership.findFirst({
     where: { userId: session.user.id },
-    include: { dealer: true },
+    include: { dealer: true, user: true },
     orderBy: { createdAt: "asc" },
   });
 
   return NextResponse.json({
     dealerName: membership?.dealer.businessName ?? session.user.dealerName,
     verificationStatus: membership?.dealer.verificationStatus ?? "PENDING",
+    city: membership?.dealer.city,
+    region: membership?.dealer.region,
+    phone: membership?.dealer.phone ?? membership?.user.phone,
+    businessId: membership?.dealer.businessId,
+    contactName: membership?.dealer.contactName,
   });
 }

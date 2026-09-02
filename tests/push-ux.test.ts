@@ -66,12 +66,24 @@ describe("push-support", () => {
     ).toBe(false);
   });
 
-  it("does not show onboarding when permission granted", () => {
+  it("shows onboarding when permission granted but not subscribed (retry)", () => {
     expect(
       shouldShowPushOnboarding({
         support: "supported",
         permission: "granted",
         deviceSubscribed: false,
+        dismissed: false,
+        isMobileViewport: true,
+      })
+    ).toBe(true);
+  });
+
+  it("does not show onboarding when subscribed", () => {
+    expect(
+      shouldShowPushOnboarding({
+        support: "supported",
+        permission: "granted",
+        deviceSubscribed: true,
         dismissed: false,
         isMobileViewport: true,
       })
@@ -230,14 +242,10 @@ describe("push server subscriptions", () => {
 describe("push client subscribe flow (mocked)", () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.stubGlobal(
-      "Notification",
-      {
-        permission: "default",
-        requestPermission: vi.fn().mockResolvedValue("granted"),
-      },
-      "partial"
-    );
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: vi.fn().mockResolvedValue("granted"),
+    });
   });
 
   it("requestPermission not called until explicit subscribe", async () => {

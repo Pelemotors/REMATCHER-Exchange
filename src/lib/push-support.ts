@@ -76,9 +76,10 @@ export function shouldShowPushOnboarding(input: {
 }): boolean {
   if (!input.isMobileViewport) return false;
   if (input.support !== "supported") return false;
-  if (input.permission === "granted" || input.permission === "denied") return false;
+  if (input.permission === "denied") return false;
   if (input.deviceSubscribed) return false;
   if (input.dismissed) return false;
+  // Show when permission not yet granted, or granted but registration did not persist.
   return true;
 }
 

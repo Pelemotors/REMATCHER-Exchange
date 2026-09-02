@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   BadgeV2,
+  ButtonV2,
   DataValue,
   PageHeaderV2,
   SectionHeader,
   Surface,
 } from "@/components/ui/brand-v2";
 import { ActiveSearchesSheet } from "@/components/demand/active-searches-sheet";
+import { HomeSetupPanel } from "@/components/home/home-setup-panel";
 import { formatRelative } from "@/lib/utils";
 import { BRAND } from "@/config/brand";
 import { ChevronLeft } from "lucide-react";
@@ -30,16 +32,28 @@ export interface HomeV2Notification {
   createdAt: Date;
 }
 
+export interface HomeV2SetupStatus {
+  hasInventory: boolean;
+  hasActiveDemand: boolean;
+  pushEnabled: boolean;
+  inventoryCount: number;
+  activeDemandCount: number;
+  shouldShowOnboarding: boolean;
+}
+
 export interface HomeV2Props {
   userName: string;
   dealerName: string | null;
   actionItems: HomeV2ActionItem[];
   activeDemands: number;
+  inventoryCount: number;
   matches: number;
   opportunities: number;
+  pendingOutcomes: number;
   connectionsLabel: string;
   connectionsSecondary: string;
   notifications: HomeV2Notification[];
+  setupStatus: HomeV2SetupStatus;
 }
 
 export function HomeV2({
@@ -47,29 +61,45 @@ export function HomeV2({
   dealerName,
   actionItems,
   activeDemands,
+  inventoryCount,
   matches,
   opportunities,
+  pendingOutcomes,
   connectionsLabel,
   connectionsSecondary,
   notifications,
+  setupStatus,
 }: HomeV2Props) {
   const [searchesOpen, setSearchesOpen] = useState(false);
   const hasOpportunities = matches > 0 || opportunities > 0;
+  const isColdStart = !setupStatus.hasInventory || !setupStatus.hasActiveDemand;
 
   return (
     <div className={styles.page}>
       <PageHeaderV2
         eyebrow={dealerName ?? BRAND.product}
         title={`שלום, ${userName}`}
+        subtitle="מרכז העבודה — מה דורש טיפול עכשיו"
       />
 
-      {/* 1. Requires action */}
+      {!setupStatus.shouldShowOnboarding && (
+        <HomeSetupPanel
+          status={{
+            hasInventory: setupStatus.hasInventory,
+            hasActiveDemand: setupStatus.hasActiveDemand,
+            pushEnabled: setupStatus.pushEnabled,
+            inventoryCount,
+            activeDemandCount: activeDemands,
+          }}
+        />
+      )}
+
       {actionItems.length > 0 ? (
         <section>
           <SectionHeader title="דורש פעולה" />
           <div className={styles.actionList}>
             {actionItems.map((item) => (
-              <Link key={item.href} href={item.href} className="block">
+              <Link key={`${item.href}-${item.label}`} href={item.href} className="block">
                 <Surface depth="raised" className={styles.actionRow}>
                   <span className="font-medium text-v2-text-primary">
                     {item.label}
@@ -84,18 +114,33 @@ export function HomeV2({
         </section>
       ) : (
         <Surface depth="secondary" className={styles.idlePanel}>
-          <div>
+          <div className="flex-1">
             <p className="font-medium text-v2-text-primary">
-              אין פעולות דחופות
+              {isColdStart ? "התחל להפעיל את הרשת" : "אין פעולות דחופות"}
             </p>
             <p className="mt-1 text-small text-v2-text-secondary">
-              {BRAND.parent} עובד ברקע
+              {isColdStart
+                ? "הוסף מלאי או פתח חיפוש — REMATCHER יעבוד ברקע"
+                : `${BRAND.parent} עובד ברקע`}
             </p>
+            {isColdStart && (
+              <div className={styles.idleActions}>
+                {!setupStatus.hasInventory && (
+                  <ButtonV2 variant="signal" href="/inventory" className="w-full sm:w-auto">
+                    הוסף מלאי
+                  </ButtonV2>
+                )}
+                {setupStatus.hasInventory && !setupStatus.hasActiveDemand && (
+                  <ButtonV2 variant="signal" href="/demand?new=1" className="w-full sm:w-auto">
+                    פתח חיפוש
+                  </ButtonV2>
+                )}
+              </div>
+            )}
           </div>
         </Surface>
       )}
 
-      {/* 2. Opportunities */}
       <section className={styles.opportunitySection}>
         <SectionHeader
           title="הזדמנויות"
@@ -168,7 +213,20 @@ export function HomeV2({
         )}
       </section>
 
-      {/* 3. Recent activity */}
+      {pendingOutcomes > 0 && (
+        <section>
+          <SectionHeader title="חיבורים" />
+          <Link href="/activity?filter=outcomes" className="block">
+            <Surface depth="raised" className={styles.actionRow}>
+              <span className="font-medium text-v2-text-primary">
+                עדכן תוצאה לחיבורים פתוחים
+              </span>
+              <BadgeV2 variant="signal">{pendingOutcomes}</BadgeV2>
+            </Surface>
+          </Link>
+        </section>
+      )}
+
       <section>
         <SectionHeader
           title="מה קרה"
@@ -205,7 +263,6 @@ export function HomeV2({
         )}
       </section>
 
-      {/* 4. Network */}
       <section>
         <SectionHeader title="הרשת שלך" />
         <div className={styles.networkGrid}>
@@ -223,7 +280,17 @@ export function HomeV2({
               </DataValue>
             </Surface>
           </button>
-          <Link href="/account">
+          <Link href="/inventory">
+            <Surface
+              depth="secondary"
+              className="px-4 py-4 transition hover:bg-v2-surface-raised"
+            >
+              <DataValue size="sm" label="רכבים במלאי">
+                {inventoryCount}
+              </DataValue>
+            </Surface>
+          </Link>
+          <Link href="/account" className="md:col-span-2">
             <Surface
               depth="secondary"
               className="px-4 py-4 transition hover:bg-v2-surface-raised"
