@@ -47,7 +47,7 @@ export interface AgentMeta {
   responseType: string;
 }
 
-export const AGENT_VERSION = "2.2";
+export const AGENT_VERSION = "2.3";
 
 /** Tool catalog for planner prompt */
 export const TOOL_DESCRIPTIONS: Record<ReadToolName, string> = {

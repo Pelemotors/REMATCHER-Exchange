@@ -1,0 +1,43 @@
+---
+description: Agent behavior documentation — source of truth and change discipline
+globs: src/services/assistant/**,tests/assistant*.test.ts,docs/agent/**
+alwaysApply: false
+---
+
+# Agent Documentation Rule
+
+## Source of Truth
+
+Canonical Agent behavior specs live in `docs/agent/`:
+
+| Document | Purpose |
+|----------|---------|
+| `AGENT_PLAYBOOK.md` | Product constitution |
+| `PRIVACY_CONSTITUTION.md` | Hard privacy invariants |
+| `TOOL_POLICY.md` | Approved/forbidden tools |
+| `COMMERCIAL_LANGUAGE.md` | Voice and Hebrew UX |
+| `GOLDEN_CONVERSATIONS.md` | Regression scenarios G-01–G-40 |
+| `CHANGELOG.md` | Product-level Agent change log |
+| `GAP_ANALYSIS_*.md` | Implementation gap tracking |
+
+If code and documentation disagree: **privacy and hard product invariants win** — fix the discrepancy immediately.
+
+## Required on Every Agent Behavior Change
+
+Any change affecting Agent authority, privacy, tool access, retrieval strategy, commercial language, confirmation rules, conversation state, or Golden Conversations **must** in the same commit:
+
+1. Update the relevant `docs/agent/*` document
+2. Update or add a Golden Conversation in `GOLDEN_CONVERSATIONS.md`
+3. Add/update regression tests where feasible (`tests/assistant-v2.test.ts` or eval suite)
+4. Update `docs/agent/CHANGELOG.md`
+
+## Do Not
+
+- Silently change Agent behavior without doc updates
+- Introduce forbidden network tools (see `TOOL_POLICY.md` §7)
+- Autonomously express Interest or bypass Reveal
+- Default to unconditional tool fan-out on every turn
+
+## Before Implementing Agent 2.3+
+
+Read `docs/agent/GAP_ANALYSIS_2.2.md` and classify impact against Golden Conversations.
