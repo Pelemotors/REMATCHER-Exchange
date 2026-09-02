@@ -14,7 +14,28 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BRAND } from "@/config/brand";
 import { ExchangeAssistant } from "@/components/assistant/exchange-assistant";
+
+function SidebarBrand({ onHome }: { onHome: boolean }) {
+  if (onHome) {
+    return (
+      <div className="flex items-center gap-3">
+        <ExchangeMark state="idle" size={36} />
+        <div className="leading-tight">
+          <p className="text-label font-bold uppercase tracking-[0.12em] text-white/60">
+            {BRAND.parent}
+          </p>
+          <p className="text-small font-medium text-white/80">
+            {BRAND.productShort}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return <BrandWordmark variant="light" />;
+}
 
 const navItems = [
   { href: "/home", label: "בית", icon: Home },
@@ -33,13 +54,14 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isHome = pathname.startsWith("/home");
 
   return (
     <div className="min-h-screen bg-canvas pb-20 md:pb-0 md:grid md:grid-cols-[260px_1fr]">
       {/* Desktop sidebar — Midnight */}
       <aside className="sidebar-dark hidden md:flex md:flex-col md:p-6">
         <div className="mb-10">
-          <BrandWordmark variant="light" />
+          <SidebarBrand onHome={isHome} />
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {navItems.map(({ href, label, icon: Icon }) => (

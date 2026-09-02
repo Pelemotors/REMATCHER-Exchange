@@ -1,0 +1,338 @@
+/* Hero loop timeline: 5500ms total — see keyframe percentages below */
+.mark {
+  display: block;
+  overflow: visible;
+  background: transparent;
+}
+
+.leftHalf,
+.rightHalf,
+.connectionDiamond {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+/* ── Separation offsets (responsive) ── */
+.heroLoop {
+  --mark-separation: 150px;
+}
+
+@media (max-width: 1023px) {
+  .heroLoop {
+    --mark-separation: 100px;
+  }
+}
+
+@media (max-width: 767px) {
+  .heroLoop {
+    --mark-separation: 62px;
+  }
+}
+
+/* ── Hero demo loop — ONE composition, transform/opacity only ── */
+.heroLoop {
+  animation: markFadeLoop 5.5s linear infinite;
+}
+
+.heroLoop .leftHalf {
+  animation: leftHalfLoop 5.5s linear infinite;
+}
+
+.heroLoop .rightHalf {
+  animation: rightHalfLoop 5.5s linear infinite;
+}
+
+.heroLoop .connectionDiamond {
+  animation: diamondLoop 5.5s linear infinite;
+}
+
+/*
+  Timeline (5500ms):
+  0–1000ms    idle        0% – 18.18%
+  1000–2000ms searching   18.18% – 36.36%
+  2000–3200ms converge    36.36% – 58.18%
+  3000–3200ms connection  54.55% – 58.18%
+  3200–3500ms pulse       58.18% – 63.64%
+  3500–5000ms hold        63.64% – 90.91%
+  5000–5500ms reset       90.91% – 100%
+*/
+
+@keyframes leftHalfLoop {
+  0%,
+  18.18% {
+    transform: translateX(calc(-1 * var(--mark-separation)));
+    opacity: 1;
+  }
+
+  27.27% {
+    transform: translateX(calc(-1 * var(--mark-separation)));
+    opacity: 0.97;
+  }
+
+  36.36% {
+    transform: translateX(calc(-1 * var(--mark-separation)));
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  58.18%,
+  90.91% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  95.45%,
+  100% {
+    transform: translateX(calc(-1 * var(--mark-separation)));
+    opacity: 1;
+  }
+}
+
+@keyframes rightHalfLoop {
+  0%,
+  18.18% {
+    transform: translateX(var(--mark-separation));
+    opacity: 1;
+  }
+
+  27.27% {
+    transform: translateX(var(--mark-separation));
+    opacity: 0.97;
+  }
+
+  36.36% {
+    transform: translateX(var(--mark-separation));
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  58.18%,
+  90.91% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  95.45%,
+  100% {
+    transform: translateX(var(--mark-separation));
+    opacity: 1;
+  }
+}
+
+@keyframes diamondLoop {
+  0%,
+  54.55% {
+    opacity: 0;
+    transform: scale(0.65);
+    filter: none;
+  }
+
+  54.55% {
+    animation-timing-function: ease-out;
+  }
+
+  58.18% {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+  }
+
+  60.91% {
+    opacity: 1;
+    transform: scale(1.1);
+    filter: brightness(1.15);
+  }
+
+  63.64%,
+  90.91% {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+  }
+
+  95.45%,
+  100% {
+    opacity: 0;
+    transform: scale(0.65);
+    filter: none;
+  }
+}
+
+@keyframes markFadeLoop {
+  0%,
+  90.91% {
+    opacity: 1;
+  }
+
+  95.45% {
+    opacity: 0.2;
+  }
+
+  97.27% {
+    opacity: 0.2;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ── Manual states (mark preview / static usage) ── */
+.idle .leftHalf {
+  transform: translateX(calc(-1 * var(--mark-separation, 150px)));
+}
+
+.idle .rightHalf {
+  transform: translateX(var(--mark-separation, 150px));
+}
+
+.idle .connectionDiamond {
+  opacity: 0;
+  transform: scale(0.65);
+}
+
+.searching .leftHalf {
+  transform: translateX(calc(-1 * var(--mark-separation, 150px)));
+}
+
+.searching .rightHalf {
+  transform: translateX(var(--mark-separation, 150px));
+}
+
+.searching .connectionDiamond {
+  opacity: 0;
+  transform: scale(0.65);
+}
+
+.converging .leftHalf {
+  animation: convergeLeft 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.converging .rightHalf {
+  animation: convergeRight 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.converging .connectionDiamond {
+  animation: diamondReveal 0.2s ease-out 1.08s forwards;
+}
+
+@keyframes convergeLeft {
+  from {
+    transform: translateX(calc(-1 * var(--mark-separation, 150px)));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes convergeRight {
+  from {
+    transform: translateX(var(--mark-separation, 150px));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes diamondReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.65);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.matched .leftHalf {
+  transform: translateX(0);
+}
+
+.matched .rightHalf {
+  transform: translateX(0);
+}
+
+.matched .connectionDiamond {
+  opacity: 1;
+  transform: scale(1);
+  animation: diamondPulse 0.3s ease-out;
+}
+
+@keyframes diamondPulse {
+  0% {
+    transform: scale(1);
+    filter: none;
+  }
+  50% {
+    transform: scale(1.1);
+    filter: brightness(1.15);
+  }
+  100% {
+    transform: scale(1);
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroLoop,
+  .heroLoop .leftHalf,
+  .heroLoop .rightHalf,
+  .heroLoop .connectionDiamond {
+    animation: none !important;
+  }
+
+  .heroLoop .leftHalf,
+  .heroLoop .rightHalf {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+  }
+
+  .heroLoop .connectionDiamond {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+    filter: none !important;
+  }
+
+  .searching .leftHalf,
+  .searching .rightHalf,
+  .converging .leftHalf,
+  .converging .rightHalf,
+  .converging .connectionDiamond,
+  .matched .connectionDiamond {
+    animation: none !important;
+  }
+
+  .idle .leftHalf,
+  .searching .leftHalf {
+    transform: translateX(calc(-1 * var(--mark-separation, 150px)));
+  }
+
+  .idle .rightHalf,
+  .searching .rightHalf {
+    transform: translateX(var(--mark-separation, 150px));
+  }
+
+  .matched .leftHalf,
+  .converging .leftHalf {
+    transform: translateX(0);
+  }
+
+  .matched .rightHalf,
+  .converging .rightHalf {
+    transform: translateX(0);
+  }
+
+  .matched .connectionDiamond,
+  .converging .connectionDiamond {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .idle .connectionDiamond,
+  .searching .connectionDiamond {
+    opacity: 0;
+    transform: scale(0.65);
+  }
+}

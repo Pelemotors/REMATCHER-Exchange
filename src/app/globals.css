@@ -178,4 +178,147 @@ body {
   .progress-bar-fill {
     @apply h-full rounded-sm bg-signal transition-all duration-normal;
   }
+
+  /* ── Brand UI v2 (scoped) ───────────────────────────── */
+  [data-brand-ui="2"] {
+    --rm2-midnight: #070C14;
+    --rm2-graphite: #111A26;
+    --rm2-deep-navy: #163A5F;
+    --rm2-exchange-blue: #174A73;
+    --rm2-signal-blue: #2D78A8;
+    --rm2-signal-blue-soft: rgba(45, 120, 168, 0.12);
+    --rm2-platinum: #C9CED3;
+    --rm2-warm-white: #F3F1EC;
+    --rm2-canvas: #0A1018;
+    --rm2-surface: #111A26;
+    --rm2-surface-raised: #162030;
+    --rm2-surface-secondary: #1A2535;
+    --rm2-border: rgba(201, 206, 211, 0.12);
+    --rm2-border-strong: rgba(201, 206, 211, 0.22);
+    --rm2-text-primary: #F3F1EC;
+    --rm2-text-secondary: rgba(243, 241, 236, 0.72);
+    --rm2-text-muted: rgba(243, 241, 236, 0.48);
+    --rm2-success: #16865C;
+    --rm2-warning: #C47A12;
+    --rm2-error: #C53B3B;
+
+    @apply bg-v2-canvas text-v2-text-primary;
+  }
+
+  .v2-surface {
+    @apply bg-v2-surface;
+  }
+
+  .v2-surface-raised {
+    @apply bg-v2-surface-raised shadow-[0_1px_0_rgba(201,206,211,0.06)_inset];
+  }
+
+  .v2-divider {
+    @apply border-v2-border border-t;
+  }
+
+  .v2-btn {
+    @apply inline-flex min-h-touch items-center justify-center rounded-md px-4 py-2.5 text-body font-semibold transition duration-normal active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v2-signal focus-visible:ring-offset-2 focus-visible:ring-offset-v2-canvas;
+  }
+
+  .v2-btn-primary {
+    @apply v2-btn bg-v2-exchange text-v2-warm hover:bg-v2-deep-navy;
+  }
+
+  .v2-btn-signal {
+    @apply v2-btn bg-v2-signal text-v2-warm hover:opacity-90;
+  }
+
+  .v2-btn-secondary {
+    @apply v2-btn border border-v2-border-strong bg-transparent text-v2-text-primary hover:bg-v2-surface-secondary;
+  }
+
+  .v2-btn-ghost {
+    @apply v2-btn bg-transparent text-v2-text-secondary hover:bg-v2-surface-secondary hover:text-v2-text-primary;
+  }
+
+  .v2-badge {
+    @apply inline-flex items-center rounded-sm px-2 py-0.5 text-label font-semibold uppercase tracking-wide;
+  }
+
+  .v2-badge-match {
+    @apply v2-badge bg-v2-signal-soft text-v2-signal;
+  }
+
+  .v2-badge-neutral {
+    @apply v2-badge bg-v2-surface-secondary text-v2-text-muted;
+  }
+
+  .v2-badge-warning {
+    @apply v2-badge bg-warning-soft text-warning;
+  }
+
+  .v2-text-data {
+    @apply text-[1.75rem] font-semibold leading-tight tabular-nums text-v2-warm;
+  }
+
+  .v2-text-data-sm {
+    @apply text-xl font-semibold leading-tight tabular-nums text-v2-warm;
+  }
+
+  .v2-section-title {
+    @apply text-section font-semibold text-v2-text-primary;
+  }
+
+  .v2-hero-display {
+    @apply text-[2.25rem] font-bold leading-[1.08] tracking-tight text-v2-warm sm:text-[2.75rem] lg:text-[3.125rem];
+  }
+
+  .v2-hero-accent {
+    @apply bg-gradient-to-l from-[#5BA3CC] via-v2-signal to-[#2D78A8] bg-clip-text text-transparent;
+  }
+
+  .v2-btn-hero {
+    @apply v2-btn border border-v2-deep-navy bg-v2-deep-navy text-v2-warm shadow-none transition duration-normal hover:border-v2-signal hover:bg-v2-signal;
+  }
+
+  .v2-btn-hero-ghost {
+    @apply v2-btn border border-v2-border-strong bg-transparent text-v2-text-secondary transition duration-normal hover:border-v2-border-strong hover:bg-v2-surface-secondary hover:text-v2-warm;
+  }
+
+  /* Motion primitives */
+  @keyframes v2-search-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes v2-converge-left {
+    0% { transform: translateX(6px); }
+    100% { transform: translateX(2px); }
+  }
+
+  @keyframes v2-converge-right {
+    0% { transform: translateX(-6px); }
+    100% { transform: translateX(-2px); }
+  }
+
+  @keyframes v2-match-pulse {
+    0% { opacity: 0; transform: scale(0.6); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes v2-signal-travel {
+    0% { opacity: 0; transform: translateX(100%); }
+    50% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-100%); }
+  }
+
+  @keyframes v2-node-activate {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.9; }
+  }
+
+  .motion-signal-travel {
+    animation: v2-signal-travel 2.5s ease-in-out infinite;
+  }
+
+  .motion-node-activate {
+    animation: v2-node-activate 2s ease-in-out infinite;
+  }
 }

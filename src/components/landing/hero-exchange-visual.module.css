@@ -1,0 +1,243 @@
+.stage {
+  position: relative;
+  width: min(100%, 620px);
+  height: min(72vh, 480px);
+  max-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+}
+
+.field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.supplyLabel,
+.demandLabel {
+  position: absolute;
+  top: 8%;
+  z-index: 2;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.supplyLabel {
+  left: 4%;
+  color: rgba(45, 120, 168, 0.55);
+}
+
+.demandLabel {
+  right: 4%;
+  color: rgba(201, 206, 211, 0.4);
+}
+
+.markWrap {
+  position: relative;
+  z-index: 3;
+  width: clamp(280px, 52%, 340px);
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mark {
+  width: 100%;
+  height: auto;
+}
+
+.matchLabel {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 4;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: rgba(45, 120, 168, 0.7);
+  opacity: 0;
+  animation: matchLabelLoop 5.5s linear infinite;
+}
+
+/* Signal activity — searching phase only (18.18%–40%), fades during convergence */
+.signalGroup {
+  opacity: 0;
+  animation: signalGroupLoop 5.5s linear infinite;
+}
+
+.signalPath {
+  stroke: rgba(45, 120, 168, 0.5);
+  stroke-width: 0.28;
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 42;
+  stroke-dashoffset: 42;
+}
+
+.signalPathDemand {
+  stroke: rgba(201, 206, 211, 0.28);
+  stroke-width: 0.28;
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 42;
+  stroke-dashoffset: 42;
+}
+
+.activeNode {
+  fill: rgba(45, 120, 168, 0.85);
+  opacity: 0;
+}
+
+.activeNodeDemand {
+  fill: rgba(201, 206, 211, 0.7);
+  opacity: 0;
+}
+
+@keyframes signalGroupLoop {
+  0%,
+  18.18% {
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  36.36% {
+    opacity: 1;
+  }
+
+  40% {
+    opacity: 0.3;
+  }
+
+  45%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.signalGroup .signalPath,
+.signalGroup .signalPathDemand {
+  animation: signalStrokeLoop 5.5s linear infinite;
+}
+
+@keyframes signalStrokeLoop {
+  0%,
+  20% {
+    stroke-dashoffset: 42;
+    opacity: 0;
+  }
+
+  22% {
+    opacity: 0.7;
+  }
+
+  32% {
+    stroke-dashoffset: 0;
+    opacity: 0.5;
+  }
+
+  38% {
+    opacity: 0.2;
+    stroke-dashoffset: -10;
+  }
+
+  42%,
+  100% {
+    opacity: 0;
+    stroke-dashoffset: -10;
+  }
+}
+
+.signalGroup .activeNode,
+.signalGroup .activeNodeDemand {
+  animation: signalNodeLoop 5.5s linear infinite;
+}
+
+@keyframes signalNodeLoop {
+  0%,
+  20% {
+    opacity: 0;
+  }
+
+  24%,
+  34% {
+    opacity: 1;
+  }
+
+  40%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes matchLabelLoop {
+  0%,
+  63.64% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  66% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  90.91% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  95%,
+  100% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signalGroup,
+  .signalGroup .signalPath,
+  .signalGroup .signalPathDemand,
+  .signalGroup .activeNode,
+  .signalGroup .activeNodeDemand,
+  .matchLabel {
+    animation: none !important;
+  }
+
+  .matchLabel {
+    opacity: 1;
+    transform: none;
+  }
+
+  .signalGroup {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .stage {
+    height: min(52vh, 400px);
+  }
+
+  .markWrap {
+    width: clamp(220px, 70%, 300px);
+  }
+
+  .supplyLabel,
+  .demandLabel {
+    top: 4%;
+    font-size: 0.625rem;
+  }
+}

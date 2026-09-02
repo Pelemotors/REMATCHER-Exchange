@@ -160,3 +160,12 @@ export const BRAND_ASSET_TEMPORARY = {
   appIcon: "/icons/icon.svg",
   wordmarkOnly: true,
 } as const;
+
+/** Brand UI v2 — scoped rollout (see brand-v2.ts, docs/BRAND_SYSTEM.md) */
+export {
+  BRAND_UI_VERSION,
+  TOKENS_V2,
+  CSS_VARS_V2,
+  BRAND_ASSETS_V2,
+  type ExchangeMarkState,
+} from "./brand-v2";

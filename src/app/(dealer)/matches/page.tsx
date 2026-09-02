@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PageHeader, LoadingSpinner, EmptyState } from "@/components/ui/common";
-import { MatchCard } from "@/components/cards/match-card";
+import { LoadingSpinner } from "@/components/ui/common";
+import { BrandV2Scope, SectionHeader, EmptyStateV2 } from "@/components/ui/brand-v2";
+import { MatchCardV2 } from "@/components/cards/match-card-v2";
 import { COPY } from "@/config/brand";
 import type { MatchExplanation } from "@/lib/schemas/ai";
 
@@ -50,46 +51,48 @@ export default function MatchesPage() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="התאמות"
-        subtitle="התאמות אנונימיות — החלט אם שווה להיחשף"
-        action={
-          <Link href="/demand" className="btn-primary text-sm">
-            + חיפוש חדש
-          </Link>
-        }
-      />
-
-      {matches.length === 0 ? (
-        <EmptyState
-          title={COPY.emptyMatches.title}
-          description={COPY.emptyMatches.description}
+    <BrandV2Scope className="-mx-4 -mt-4 px-4 pt-4 md:-mx-6 md:px-6">
+      <div>
+        <SectionHeader
+          title="התאמות"
+          subtitle="התאמות אנונימיות — החלט אם שווה להיחשף"
           action={
-            <Link href="/demand" className="btn-primary">
-              צור חיפוש
+            <Link href="/demand" className="v2-btn-signal text-sm">
+              + חיפוש חדש
             </Link>
           }
         />
-      ) : (
-        <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-          {matches.map((m) => (
-            <MatchCard
-              key={m.id}
-              headline={m.explanation?.headline ?? "התאמה"}
-              summary={m.explanation?.summary ?? ""}
-              fits={m.explanation?.fits ?? []}
-              gaps={m.explanation?.gaps ?? []}
-              vehicle={m.vehicle as MatchItem["vehicle"] & { b2bPrice?: number }}
-              band={m.scoreBand as "STRONG" | "ALTERNATIVE"}
-              loading={actionLoading === m.id}
-              showActions={!m.interest || m.interest.status === "NO_RESPONSE"}
-              onInterested={() => handleAction(m.id, "interested")}
-              onReject={() => handleAction(m.id, "reject")}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+
+        {matches.length === 0 ? (
+          <EmptyStateV2
+            title={COPY.emptyMatches.title}
+            description={COPY.emptyMatches.description}
+            action={
+              <Link href="/demand" className="v2-btn-signal">
+                צור חיפוש
+              </Link>
+            }
+          />
+        ) : (
+          <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+            {matches.map((m) => (
+              <MatchCardV2
+                key={m.id}
+                headline={m.explanation?.headline ?? "התאמה"}
+                summary={m.explanation?.summary ?? ""}
+                fits={m.explanation?.fits ?? []}
+                gaps={m.explanation?.gaps ?? []}
+                vehicle={m.vehicle as MatchItem["vehicle"] & { b2bPrice?: number }}
+                band={m.scoreBand as "STRONG" | "ALTERNATIVE"}
+                loading={actionLoading === m.id}
+                showActions={!m.interest || m.interest.status === "NO_RESPONSE"}
+                onInterested={() => handleAction(m.id, "interested")}
+                onReject={() => handleAction(m.id, "reject")}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </BrandV2Scope>
   );
 }

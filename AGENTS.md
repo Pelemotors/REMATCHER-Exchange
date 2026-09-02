@@ -8,7 +8,7 @@
 - **Product (user-facing):** REMATCHER Exchange
 - **Do NOT use** "Private Dealer Exchange" in UI/copy
 - Hebrew terminology: חיפוש, התאמה, מעניין אותי, יש עניין ברכב שלך, עניין הדדי, נוצר חיבור
-- See [docs/BRAND_SYSTEM.md](./docs/BRAND_SYSTEM.md)
+- See [docs/BRAND_SYSTEM.md](./docs/BRAND_SYSTEM.md) — v1 global, **v2 proof** scoped via `[data-brand-ui="2"]` on Landing Hero, Home, Matches
 
 ## Agent Constitution (LOCKED)
 

@@ -1,7 +1,21 @@
-<!-- BRAND_ASSET_TEMPORARY — not final logo -->
+<!-- REMATCHER Exchange mark v2 — substantial beveled halves -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="96" fill="#0B1220"/>
-  <circle cx="160" cy="256" r="28" fill="#18C37E"/>
-  <circle cx="352" cy="256" r="28" fill="#18C37E"/>
-  <rect x="188" y="248" width="136" height="16" rx="8" fill="#18C37E"/>
+  <defs>
+    <linearGradient id="s" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E5A85"/>
+      <stop offset="50%" stop-color="#174A73"/>
+      <stop offset="100%" stop-color="#0F2F4A"/>
+    </linearGradient>
+    <linearGradient id="d" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8EBEE"/>
+      <stop offset="50%" stop-color="#C9CED3"/>
+      <stop offset="100%" stop-color="#8E969D"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#070C14"/>
+  <g transform="translate(256 256)">
+    <path d="M -118 -96 L -14 0 L -118 96 L -82 96 L 10 0 L -82 -96 Z" fill="url(#s)"/>
+    <path d="M 118 -96 L 14 0 L 118 96 L 82 96 L -10 0 L 82 -96 Z" fill="url(#d)"/>
+    <polygon points="0,-18 14,0 0,18 -14,0" fill="#2D78A8"/>
+  </g>
 </svg>
