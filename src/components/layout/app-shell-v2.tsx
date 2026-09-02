@@ -15,6 +15,7 @@ import {
 import { ExchangeMark } from "@/components/brand/exchange-mark";
 import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
 import { ExchangeAssistant } from "@/components/assistant/exchange-assistant";
+import { PushOnboardingPrompt } from "@/components/pwa/push-onboarding-prompt";
 import { BRAND } from "@/config/brand";
 import styles from "./app-shell-v2.module.css";
 
@@ -103,7 +104,10 @@ export function AppShellV2({ children }: { children: React.ReactNode }) {
           </Link>
         </header>
 
-        <main className={styles.content}>{children}</main>
+        <main className={styles.content}>
+          <PushOnboardingPrompt />
+          {children}
+        </main>
         <ExchangeAssistant />
       </div>
 

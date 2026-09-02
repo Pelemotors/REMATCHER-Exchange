@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { PageHeader, UsageProgress } from "@/components/ui/common";
-import { PushSubscribeButton } from "@/components/pwa/push-subscribe";
+import { UsageProgress } from "@/components/ui/common";
+import {
+  BadgeV2,
+  ButtonV2,
+  PageHeaderV2,
+  Surface,
+} from "@/components/ui/brand-v2";
+import { PushSettings } from "@/components/pwa/push-settings";
 import { COPY } from "@/config/brand";
 import {
   connectionsMonthlyUsedLabel,
@@ -35,34 +41,34 @@ export default function AccountPage() {
 
   return (
     <div>
-      <PageHeader title="חשבון" />
+      <PageHeaderV2 title="חשבון" />
 
-      <div className="card mb-4 space-y-3">
+      <Surface depth="raised" className="mb-4 space-y-3 p-4">
         <div>
-          <p className="text-sm text-text-secondary">שם</p>
-          <p className="font-medium">{session?.user?.name}</p>
+          <p className="text-sm text-v2-text-secondary">שם</p>
+          <p className="font-medium text-v2-text-primary">{session?.user?.name}</p>
         </div>
         <div>
-          <p className="text-sm text-text-secondary">אימייל</p>
-          <p className="font-medium" dir="ltr">
+          <p className="text-sm text-v2-text-secondary">אימייל</p>
+          <p className="font-medium text-v2-text-primary" dir="ltr">
             {session?.user?.email}
           </p>
         </div>
         <div>
-          <p className="text-sm text-text-secondary">סוחר</p>
-          <p className="font-medium">{session?.user?.dealerName}</p>
+          <p className="text-sm text-v2-text-secondary">סוחר</p>
+          <p className="font-medium text-v2-text-primary">{session?.user?.dealerName}</p>
         </div>
         <div>
-          <p className="text-sm text-text-secondary">סטטוס אימות</p>
-          <span className="badge-signal">
+          <p className="text-sm text-v2-text-secondary">סטטוס אימות</p>
+          <BadgeV2 variant="success">
             {verificationLabel(verificationStatus)}
-          </span>
+          </BadgeV2>
         </div>
-      </div>
+      </Surface>
 
       {usage && (
-        <div className="card mb-4 space-y-4">
-          <h3 className="text-h3 font-semibold text-ink">חיבורים</h3>
+        <Surface depth="raised" className="mb-4 space-y-4 p-4">
+          <h3 className="text-h3 font-semibold text-v2-warm">חיבורים</h3>
           {usage.actionRequired && (
             <p className="rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">
               {COPY.commercialActionRequired}
@@ -97,21 +103,22 @@ export default function AccountPage() {
               )}
             />
           )}
-          <p className="text-label text-text-muted">מסלול: {usage.planName}</p>
-        </div>
+          <p className="text-label text-v2-text-muted">מסלול: {usage.planName}</p>
+        </Surface>
       )}
 
-      <div className="card mb-4">
-        <h3 className="mb-3 font-semibold">התראות</h3>
-        <PushSubscribeButton />
-      </div>
+      <Surface depth="raised" className="mb-4 p-4">
+        <h3 className="mb-3 font-semibold text-v2-text-primary">התראות</h3>
+        <PushSettings userId={session?.user?.id} />
+      </Surface>
 
-      <button
-        className="btn-secondary w-full"
+      <ButtonV2
+        variant="secondary"
+        className="w-full"
         onClick={() => signOut({ callbackUrl: "/login" })}
       >
         התנתק
-      </button>
+      </ButtonV2>
     </div>
   );
 }
