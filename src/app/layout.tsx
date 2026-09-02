@@ -7,6 +7,7 @@ import { PwaRegister } from "@/components/pwa/pwa-register";
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
   variable: "--font-heebo",
+  display: "swap",
 });
 
 export const metadata: Metadata = {

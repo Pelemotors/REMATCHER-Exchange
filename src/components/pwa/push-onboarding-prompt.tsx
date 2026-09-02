@@ -40,7 +40,15 @@ export function PushOnboardingPrompt() {
   }, [userId]);
 
   useEffect(() => {
-    evaluate();
+    const run = () => {
+      void evaluate();
+    };
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(run, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = setTimeout(run, 2000);
+    return () => clearTimeout(timer);
   }, [evaluate]);
 
   if (!visible || !userId) return null;
