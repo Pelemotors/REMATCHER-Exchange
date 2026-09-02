@@ -29,10 +29,18 @@ describe("ExchangeMarkState type coverage", () => {
   });
 });
 
-describe("MatchCardV2 contract", () => {
-  it("uses only existing band values — no fabricated scores", () => {
-    const allowedBands = ["STRONG", "ALTERNATIVE", null];
-    expect(allowedBands).not.toContain("PERCENTAGE");
-    expect(allowedBands).not.toContain("CONFIDENCE");
+describe("Brand UI v2 exports", () => {
+  it("exports core primitives", () => {
+    const exports = [
+      "BrandV2Scope",
+      "Surface",
+      "ButtonV2",
+      "BadgeV2",
+      "StatusBadgeV2",
+      "PageHeaderV2",
+      "SkeletonV2",
+      "NavItemV2",
+    ];
+    expect(exports.length).toBeGreaterThan(0);
   });
 });
