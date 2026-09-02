@@ -159,17 +159,35 @@ export async function getDemandByIdForDealer(dealerId: string, demandId: string)
 export async function executeToolsParallel(
   tools: ReadToolName[],
   dealerId: string
-): Promise<{ results: Record<string, unknown>; durations: Record<string, number> }> {
+): Promise<{
+  results: Record<string, unknown>;
+  durations: Record<string, number>;
+  errors: Record<string, string>;
+  partialFailure: boolean;
+}> {
   const results: Record<string, unknown> = {};
   const durations: Record<string, number> = {};
+  const errors: Record<string, string> = {};
 
   await Promise.all(
     tools.map(async (tool) => {
       const start = Date.now();
-      results[tool] = await executeReadTool(tool, dealerId);
-      durations[tool] = Date.now() - start;
+      try {
+        results[tool] = await executeReadTool(tool, dealerId);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "unknown";
+        errors[tool] = message;
+        results[tool] = null;
+      } finally {
+        durations[tool] = Date.now() - start;
+      }
     })
   );
 
-  return { results, durations };
+  return {
+    results,
+    durations,
+    errors,
+    partialFailure: Object.keys(errors).length > 0,
+  };
 }

@@ -28,6 +28,7 @@ import {
   prepareDemandRenewal,
 } from "@/services/assistant/tools/action-tools";
 import { planAgentTurn } from "@/services/assistant/planner";
+import { mergeSessionContext } from "@/services/assistant/commercial-judgment";
 import {
   helpOnlyResponse,
   synthesizeResponse,
@@ -80,7 +81,7 @@ export async function runExchangeAssistantV2(params: {
       intent: "FISHING_BLOCKED",
       privacyBlocked: true,
       message: privacyBlockedMessage(privacy.reason),
-      suggestions: [{ label: "פתח חיפוש", href: "/demand?new=1" }],
+      suggestions: [],
       meta,
     };
   }
@@ -200,6 +201,11 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
+  const sessionContext = mergeSessionContext(
+    params.conversation?.sessionContext,
+    params.message
+  );
+
   // --- Plan (demand-driven tool selection) ---
   const {
     plan,
@@ -258,7 +264,7 @@ export async function runExchangeAssistantV2(params: {
   );
   meta.tools = tools;
 
-  const { results, durations } = await executeToolsParallel(
+  const { results, durations, errors, partialFailure } = await executeToolsParallel(
     tools,
     params.dealerId
   );
@@ -273,8 +279,10 @@ export async function runExchangeAssistantV2(params: {
   } = await synthesizeResponse({
     userMessage: params.message,
     toolResults: results,
+    toolErrors: errors,
     userId: params.userId,
     goal: plan.goal,
+    sessionContext,
   });
 
   meta.synthesizerUsed = synthesizerUsed;
@@ -298,6 +306,8 @@ export async function runExchangeAssistantV2(params: {
       synthesizerUsed,
       goal: plan.goal,
       cardCount: response.cards.length,
+      partialToolFailure: partialFailure,
+      toolErrors: Object.keys(errors),
     },
   });
 
@@ -309,6 +319,7 @@ export async function runExchangeAssistantV2(params: {
     conversation: {
       lastList: response.lastList,
       goal: plan.goal,
+      sessionContext,
     },
     meta,
   };
@@ -356,14 +367,15 @@ export async function getAssistantContext(dealerId: string) {
     });
   }
 
-  if (suggestions.length === 0) {
-    suggestions.push(
-      { label: "מה כדאי לטפל בו עכשיו?" },
-      { label: "פתח חיפוש", href: "/demand?new=1" }
-    );
-  } else {
+  const hasActionable = suggestions.length > 0;
+  const activeDemands = state?.activeDemands ?? 0;
+
+  if (hasActionable) {
     suggestions.push({ label: "תעשה לי סדר" });
+  } else if (activeDemands === 0) {
+    suggestions.push({ label: "פתח חיפוש", href: "/demand?new=1" });
   }
+  // Healthy active searches with no commercial action: no automatic CTA (G-41, G-42)
 
   return {
     agentVersion: AGENT_VERSION,

@@ -27,7 +27,7 @@ function buildFallbackExplanation(evaluation: MatchEvaluation): MatchExplanation
     summary:
       evaluation.gaps.length > 0
         ? `הרכב מתאים ברוב הפרמטרים. ${evaluation.gaps[0]}`
-        : "הרכב מתאים לדרישות החיפוש.",
+        : "הרכב מתאים לתנאי החיפוש.",
     fits: evaluation.fits,
     gaps: evaluation.gaps,
   };
