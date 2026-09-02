@@ -231,7 +231,8 @@ function formatActionResponse(
   if (actions.length === 0) {
     const message = emptyStateMessage(activeDemands, intent);
     const suggestions = buildIdleSuggestions(judgment);
-    return applyCommercialJudgment({ message, suggestions }, judgment);
+    const judged = applyCommercialJudgment({ message, suggestions }, judgment);
+    return { ...judged, cards: [], lastList: [] };
   }
 
   if (actions.length === 1) {
@@ -315,10 +316,11 @@ function buildDeterministicResponse(
   if (isBrokerNoInventoryDisclosure(userMessage)) {
     const brokerMessage = buildBrokerOnlyMessage(activeDemands);
     const brokerSuggestions = buildBrokerOnlySuggestions(activeDemands, judgment);
-    return applyCommercialJudgment(
+    const judged = applyCommercialJudgment(
       { message: brokerMessage, suggestions: brokerSuggestions },
       judgment
     );
+    return { ...judged, cards: [], lastList: [] };
   }
 
   const activeDemandsList = toolResults.getMyActiveDemands as
@@ -366,10 +368,11 @@ function buildDeterministicResponse(
   ) {
     if (/מה כדאי/i.test(userMessage)) {
       const message = `כרגע אין משהו דחוף שמחכה לך. יש לך ${activeDemands} חיפושים פעילים, אבל עדיין לא נוצרה התאמה ששווה פעולה.`;
-      return applyCommercialJudgment(
+      const judged = applyCommercialJudgment(
         { message, suggestions: buildIdleSuggestions(judgment) },
         judgment
       );
+      return { ...judged, cards: [], lastList: [] };
     }
   }
 

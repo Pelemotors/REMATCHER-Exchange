@@ -7,6 +7,10 @@ import { checkPrivacyGate, privacyBlockedMessage } from "@/services/assistant/pr
 import { resolveListReference } from "@/services/assistant/conversation-state";
 import { heuristicPlan } from "@/services/assistant/planner";
 import { AGENT_VERSION, ALL_READ_TOOLS } from "@/services/assistant/tools/registry";
+import {
+  applyCommercialJudgment,
+  filterSuggestions,
+} from "@/services/assistant/commercial-judgment";
 
 describe("Agent V2 architecture", () => {
   it("exports agent version 2.3", () => {
@@ -325,4 +329,76 @@ describe("Agent 2.3 — negative idle prioritization", () => {
       assertNoIdleCommercialPush(response);
     });
   }
+});
+
+describe("Commercial Judgment — filterSuggestions regression", () => {
+  const idleInput = {
+    userMessage: "תעשה לי סדר",
+    activeDemands: 7,
+    hasActionableItems: false,
+    intent: "prioritize",
+  };
+
+  it("removes create-search CTA but keeps navigation when no explicit intent", () => {
+    const suggestions = filterSuggestions(
+      [
+        { label: "החיפושים שלי", href: "/demand" },
+        { label: "פתח חיפוש", href: "/demand?new=1" },
+      ],
+      idleInput
+    );
+    expect(suggestions.map((s) => s.label)).toEqual(["החיפושים שלי"]);
+  });
+
+  it("applyCommercialJudgment strips manufactured OpenAI create-search CTA", () => {
+    const result = applyCommercialJudgment(
+      {
+        message: "כרגע אין משהו דחוף שמחכה לך.",
+        suggestions: [
+          { label: "החיפושים שלי", href: "/demand" },
+          { label: "פתח חיפוש", href: "/demand?new=1" },
+          { label: "ליצור חיפוש חדש", href: "/demand?new=1" },
+        ],
+      },
+      idleInput
+    );
+    expect(result.suggestions.map((s) => s.label)).toEqual(["החיפושים שלי"]);
+    expect(result.message).not.toMatch(/פתח חיפוש|ליצור חיפוש/i);
+  });
+});
+
+describe("Commercial Judgment — filterSuggestions regression", () => {
+  const idleInput = {
+    userMessage: "תעשה לי סדר",
+    activeDemands: 7,
+    hasActionableItems: false,
+    intent: "prioritize",
+  };
+
+  it("removes create-search CTA but keeps navigation when no explicit intent", () => {
+    const suggestions = filterSuggestions(
+      [
+        { label: "החיפושים שלי", href: "/demand" },
+        { label: "פתח חיפוש", href: "/demand?new=1" },
+      ],
+      idleInput
+    );
+    expect(suggestions.map((s) => s.label)).toEqual(["החיפושים שלי"]);
+  });
+
+  it("applyCommercialJudgment strips manufactured OpenAI create-search CTA", () => {
+    const result = applyCommercialJudgment(
+      {
+        message: "כרגע אין משהו דחוף שמחכה לך.",
+        suggestions: [
+          { label: "החיפושים שלי", href: "/demand" },
+          { label: "פתח חיפוש", href: "/demand?new=1" },
+          { label: "ליצור חיפוש חדש", href: "/demand?new=1" },
+        ],
+      },
+      idleInput
+    );
+    expect(result.suggestions.map((s) => s.label)).toEqual(["החיפושים שלי"]);
+    expect(result.message).not.toMatch(/פתח חיפוש|ליצור חיפוש/i);
+  });
 });
