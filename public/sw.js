@@ -1,4 +1,4 @@
-const CACHE_NAME = "rematcher-exchange-v3";
+const CACHE_NAME = "rematcher-exchange-v4";
 const APP_NAME = "REMATCHER Exchange";
 const OFFLINE_URL = "/offline";
 
@@ -23,7 +23,6 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Never cache auth/public HTML shells — always fetch fresh from network
   if (
     event.request.mode === "navigate" ||
     url.pathname === "/" ||
@@ -41,36 +40,65 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+async function reportTelemetry(deliveryId, event) {
+  if (!deliveryId) return;
+  try {
+    await fetch("/api/push/telemetry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ deliveryId, event }),
+    });
+  } catch {
+    /* non-blocking */
+  }
+}
+
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   const data = event.data.json();
+  const deliveryId = data.deliveryId ?? null;
+
   event.waitUntil(
-    self.registration.showNotification(data.title || APP_NAME, {
-      body: data.body,
-      tag: APP_NAME,
-      icon: "/icons/icon.svg",
-      badge: "/icons/icon.svg",
-      data: { link: data.link },
-      dir: "rtl",
-      lang: "he",
-    })
+    (async () => {
+      await reportTelemetry(deliveryId, "received");
+      await self.registration.showNotification(data.title || APP_NAME, {
+        body: data.body,
+        tag: deliveryId || APP_NAME,
+        icon: "/icons/icon.svg",
+        badge: "/icons/icon.svg",
+        data: { link: data.link, deliveryId },
+        dir: "rtl",
+        lang: "he",
+      });
+    })()
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const link = event.notification.data?.link ?? "/activity";
+  const deliveryId = event.notification.data?.deliveryId ?? null;
+
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
-        for (const client of clients) {
-          if ("focus" in client) {
-            client.navigate(link);
-            return client.focus();
-          }
+    (async () => {
+      await reportTelemetry(deliveryId, "clicked");
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of clients) {
+        if ("focus" in client) {
+          await client.navigate(link);
+          await client.focus();
+          await reportTelemetry(deliveryId, "destination_opened");
+          return;
         }
-        return self.clients.openWindow(link);
-      })
+      }
+      const newClient = await self.clients.openWindow(link);
+      if (newClient) {
+        await reportTelemetry(deliveryId, "destination_opened");
+      }
+    })()
   );
 });

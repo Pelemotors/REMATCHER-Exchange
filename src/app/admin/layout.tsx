@@ -34,6 +34,12 @@ export default async function AdminLayout({
                 </BadgeV2>
               )}
             </Link>
+            <Link href="/admin/communications" className={styles.navLink}>
+              תקשורת Push
+            </Link>
+            <Link href="/admin/intelligence" className={styles.navLink}>
+              Product Intelligence
+            </Link>
             <Link href="/home" className={styles.navLink}>
               Exchange
             </Link>

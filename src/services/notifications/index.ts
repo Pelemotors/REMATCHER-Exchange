@@ -1,6 +1,8 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { NotificationType } from "@prisma/client";
-import { sendPushToUser } from "./push";
+import type { NotificationSourceCategory, NotificationType } from "@prisma/client";
+import { deliverPushToUser } from "./push";
+import type { PushSource, PushTriggerType } from "@prisma/client";
 
 export async function createNotification(params: {
   userId: string;
@@ -11,6 +13,10 @@ export async function createNotification(params: {
   entityType?: string;
   entityId?: string;
   sendPush?: boolean;
+  sourceCategory?: NotificationSourceCategory;
+  pushSource?: PushSource;
+  pushTriggerType?: PushTriggerType;
+  dealerId?: string;
 }) {
   const notification = await prisma.notification.create({
     data: {
@@ -21,15 +27,35 @@ export async function createNotification(params: {
       link: params.link,
       entityType: params.entityType,
       entityId: params.entityId,
+      sourceCategory: params.sourceCategory ?? "PRODUCT",
     },
   });
 
   if (params.sendPush !== false) {
-    await sendPushToUser(params.userId, {
-      title: params.title,
-      body: params.body,
-      link: params.link,
-    }).catch(() => {});
+    const prefs = await prisma.notificationPreference.findUnique({
+      where: { userId: params.userId },
+    });
+    const category = params.sourceCategory ?? "PRODUCT";
+    const allowed =
+      !prefs ||
+      (category === "PRODUCT" && prefs.criticalProduct) ||
+      (category === "REMINDER" && prefs.reminders) ||
+      (category === "ADMIN" && prefs.adminCommunications) ||
+      category === "SYSTEM";
+
+    if (allowed) {
+      await deliverPushToUser({
+        userId: params.userId,
+        dealerId: params.dealerId,
+        title: params.title,
+        body: params.body,
+        link: params.link,
+        source: params.pushSource ?? "PRODUCT",
+        triggerType: params.pushTriggerType,
+        notificationId: notification.id,
+        skipIfNoSubscription: true,
+      }).catch(() => {});
+    }
   }
 
   return notification;
@@ -37,7 +63,7 @@ export async function createNotification(params: {
 
 export async function notifyDealerUsers(
   dealerId: string,
-  params: Omit<Parameters<typeof createNotification>[0], "userId">
+  params: Omit<Parameters<typeof createNotification>[0], "userId" | "dealerId">
 ) {
   const memberships = await prisma.dealerMembership.findMany({
     where: { dealerId },
@@ -45,24 +71,8 @@ export async function notifyDealerUsers(
   });
 
   for (const m of memberships) {
-    await createNotification({ ...params, userId: m.userId });
+    await createNotification({ ...params, userId: m.userId, dealerId });
   }
 }
 
-export async function logAppEvent(params: {
-  eventType: string;
-  entityType?: string;
-  entityId?: string;
-  dealerId?: string;
-  metadata?: object;
-}) {
-  await prisma.appEvent.create({
-    data: {
-      eventType: params.eventType,
-      entityType: params.entityType,
-      entityId: params.entityId,
-      dealerId: params.dealerId,
-      metadataJson: params.metadata ?? undefined,
-    },
-  });
-}
+export { logEvent, logAppEvent } from "@/services/events/log-event";
