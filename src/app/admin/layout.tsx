@@ -2,7 +2,9 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { isAdminRole } from "@/lib/brand-copy";
 import { redirect } from "next/navigation";
+import { BadgeV2 } from "@/components/ui/brand-v2";
 import { countPendingDealersForApproval } from "@/services/admin/dealer-verification";
+import styles from "./admin-layout.module.css";
 
 export default async function AdminLayout({
   children,
@@ -17,22 +19,22 @@ export default async function AdminLayout({
   const pendingCount = await countPendingDealersForApproval();
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <header className="border-b border-border bg-surface">
-        <div className="container-app flex items-center justify-between py-4">
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/admin" className="font-semibold">
+    <div className={styles.root}>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <nav className={styles.nav}>
+            <Link href="/admin" className={styles.navBrand}>
               Control Room
             </Link>
-            <Link href="/admin/dealers" className="text-text-secondary hover:text-ink">
+            <Link href="/admin/dealers" className={styles.navLink}>
               סוחרים לאישור
               {pendingCount > 0 && (
-                <span className="mr-2 rounded-full bg-signal px-2 py-0.5 text-xs text-white">
+                <BadgeV2 variant="signal" className="mr-2">
                   {pendingCount}
-                </span>
+                </BadgeV2>
               )}
             </Link>
-            <Link href="/home" className="text-text-secondary hover:text-ink">
+            <Link href="/home" className={styles.navLink}>
               Exchange
             </Link>
           </nav>

@@ -1,38 +1,54 @@
+"use client";
+
 import Link from "next/link";
-import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { ButtonV2 } from "@/components/ui/brand-v2";
+import { BRAND } from "@/config/brand";
+import styles from "./public-layout.module.css";
 
 interface Props {
   children: React.ReactNode;
   showHeader?: boolean;
 }
 
-export function PublicHeader() {
+function PublicHeaderStatic() {
   return (
-    <header className="border-b border-border bg-surface">
-      <div className="container-app flex items-center justify-between py-4">
-        <Link href="/">
-          <BrandWordmark />
+    <header className={styles.header}>
+      <div className={styles.headerInner}>
+        <Link href="/" className={styles.lockup}>
+          <ExchangeMark
+            state="idle"
+            variant="hero"
+            className={styles.markIcon}
+            decorative
+          />
+          <div className={styles.lockupText}>
+            <p className={styles.brandParent}>{BRAND.parent}</p>
+            <p className={styles.brandProduct}>{BRAND.productShort}</p>
+          </div>
         </Link>
-        <nav className="flex items-center gap-3 text-sm">
-          <a href="#how-it-works" className="hidden text-text-secondary hover:text-ink sm:inline">
-            איך זה עובד
-          </a>
-          <Link href="/login" className="btn-secondary px-4 py-2 text-sm">
+        <nav className={styles.nav} aria-label="ניווט ראשי">
+          <Link href="/login" className={styles.navLink}>
             התחבר
           </Link>
-          <Link href="/signup" className="btn-primary px-4 py-2 text-sm">
+          <ButtonV2 variant="primary" href="/signup" className="text-sm">
             הצטרפות
-          </Link>
+          </ButtonV2>
         </nav>
       </div>
     </header>
   );
 }
 
+/** @deprecated Use PublicLayout with built-in v2 header */
+export function PublicHeader() {
+  return <PublicHeaderStatic />;
+}
+
 export function PublicLayout({ children, showHeader = true }: Props) {
   return (
-    <div className="min-h-screen bg-canvas">
-      {showHeader && <PublicHeader />}
+    <div className={styles.root}>
+      {showHeader && <PublicHeaderStatic />}
       {children}
     </div>
   );

@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1220",
+  themeColor: "#070C14",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -38,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl">
-      <body className={`${heebo.variable} font-sans`}>
+    <html lang="he" dir="rtl" data-brand-ui="2">
+      <body className={`${heebo.variable} font-sans bg-v2-canvas text-v2-text-primary`}>
         <Providers>
           {children}
           <PwaRegister />

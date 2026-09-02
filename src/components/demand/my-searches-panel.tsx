@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { ButtonV2, SkeletonBlockV2, Surface } from "@/components/ui/brand-v2";
 import { DemandCard } from "./demand-card";
-import { LoadingSpinner } from "@/components/ui/common";
 import type { EnrichedDemand } from "@/services/demand/demand-queries";
 
 interface Props {
@@ -49,23 +48,19 @@ export function MySearchesPanel({ compact, lightweight, limit, onViewAll }: Prop
   }
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-8">
-        <LoadingSpinner />
-      </div>
-    );
+    return <SkeletonBlockV2 lines={3} className="py-8" />;
   }
 
   const shown = limit ? active.slice(0, limit) : active;
 
   if (shown.length === 0) {
     return (
-      <div className="card text-center text-sm text-text-secondary">
+      <Surface depth="raised" className="p-6 text-center text-sm text-v2-text-secondary">
         <p>אין חיפושים פעילים כרגע.</p>
-        <Link href="/demand?new=1" className="btn-primary mt-4 inline-block">
+        <ButtonV2 variant="signal" href="/demand?new=1" className="mt-4">
           פתח חיפוש חדש
-        </Link>
-      </div>
+        </ButtonV2>
+      </Surface>
     );
   }
 
@@ -84,9 +79,9 @@ export function MySearchesPanel({ compact, lightweight, limit, onViewAll }: Prop
         />
       ))}
       {limit && active.length > limit && onViewAll && (
-        <button type="button" className="btn-secondary w-full" onClick={onViewAll}>
+        <ButtonV2 variant="secondary" className="w-full" onClick={onViewAll}>
           הצג את כל החיפושים ({active.length})
-        </button>
+        </ButtonV2>
       )}
     </div>
   );

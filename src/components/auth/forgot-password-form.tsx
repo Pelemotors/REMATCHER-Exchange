@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
+import { ExchangeMark } from "@/components/brand/exchange-mark";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -32,48 +33,50 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-6">
-      <div className="flex flex-col items-center text-center">
-        <BrandWordmark />
-        <h1 className="mt-4 text-h3 font-semibold">איפוס סיסמה</h1>
-      </div>
+    <form onSubmit={handleSubmit}>
+      <Surface depth="raised" className="w-full max-w-md space-y-6 p-6">
+        <div className="flex flex-col items-center text-center">
+          <ExchangeMark state="idle" size={56} decorative />
+          <h1 className="mt-4 text-h3 font-semibold text-v2-warm">איפוס סיסמה</h1>
+        </div>
 
-      {sent ? (
-        <p className="text-center text-sm text-text-secondary">
-          אם כתובת האימייל רשומה במערכת, נשלח אליך קישור לאיפוס סיסמה.
-        </p>
-      ) : (
-        <>
-          {error && (
-            <div className="rounded-sm bg-error-soft px-3 py-2 text-small text-error">
-              {error}
+        {sent ? (
+          <p className="text-center text-sm text-v2-text-secondary">
+            אם כתובת האימייל רשומה במערכת, נשלח אליך קישור לאיפוס סיסמה.
+          </p>
+        ) : (
+          <>
+            {error && (
+              <div className="rounded-sm bg-error-soft px-3 py-2 text-small text-error">
+                {error}
+              </div>
+            )}
+            <div>
+              <label className="label" htmlFor="email">
+                אימייל
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                dir="ltr"
+              />
             </div>
-          )}
-          <div>
-            <label className="label" htmlFor="email">
-              אימייל
-            </label>
-            <input
-              id="email"
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              dir="ltr"
-            />
-          </div>
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "שולח..." : "שלח קישור לאיפוס"}
-          </button>
-        </>
-      )}
+            <ButtonV2 type="submit" variant="signal" className="w-full" disabled={loading}>
+              {loading ? "שולח..." : "שלח קישור לאיפוס"}
+            </ButtonV2>
+          </>
+        )}
 
-      <p className="text-center text-sm">
-        <Link href="/login" className="text-signal">
-          חזרה להתחברות
-        </Link>
-      </p>
+        <p className="text-center text-sm">
+          <Link href="/login" className="text-v2-signal">
+            חזרה להתחברות
+          </Link>
+        </p>
+      </Surface>
     </form>
   );
 }

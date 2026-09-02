@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { BadgeV2, ButtonV2, Surface } from "@/components/ui/brand-v2";
 import type { EnrichedDemand } from "@/services/demand/demand-queries";
 
 interface Props {
@@ -24,47 +24,46 @@ export function DemandCard({
   );
 
   return (
-    <div className={cn("card space-y-3", compact && "p-4")}>
+    <Surface depth="raised" className={cn("space-y-3", compact ? "p-4" : "p-4")}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-ink">{demand.title}</h3>
+          <h3 className="font-bold text-v2-warm">{demand.title}</h3>
           {demand.subtitle && (
-            <p className="text-sm text-text-secondary">{demand.subtitle}</p>
+            <p className="text-sm text-v2-text-secondary">{demand.subtitle}</p>
           )}
           {demand.tags.length > 0 && (
-            <p className="mt-1 text-xs text-text-muted">
+            <p className="mt-1 text-xs text-v2-text-muted">
               {demand.tags.join(" · ")}
             </p>
           )}
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+        <BadgeV2
+          variant={
             demand.uxStatus === "EXPIRING"
-              ? "bg-warning-soft text-warning"
+              ? "warning"
               : isActive
-                ? "bg-success-soft text-success"
-                : "bg-surface-secondary text-text-muted"
-          )}
+                ? "success"
+                : "neutral"
+          }
         >
           {demand.statusLabel}
           {isActive && demand.daysLeft != null && demand.daysLeft > 0 && (
             <> · נותרו {demand.daysLeft} ימים</>
           )}
-        </span>
+        </BadgeV2>
       </div>
 
       {!compact && (
-        <p className="rounded-lg bg-surface-secondary px-3 py-2 text-sm text-text-secondary">
+        <Surface depth="secondary" className="px-3 py-2 text-sm text-v2-text-secondary">
           {demand.reflection}
-        </p>
+        </Surface>
       )}
 
       {demand.matchHint && (
         <p
           className={cn(
             "text-sm",
-            demand.hasAuthorizedMatch ? "text-signal font-medium" : "text-text-muted"
+            demand.hasAuthorizedMatch ? "font-medium text-v2-signal" : "text-v2-text-muted"
           )}
         >
           {demand.matchHint}
@@ -73,38 +72,38 @@ export function DemandCard({
 
       <div className="flex flex-wrap gap-2">
         {demand.hasAuthorizedMatch && (
-          <Link href="/matches" className="btn-primary text-sm">
+          <ButtonV2 variant="signal" href="/matches" className="text-sm">
             צפה בהתאמה
-          </Link>
+          </ButtonV2>
         )}
         {isActive && onEdit && (
-          <button
-            type="button"
-            className="btn-secondary text-sm"
+          <ButtonV2
+            variant="secondary"
+            className="text-sm"
             onClick={() => onEdit(demand.id)}
           >
             ערוך חיפוש
-          </button>
+          </ButtonV2>
         )}
         {demand.uxStatus === "EXPIRED" && onRenew && (
-          <button
-            type="button"
-            className="btn-primary text-sm"
+          <ButtonV2
+            variant="signal"
+            className="text-sm"
             onClick={() => onRenew(demand.id)}
           >
             הפעל מחדש
-          </button>
+          </ButtonV2>
         )}
         {isActive && onClose && (
-          <button
-            type="button"
-            className="btn-secondary text-sm"
+          <ButtonV2
+            variant="secondary"
+            className="text-sm"
             onClick={() => onClose(demand.id)}
           >
             סיים חיפוש
-          </button>
+          </ButtonV2>
         )}
       </div>
-    </div>
+    </Surface>
   );
 }

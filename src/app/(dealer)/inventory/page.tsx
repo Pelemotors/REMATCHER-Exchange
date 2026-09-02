@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, LoadingSpinner, EmptyState } from "@/components/ui/common";
+import {
+  BadgeV2,
+  ButtonV2,
+  DataValue,
+  EmptyStateV2,
+  PageHeaderV2,
+  SkeletonBlockV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import { InventoryImportPanel } from "@/components/inventory/inventory-import";
 import { freshnessLabel, vehicleStatusLabel } from "@/lib/status-labels";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import styles from "./inventory.module.css";
 
 interface Vehicle {
   id: string;
@@ -52,25 +61,29 @@ export default function InventoryPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <LoadingSpinner />
+      <div className={styles.page}>
+        <PageHeaderV2
+          title="המלאי שלי"
+          subtitle="רק המלאי שלך — לא גלישה ברשת"
+        />
+        <SkeletonBlockV2 lines={4} />
       </div>
     );
   }
 
   return (
-    <div>
-      <PageHeader
+    <div className={styles.page}>
+      <PageHeaderV2
         title="המלאי שלי"
         subtitle="רק המלאי שלך — לא גלישה ברשת"
         action={
           <div className="flex gap-2">
-            <button className="btn-secondary" onClick={() => setShowImport(!showImport)}>
+            <ButtonV2 variant="secondary" onClick={() => setShowImport(!showImport)}>
               ייבוא קובץ
-            </button>
-            <button className="btn-primary" onClick={() => setShowAdd(true)}>
+            </ButtonV2>
+            <ButtonV2 variant="signal" onClick={() => setShowAdd(true)}>
               + הוסף
-            </button>
+            </ButtonV2>
           </div>
         }
       />
@@ -78,59 +91,55 @@ export default function InventoryPage() {
       {showImport && <InventoryImportPanel onComplete={load} />}
 
       {showAdd && (
-        <form onSubmit={handleAdd} className="card mb-6 space-y-4">
-          <h3 className="font-semibold">הוספת רכב (טקסט חופשי)</h3>
-          <textarea
-            className="input min-h-[100px]"
-            placeholder='לדוגמה: Mazda CX-5 Premium 2023 61K km לבן B2B 134000'
-            value={rawInput}
-            onChange={(e) => setRawInput(e.target.value)}
-            required
-          />
-          <div className="flex gap-3">
-            <button type="submit" className="btn-primary flex-1" disabled={submitting}>
-              {submitting ? "מעבד..." : "הוסף ונרמל"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setShowAdd(false)}
-            >
-              ביטול
-            </button>
-          </div>
+        <form onSubmit={handleAdd} className="mb-6">
+          <Surface depth="raised" className="space-y-4 p-4">
+            <h3 className="font-semibold text-v2-text-primary">הוספת רכב (טקסט חופשי)</h3>
+            <textarea
+              className="input min-h-[100px]"
+              placeholder='לדוגמה: Mazda CX-5 Premium 2023 61K km לבן B2B 134000'
+              value={rawInput}
+              onChange={(e) => setRawInput(e.target.value)}
+              required
+            />
+            <div className="flex gap-3">
+              <ButtonV2 type="submit" variant="signal" className="flex-1" disabled={submitting}>
+                {submitting ? "מעבד..." : "הוסף ונרמל"}
+              </ButtonV2>
+              <ButtonV2 variant="secondary" onClick={() => setShowAdd(false)}>
+                ביטול
+              </ButtonV2>
+            </div>
+          </Surface>
         </form>
       )}
 
       {vehicles.length === 0 ? (
-        <EmptyState
+        <EmptyStateV2
           title="אין רכבים במלאי"
           description="הוסף רכבים כדי שהמערכת תוכל לחפש התאמות ברקע"
           action={
-            <button className="btn-primary" onClick={() => setShowAdd(true)}>
+            <ButtonV2 variant="signal" onClick={() => setShowAdd(true)}>
               הוסף רכב ראשון
-            </button>
+            </ButtonV2>
           }
         />
       ) : (
-        <div className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 lg:grid-cols-3">
+        <div className={styles.grid}>
           {vehicles.map((v) => (
-            <div key={v.id} className="card">
-              <h3 className="font-bold">
+            <Surface key={v.id} depth="raised" className={styles.card}>
+              <h3 className="font-bold text-v2-text-primary">
                 {[v.make, v.model].filter(Boolean).join(" ") || "רכב"}
               </h3>
-              <p className="text-sm text-text-secondary">{v.year}</p>
+              <p className="text-sm text-v2-text-secondary">{v.year}</p>
               <div className="mt-3 flex justify-between text-sm">
-                <span>{formatNumber(v.mileage)} ק&quot;מ</span>
-                <span className="font-semibold text-signal">
-                  {formatCurrency(v.b2bPrice)}
-                </span>
+                <span className="text-v2-text-secondary">{formatNumber(v.mileage)} ק&quot;מ</span>
+                <DataValue size="sm">{formatCurrency(v.b2bPrice)}</DataValue>
               </div>
               <div className="mt-2 flex gap-2">
-                <span className="badge-neutral">{freshnessLabel(v.freshnessState)}</span>
-                <span className="badge">{vehicleStatusLabel(v.status)}</span>
+                <BadgeV2 variant="neutral">{freshnessLabel(v.freshnessState)}</BadgeV2>
+                <BadgeV2 variant="neutral">{vehicleStatusLabel(v.status)}</BadgeV2>
               </div>
-            </div>
+            </Surface>
           ))}
         </div>
       )}

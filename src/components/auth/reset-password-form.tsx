@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
+import { ExchangeMark } from "@/components/brand/exchange-mark";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -37,63 +38,65 @@ export function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="card w-full max-w-md text-center">
-        <p className="text-text-secondary">קישור לא תקין.</p>
-        <Link href="/forgot-password" className="btn-primary mt-4 inline-block">
+      <Surface depth="raised" className="w-full max-w-md p-6 text-center">
+        <p className="text-v2-text-secondary">קישור לא תקין.</p>
+        <ButtonV2 variant="signal" href="/forgot-password" className="mt-4">
           בקש קישור חדש
-        </Link>
-      </div>
+        </ButtonV2>
+      </Surface>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-6">
-      <div className="flex flex-col items-center text-center">
-        <BrandWordmark />
-        <h1 className="mt-4 text-h3 font-semibold">סיסמה חדשה</h1>
-      </div>
-
-      {error && (
-        <div className="rounded-sm bg-error-soft px-3 py-2 text-small text-error">
-          {error}
+    <form onSubmit={handleSubmit}>
+      <Surface depth="raised" className="w-full max-w-md space-y-6 p-6">
+        <div className="flex flex-col items-center text-center">
+          <ExchangeMark state="idle" size={56} decorative />
+          <h1 className="mt-4 text-h3 font-semibold text-v2-warm">סיסמה חדשה</h1>
         </div>
-      )}
 
-      <div>
-        <label className="label" htmlFor="password">
-          סיסמה חדשה
-        </label>
-        <input
-          id="password"
-          type="password"
-          className="input"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={8}
-          dir="ltr"
-        />
-      </div>
+        {error && (
+          <div className="rounded-sm bg-error-soft px-3 py-2 text-small text-error">
+            {error}
+          </div>
+        )}
 
-      <div>
-        <label className="label" htmlFor="confirmPassword">
-          אימות סיסמה
-        </label>
-        <input
-          id="confirmPassword"
-          type="password"
-          className="input"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-          minLength={8}
-          dir="ltr"
-        />
-      </div>
+        <div>
+          <label className="label" htmlFor="password">
+            סיסמה חדשה
+          </label>
+          <input
+            id="password"
+            type="password"
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            dir="ltr"
+          />
+        </div>
 
-      <button type="submit" className="btn-primary w-full" disabled={loading}>
-        {loading ? "מעדכן..." : "עדכן סיסמה"}
-      </button>
+        <div>
+          <label className="label" htmlFor="confirmPassword">
+            אימות סיסמה
+          </label>
+          <input
+            id="confirmPassword"
+            type="password"
+            className="input"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength={8}
+            dir="ltr"
+          />
+        </div>
+
+        <ButtonV2 type="submit" variant="signal" className="w-full" disabled={loading}>
+          {loading ? "מעדכן..." : "עדכן סיסמה"}
+        </ButtonV2>
+      </Surface>
     </form>
   );
 }

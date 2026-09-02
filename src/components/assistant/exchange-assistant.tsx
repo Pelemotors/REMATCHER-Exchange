@@ -4,9 +4,10 @@ import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { MessageSquare, Send } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { ButtonV2 } from "@/components/ui/brand-v2";
 import type { ConversationState } from "@/services/assistant/conversation-state";
+import styles from "./exchange-assistant.module.css";
 
 interface Suggestion {
   label: string;
@@ -114,10 +115,10 @@ export function ExchangeAssistant() {
       <button
         type="button"
         onClick={openAssistant}
-        className="fixed bottom-20 left-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface shadow-elevated hover:border-signal md:bottom-6 md:left-6"
+        className={styles.fab}
         aria-label="Exchange Assistant"
       >
-        <MessageSquare className="h-5 w-5 text-signal" strokeWidth={1.75} />
+        <MessageSquare className={styles.fabIcon} strokeWidth={1.75} size={20} />
       </button>
 
       <BottomSheet
@@ -130,57 +131,57 @@ export function ExchangeAssistant() {
         footer={
           <div className="space-y-2">
             {pendingConfirmation && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="btn-primary flex-1"
+              <div className={styles.confirmRow}>
+                <ButtonV2
+                  variant="signal"
+                  className="flex-1"
                   onClick={() => send("כן")}
                 >
                   אשר
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary flex-1"
+                </ButtonV2>
+                <ButtonV2
+                  variant="secondary"
+                  className="flex-1"
                   onClick={() => send("לא")}
                 >
                   בטל
-                </button>
+                </ButtonV2>
               </div>
             )}
             <form
-              className="flex gap-2"
+              className={styles.composer}
               onSubmit={(e) => {
                 e.preventDefault();
                 send(input);
               }}
             >
               <input
-                className="input flex-1"
+                className={styles.input}
                 placeholder="שאל על החיפושים או הפעילות שלך..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
               />
               <button
                 type="submit"
-                className="btn-primary px-3"
+                className={styles.sendBtn}
                 disabled={loading}
+                aria-label="שלח"
               >
-                <Send className="h-4 w-4" />
+                <Send size={16} />
               </button>
             </form>
           </div>
         }
       >
-        <div className="space-y-3">
+        <div className={styles.messages}>
           {messages.map((msg, i) => (
             <div key={i}>
               <div
-                className={cn(
-                  "max-w-[90%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
+                className={
                   msg.role === "user"
-                    ? "mr-auto bg-signal text-white"
-                    : "ml-auto bg-surface-secondary"
-                )}
+                    ? styles.bubbleUser
+                    : styles.bubbleAssistant
+                }
               >
                 {msg.text}
               </div>
@@ -188,15 +189,15 @@ export function ExchangeAssistant() {
               {msg.cards && msg.cards.length > 0 && (
                 <div className="mt-2 space-y-2">
                   {msg.cards.map((card, j) => (
-                    <div key={j} className="card text-sm">
-                      <p className="font-medium">{card.title}</p>
+                    <div key={j} className={styles.card}>
+                      <p className={styles.cardTitle}>{card.title}</p>
                       {card.body && (
-                        <p className="text-text-secondary">{card.body}</p>
+                        <p className={styles.cardBody}>{card.body}</p>
                       )}
                       {card.href && (
                         <Link
                           href={card.href}
-                          className="mt-2 inline-block text-xs text-signal"
+                          className={styles.cardLink}
                           onClick={() => setOpen(false)}
                         >
                           פתח
@@ -208,13 +209,13 @@ export function ExchangeAssistant() {
               )}
 
               {msg.suggestions && (
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className={styles.chips}>
                   {msg.suggestions.map((s) =>
                     s.href ? (
                       <Link
                         key={s.label}
                         href={s.href}
-                        className="rounded-full border px-2 py-0.5 text-xs"
+                        className={styles.chip}
                         onClick={() => setOpen(false)}
                       >
                         {s.label}
@@ -223,7 +224,7 @@ export function ExchangeAssistant() {
                       <button
                         key={s.label}
                         type="button"
-                        className="rounded-full border px-2 py-0.5 text-xs"
+                        className={styles.chip}
                         onClick={() => send(s.label)}
                       >
                         {s.label}
@@ -235,7 +236,7 @@ export function ExchangeAssistant() {
             </div>
           ))}
           {loading && (
-            <p className="text-sm text-text-muted">בודק את המצב שלך...</p>
+            <p className={styles.loading}>בודק את המצב שלך...</p>
           )}
         </div>
       </BottomSheet>

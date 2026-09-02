@@ -41,7 +41,7 @@ export function BottomSheet({
   return (
     <div className="fixed inset-0 z-50" role="presentation">
       <div
-        className="absolute inset-0 bg-midnight/50"
+        className="absolute inset-0 bg-v2-midnight/60"
         onClick={onClose}
         aria-hidden
       />
@@ -50,26 +50,29 @@ export function BottomSheet({
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          "absolute flex flex-col bg-surface shadow-modal",
+          "absolute flex flex-col border border-v2-border bg-v2-surface-raised shadow-modal",
           "inset-x-0 bottom-0 h-[min(92dvh,100dvh)] max-h-[100dvh] rounded-t-xl",
           "md:inset-y-0 md:left-auto md:right-0 md:h-full md:max-h-full md:rounded-none md:rounded-l-xl",
           desktopWidth,
           className
         )}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-v2-border px-4 py-3">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-h3 font-semibold truncate">
+            <h2
+              id={titleId}
+              className="truncate text-h3 font-semibold text-v2-warm"
+            >
               {title}
             </h2>
             {subtitle && (
-              <p className="text-xs text-text-muted truncate">{subtitle}</p>
+              <p className="truncate text-xs text-v2-text-muted">{subtitle}</p>
             )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-sm p-2 hover:bg-surface-secondary"
+            className="shrink-0 rounded-sm p-2 text-v2-text-secondary hover:bg-v2-surface-secondary hover:text-v2-warm"
             aria-label="סגור"
           >
             <X className="h-5 w-5" />
@@ -81,7 +84,7 @@ export function BottomSheet({
         </div>
 
         {footer && (
-          <div className="shrink-0 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="shrink-0 border-t border-v2-border bg-v2-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {footer}
           </div>
         )}
