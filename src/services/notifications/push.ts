@@ -92,3 +92,25 @@ export async function savePushSubscription(
     },
   });
 }
+
+export async function removePushSubscription(
+  userId: string,
+  endpoint: string
+): Promise<boolean> {
+  const existing = await prisma.pushSubscription.findUnique({
+    where: { endpoint },
+  });
+  if (!existing || existing.userId !== userId) return false;
+  await prisma.pushSubscription.delete({ where: { endpoint } });
+  return true;
+}
+
+export async function isDeviceSubscribed(
+  userId: string,
+  endpoint: string
+): Promise<boolean> {
+  const row = await prisma.pushSubscription.findUnique({
+    where: { endpoint },
+  });
+  return row?.userId === userId;
+}
