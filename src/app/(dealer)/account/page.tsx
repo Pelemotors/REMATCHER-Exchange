@@ -170,10 +170,12 @@ export default function AccountPage() {
         </Surface>
       )}
 
-      <Surface depth="raised" className="mb-4 p-4" id="push">
+      <div id="push">
+      <Surface depth="raised" className="mb-4 p-4">
         <h3 className="mb-3 font-semibold text-v2-text-primary">התראות</h3>
         <PushSettings userId={session?.user?.id} />
       </Surface>
+      </div>
 
       <ButtonV2
         variant="secondary"

@@ -13,7 +13,9 @@ export type AssistantIntent =
   | "UNKNOWN"
   | "FISHING_BLOCKED"
   | "CLOSE_DEMAND"
-  | "UPDATE_DEMAND";
+  | "UPDATE_DEMAND"
+  | "VALIDATION"
+  | "UPDATE_INVENTORY";
 
 export interface AssistantContext {
   route: string;

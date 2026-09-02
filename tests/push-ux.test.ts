@@ -230,14 +230,10 @@ describe("push server subscriptions", () => {
 describe("push client subscribe flow (mocked)", () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.stubGlobal(
-      "Notification",
-      {
-        permission: "default",
-        requestPermission: vi.fn().mockResolvedValue("granted"),
-      },
-      "partial"
-    );
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: vi.fn().mockResolvedValue("granted"),
+    });
   });
 
   it("requestPermission not called until explicit subscribe", async () => {
