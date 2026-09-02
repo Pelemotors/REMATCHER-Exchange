@@ -1,0 +1,46 @@
+.root {
+  min-height: 100vh;
+  background: var(--rm2-canvas, #070c14);
+  color: var(--rm2-text-primary, #f3f1ec);
+}
+
+.header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(7, 12, 20, 0.92);
+}
+
+.headerInner {
+  margin-inline: auto;
+  max-width: 1280px;
+  padding: 1rem 1.25rem;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.navBrand {
+  font-weight: 600;
+  color: var(--rm2-warm-white, #f3f1ec);
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 150ms;
+}
+
+.navLink:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+@media (min-width: 768px) {
+  .headerInner {
+    padding-inline: 2rem;
+  }
+}

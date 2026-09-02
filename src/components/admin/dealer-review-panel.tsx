@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  ButtonV2,
+  SkeletonBlockV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 
 interface DealerReview {
   id: string;
@@ -63,93 +68,90 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
     router.refresh();
   }
 
-  if (loading) return <p>טוען...</p>;
-  if (!dealer?.id) return <p>סוחר לא נמצא</p>;
+  if (loading) return <SkeletonBlockV2 lines={4} />;
+  if (!dealer?.id) return <p className="text-v2-text-secondary">סוחר לא נמצא</p>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">בדיקת סוחר</h1>
-        <Link href="/admin/dealers" className="text-sm text-signal">
+        <h1 className="text-2xl font-bold text-v2-warm">בדיקת סוחר</h1>
+        <Link href="/admin/dealers" className="text-sm text-v2-signal">
           חזרה לתור
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <section className="card space-y-3">
-          <h2 className="font-semibold">פרטי העסק</h2>
-          <p><span className="text-text-muted">שם העסק:</span> {dealer.businessName}</p>
-          <p><span className="text-text-muted">עיר:</span> {dealer.city ?? "—"}</p>
-          <p><span className="text-text-muted">אזור:</span> {dealer.region ?? "—"}</p>
-          <p><span className="text-text-muted">ח.פ./עוסק:</span> {dealer.businessId ?? "—"}</p>
-        </section>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Surface depth="raised" as="section" className="space-y-3 p-4">
+          <h2 className="font-semibold text-v2-text-primary">פרטי העסק</h2>
+          <p><span className="text-v2-text-muted">שם העסק:</span> {dealer.businessName}</p>
+          <p><span className="text-v2-text-muted">עיר:</span> {dealer.city ?? "—"}</p>
+          <p><span className="text-v2-text-muted">אזור:</span> {dealer.region ?? "—"}</p>
+          <p><span className="text-v2-text-muted">ח.פ./עוסק:</span> {dealer.businessId ?? "—"}</p>
+        </Surface>
 
-        <section className="card space-y-3">
-          <h2 className="font-semibold">איש קשר</h2>
-          <p><span className="text-text-muted">שם:</span> {dealer.contactName}</p>
-          <p><span className="text-text-muted">אימייל:</span> {dealer.owner?.email}</p>
+        <Surface depth="raised" as="section" className="space-y-3 p-4">
+          <h2 className="font-semibold text-v2-text-primary">איש קשר</h2>
+          <p><span className="text-v2-text-muted">שם:</span> {dealer.contactName}</p>
+          <p><span className="text-v2-text-muted">אימייל:</span> {dealer.owner?.email}</p>
           <p>
-            <span className="text-text-muted">אימייל מאומת:</span>{" "}
+            <span className="text-v2-text-muted">אימייל מאומת:</span>{" "}
             {dealer.owner?.emailVerifiedAt ? "כן" : "לא"}
           </p>
-          <p><span className="text-text-muted">טלפון:</span> {dealer.phone}</p>
-        </section>
+          <p><span className="text-v2-text-muted">טלפון:</span> {dealer.phone}</p>
+        </Surface>
 
-        <section className="card space-y-3 md:col-span-2">
-          <h2 className="font-semibold">מערכת</h2>
-          <p><span className="text-text-muted">Dealer ID:</span> {dealer.id}</p>
-          <p><span className="text-text-muted">סטטוס:</span> {dealer.verificationStatus}</p>
+        <Surface depth="raised" as="section" className="space-y-3 p-4 md:col-span-2">
+          <h2 className="font-semibold text-v2-text-primary">מערכת</h2>
+          <p><span className="text-v2-text-muted">Dealer ID:</span> {dealer.id}</p>
+          <p><span className="text-v2-text-muted">סטטוס:</span> {dealer.verificationStatus}</p>
           <p>
-            <span className="text-text-muted">הרשמה:</span>{" "}
+            <span className="text-v2-text-muted">הרשמה:</span>{" "}
             {new Date(dealer.createdAt).toLocaleString("he-IL")}
           </p>
           {dealer.commercial && (
             <p>
-              <span className="text-text-muted">חיבורים חינמיים:</span>{" "}
+              <span className="text-v2-text-muted">חיבורים חינמיים:</span>{" "}
               {dealer.commercial.freeRevealUsed}/{dealer.commercial.freeRevealAllowance}
             </p>
           )}
-        </section>
+        </Surface>
       </div>
 
       {dealer.verificationStatus === "PENDING" && (
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            className="btn-primary"
+          <ButtonV2
+            variant="signal"
             disabled={actionLoading}
             onClick={approve}
           >
             אשר סוחר
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
+          </ButtonV2>
+          <ButtonV2
+            variant="secondary"
             disabled={actionLoading}
             onClick={() => setShowReject(!showReject)}
           >
             דחה בקשה
-          </button>
+          </ButtonV2>
         </div>
       )}
 
       {showReject && (
-        <div className="card space-y-3">
+        <Surface depth="raised" className="space-y-3 p-4">
           <label className="label">סיבה פנימית (אופציונלי)</label>
           <textarea
             className="input min-h-[80px]"
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
           />
-          <button
-            type="button"
-            className="btn-secondary"
+          <ButtonV2
+            variant="secondary"
             disabled={actionLoading}
             onClick={reject}
           >
             אישור דחייה
-          </button>
-        </div>
+          </ButtonV2>
+        </Surface>
       )}
     </div>
   );

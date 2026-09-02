@@ -3,8 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
-import { PublicLayout } from "@/components/public/public-layout";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -49,15 +48,15 @@ function VerifyEmailContent() {
   }
 
   return (
-    <div className="card mx-auto max-w-md space-y-4 text-center">
-      <h1 className="text-h2 font-bold">אימות אימייל</h1>
+    <Surface depth="raised" className="mx-auto max-w-md space-y-4 p-6 text-center">
+      <h1 className="text-h2 font-bold text-v2-warm">אימות אימייל</h1>
 
-      {status === "loading" && <p className="text-text-secondary">מאמת...</p>}
+      {status === "loading" && <p className="text-v2-text-secondary">מאמת...</p>}
 
       {message && (
         <p
           className={
-            status === "error" ? "text-error" : "text-text-secondary"
+            status === "error" ? "text-error" : "text-v2-text-secondary"
           }
         >
           {message}
@@ -65,27 +64,27 @@ function VerifyEmailContent() {
       )}
 
       {status === "success" && (
-        <Link href="/login" className="btn-primary inline-block">
+        <ButtonV2 variant="signal" href="/login">
           המשך להתחברות
-        </Link>
+        </ButtonV2>
       )}
 
       {email && status !== "success" && (
-        <button type="button" className="btn-secondary w-full" onClick={resend}>
+        <ButtonV2 variant="secondary" className="w-full" onClick={resend}>
           שלח שוב מייל אימות
-        </button>
+        </ButtonV2>
       )}
 
-      <Link href="/login" className="block text-sm text-signal">
+      <Link href="/login" className="block text-sm text-v2-signal">
         חזרה להתחברות
       </Link>
-    </div>
+    </Surface>
   );
 }
 
 export function VerifyEmailPage() {
   return (
-    <Suspense fallback={<div className="text-center">טוען...</div>}>
+    <Suspense fallback={<p className="text-center text-v2-text-muted">טוען...</p>}>
       <VerifyEmailContent />
     </Suspense>
   );

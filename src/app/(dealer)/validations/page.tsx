@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, LoadingSpinner } from "@/components/ui/common";
+import {
+  ButtonV2,
+  PageHeaderV2,
+  SkeletonBlockV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import { COPY } from "@/config/brand";
 
 interface Validation {
@@ -47,50 +52,56 @@ export default function ValidationsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <LoadingSpinner />
+      <div>
+        <PageHeaderV2
+          title="נדרש אימות"
+          subtitle="אימות ≠ עניין — לא נוצר חיוב"
+        />
+        <SkeletonBlockV2 lines={4} />
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader
+      <PageHeaderV2
         title="נדרש אימות"
         subtitle="אימות ≠ עניין — לא נוצר חיוב"
       />
 
       <div className="space-y-4">
         {items.map((v) => (
-          <div key={v.id} className="card space-y-3">
-            <p className="text-label text-text-muted">{COPY.validationContext}</p>
-            <p className="text-h3 font-bold text-ink">
+          <Surface key={v.id} depth="raised" className="space-y-3 p-4">
+            <p className="text-label text-v2-text-muted">{COPY.validationContext}</p>
+            <p className="text-h3 font-bold text-v2-warm">
               {v.vehicle.make} {v.vehicle.model} {v.vehicle.year}
             </p>
 
             {v.type === "AVAILABILITY" ? (
               <>
-                <p className="text-body font-semibold text-ink">
+                <p className="text-body font-semibold text-v2-text-primary">
                   {COPY.validationAvailability}
                 </p>
                 <div className="flex gap-3 pt-1">
-                  <button
-                    className="btn-primary flex-1"
+                  <ButtonV2
+                    variant="signal"
+                    className="flex-1"
                     onClick={() => respondAvailability(v.id, true)}
                   >
                     כן, זמין
-                  </button>
-                  <button
-                    className="btn-secondary flex-1"
+                  </ButtonV2>
+                  <ButtonV2
+                    variant="secondary"
+                    className="flex-1"
                     onClick={() => respondAvailability(v.id, false)}
                   >
                     נמכר
-                  </button>
+                  </ButtonV2>
                 </div>
               </>
             ) : (
               <>
-                <p className="text-body font-semibold text-ink">
+                <p className="text-body font-semibold text-v2-text-primary">
                   {COPY.validationB2bPrice}
                 </p>
                 <div className="flex gap-3">
@@ -107,19 +118,20 @@ export default function ValidationsPage() {
                       }))
                     }
                   />
-                  <button
-                    className="btn-primary shrink-0"
+                  <ButtonV2
+                    variant="signal"
+                    className="shrink-0"
                     onClick={() => submitPrice(v.id)}
                   >
                     אישור מחיר
-                  </button>
+                  </ButtonV2>
                 </div>
               </>
             )}
-          </div>
+          </Surface>
         ))}
         {items.length === 0 && (
-          <p className="text-center text-sm text-text-muted">
+          <p className="text-center text-sm text-v2-text-muted">
             אין אימותים ממתינים
           </p>
         )}

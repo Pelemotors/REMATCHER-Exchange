@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PageHeader, LoadingSpinner } from "@/components/ui/common";
-import { formatRelative } from "@/lib/utils";
+import {
+  ButtonV2,
+  PageHeaderV2,
+  SkeletonBlockV2,
+  Surface,
+} from "@/components/ui/brand-v2";
+import { formatRelative, cn } from "@/lib/utils";
 
 interface Notification {
   id: string;
@@ -41,47 +46,52 @@ export default function ActivityPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <LoadingSpinner />
+      <div>
+        <PageHeaderV2 title="פעילות" subtitle="מקור האמת — לא Feed" />
+        <SkeletonBlockV2 lines={5} />
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader
+      <PageHeaderV2
         title="פעילות"
         subtitle="מקור האמת — לא Feed"
         action={
-          <button className="btn-secondary text-sm" onClick={markAllRead}>
+          <ButtonV2 variant="secondary" className="text-sm" onClick={markAllRead}>
             סמן הכל כנקרא
-          </button>
+          </ButtonV2>
         }
       />
 
       <div className="space-y-2">
         {items.map((n) => (
-          <Link
-            key={n.id}
-            href={n.link ?? "/activity"}
-            className={`card block ${!n.readAt ? "border-signal/30 bg-signal-soft" : ""}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-medium">{n.title}</p>
-                <p className="text-sm text-text-secondary">{n.body}</p>
-              </div>
-              {!n.readAt && (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-signal" />
+          <Link key={n.id} href={n.link ?? "/activity"} className="block">
+            <Surface
+              depth="raised"
+              className={cn(
+                "p-4 transition-opacity hover:opacity-95",
+                !n.readAt && "border border-v2-signal/30 bg-v2-signal-soft/20"
               )}
-            </div>
-            <p className="mt-2 text-xs text-text-muted">
-              {formatRelative(n.createdAt)}
-            </p>
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-v2-text-primary">{n.title}</p>
+                  <p className="text-sm text-v2-text-secondary">{n.body}</p>
+                </div>
+                {!n.readAt && (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-v2-signal" />
+                )}
+              </div>
+              <p className="mt-2 text-xs text-v2-text-muted">
+                {formatRelative(n.createdAt)}
+              </p>
+            </Surface>
           </Link>
         ))}
         {items.length === 0 && (
-          <p className="text-center text-sm text-text-muted">אין התראות</p>
+          <p className="text-center text-sm text-v2-text-muted">אין התראות</p>
         )}
       </div>
     </div>

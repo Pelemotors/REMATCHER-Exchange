@@ -1,6 +1,6 @@
 /**
- * REMATCHER Exchange — Brand System v2 (Proof rollout)
- * Scoped via [data-brand-ui="2"] — does not replace v1 globally.
+ * REMATCHER Exchange — Brand System v2 (LOCKED — global product UI)
+ * Applied via [data-brand-ui="2"] on html and v2 primitives.
  */
 
 export const BRAND_UI_VERSION = 2 as const;

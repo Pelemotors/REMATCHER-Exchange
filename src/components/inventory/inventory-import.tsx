@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { LoadingSpinner } from "@/components/ui/common";
+import {
+  ButtonV2,
+  SkeletonBlockV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import type { ImportPreview } from "@/services/inventory/import";
 
 interface Props {
@@ -60,9 +64,9 @@ export function InventoryImportPanel({ onComplete }: Props) {
   }
 
   return (
-    <div className="card mb-6 space-y-4">
-      <h3 className="font-semibold">ייבוא מלאי מקובץ</h3>
-      <p className="text-sm text-text-secondary">
+    <Surface depth="raised" className="mb-6 space-y-4 p-4">
+      <h3 className="font-semibold text-v2-text-primary">ייבוא מלאי מקובץ</h3>
+      <p className="text-sm text-v2-text-secondary">
         העלה קובץ CSV או Excel — נזהה עמודות, נציג תצוגה מקדימה ורק אז נייבא
       </p>
 
@@ -70,36 +74,32 @@ export function InventoryImportPanel({ onComplete }: Props) {
         type="file"
         accept=".csv,.xlsx,.xls"
         onChange={handleFile}
-        className="block w-full text-sm"
+        className="block w-full text-sm text-v2-text-secondary"
       />
 
-      {loading && (
-        <div className="flex justify-center py-4">
-          <LoadingSpinner />
-        </div>
-      )}
+      {loading && <SkeletonBlockV2 lines={2} />}
 
       {error && <p className="text-sm text-error">{error}</p>}
 
       {preview && (
-        <div className="space-y-4 border-t border-border pt-4">
+        <div className="space-y-4 border-t border-v2-border pt-4">
           <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-            <div className="rounded-lg bg-surface-secondary p-3 text-center">
-              <p className="font-bold">{preview.summary.total}</p>
-              <p className="text-text-secondary">שורות</p>
-            </div>
-            <div className="rounded-lg bg-success-soft p-3 text-center">
-              <p className="font-bold">{preview.diff.newCount}</p>
-              <p className="text-text-secondary">חדשים</p>
-            </div>
-            <div className="rounded-lg bg-surface-secondary p-3 text-center">
-              <p className="font-bold">{preview.diff.stillActiveCount}</p>
-              <p className="text-text-secondary">עדיין במלאי</p>
-            </div>
-            <div className="rounded-lg bg-warning-soft p-3 text-center">
-              <p className="font-bold">{preview.diff.missingFromFile.length}</p>
-              <p className="text-text-secondary">לא בקובץ</p>
-            </div>
+            <Surface depth="secondary" className="p-3 text-center">
+              <p className="font-bold text-v2-warm">{preview.summary.total}</p>
+              <p className="text-v2-text-secondary">שורות</p>
+            </Surface>
+            <Surface depth="secondary" className="bg-success-soft p-3 text-center">
+              <p className="font-bold text-v2-warm">{preview.diff.newCount}</p>
+              <p className="text-v2-text-secondary">חדשים</p>
+            </Surface>
+            <Surface depth="secondary" className="p-3 text-center">
+              <p className="font-bold text-v2-warm">{preview.diff.stillActiveCount}</p>
+              <p className="text-v2-text-secondary">עדיין במלאי</p>
+            </Surface>
+            <Surface depth="secondary" className="bg-warning-soft p-3 text-center">
+              <p className="font-bold text-v2-warm">{preview.diff.missingFromFile.length}</p>
+              <p className="text-v2-text-secondary">לא בקובץ</p>
+            </Surface>
           </div>
 
           {preview.summary.needsAttention > 0 && (
@@ -109,7 +109,7 @@ export function InventoryImportPanel({ onComplete }: Props) {
           )}
 
           {preview.diff.missingFromFile.length > 0 && (
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm text-v2-text-secondary">
               <input
                 type="checkbox"
                 checked={markMissing}
@@ -123,9 +123,9 @@ export function InventoryImportPanel({ onComplete }: Props) {
             {preview.rows.slice(0, 20).map((row) => (
               <div
                 key={row.rowIndex}
-                className={`border-b border-border py-2 ${row.skip ? "opacity-50" : ""}`}
+                className={`border-b border-v2-border py-2 ${row.skip ? "opacity-50" : ""}`}
               >
-                <span className="font-medium">
+                <span className="font-medium text-v2-text-primary">
                   {[row.fields.make, row.fields.model, row.fields.year]
                     .filter(Boolean)
                     .join(" ") || `שורה ${row.rowIndex}`}
@@ -134,36 +134,32 @@ export function InventoryImportPanel({ onComplete }: Props) {
                   <span className="mr-2 text-warning"> · {row.warnings[0]}</span>
                 )}
                 {row.duplicateOfVehicleId && (
-                  <span className="mr-2 text-text-muted"> · עדכון קיים</span>
+                  <span className="mr-2 text-v2-text-muted"> · עדכון קיים</span>
                 )}
               </div>
             ))}
             {preview.rows.length > 20 && (
-              <p className="py-2 text-text-muted">
+              <p className="py-2 text-v2-text-muted">
                 +{preview.rows.length - 20} שורות נוספות
               </p>
             )}
           </div>
 
           <div className="flex gap-3">
-            <button
-              type="button"
-              className="btn-primary flex-1"
+            <ButtonV2
+              variant="signal"
+              className="flex-1"
               onClick={handleConfirm}
               disabled={loading}
             >
               אשר ייבוא
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setPreview(null)}
-            >
+            </ButtonV2>
+            <ButtonV2 variant="secondary" onClick={() => setPreview(null)}>
               ביטול
-            </button>
+            </ButtonV2>
           </div>
         </div>
       )}
-    </div>
+    </Surface>
   );
 }

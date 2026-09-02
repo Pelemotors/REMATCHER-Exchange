@@ -8,28 +8,49 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
-  /* REMATCHER Brand System v1 — LOCKED */
-  --rm-midnight: #0B1220;
-  --rm-ink: #111827;
-  --rm-signal: #18C37E;
-  --rm-signal-hover: #12A96D;
-  --rm-signal-soft: #E8F8F1;
-  --rm-canvas: #F6F8FA;
-  --rm-surface: #FFFFFF;
-  --rm-surface-secondary: #F1F4F7;
-  --rm-border: #E2E7EC;
-  --rm-border-strong: #CDD5DE;
-  --rm-text-primary: #111827;
-  --rm-text-secondary: #5F6B7A;
-  --rm-text-muted: #8B96A5;
+  /* Brand UI v2 — global product palette */
+  --rm-midnight: #070C14;
+  --rm-ink: #F3F1EC;
+  --rm-signal: #2D78A8;
+  --rm-signal-hover: #174A73;
+  --rm-signal-soft: rgba(45, 120, 168, 0.12);
+  --rm-canvas: #0A1018;
+  --rm-surface: #162030;
+  --rm-surface-secondary: #1A2535;
+  --rm-border: rgba(201, 206, 211, 0.12);
+  --rm-border-strong: rgba(201, 206, 211, 0.22);
+  --rm-text-primary: #F3F1EC;
+  --rm-text-secondary: rgba(243, 241, 236, 0.72);
+  --rm-text-muted: rgba(243, 241, 236, 0.48);
   --rm-success: #16865C;
-  --rm-success-soft: #E8F5EF;
+  --rm-success-soft: rgba(22, 134, 92, 0.15);
   --rm-warning: #C47A12;
-  --rm-warning-soft: #FFF5E5;
+  --rm-warning-soft: rgba(196, 122, 18, 0.15);
   --rm-error: #C53B3B;
-  --rm-error-soft: #FDECEC;
-  --rm-info: #3478C9;
-  --rm-info-soft: #EAF2FC;
+  --rm-error-soft: rgba(197, 59, 59, 0.15);
+  --rm-info: #2D78A8;
+  --rm-info-soft: rgba(45, 120, 168, 0.12);
+
+  --rm2-midnight: #070C14;
+  --rm2-graphite: #111A26;
+  --rm2-deep-navy: #163A5F;
+  --rm2-exchange-blue: #174A73;
+  --rm2-signal-blue: #2D78A8;
+  --rm2-signal-blue-soft: rgba(45, 120, 168, 0.12);
+  --rm2-platinum: #C9CED3;
+  --rm2-warm-white: #F3F1EC;
+  --rm2-canvas: #0A1018;
+  --rm2-surface: #111A26;
+  --rm2-surface-raised: #162030;
+  --rm2-surface-secondary: #1A2535;
+  --rm2-border: rgba(201, 206, 211, 0.12);
+  --rm2-border-strong: rgba(201, 206, 211, 0.22);
+  --rm2-text-primary: #F3F1EC;
+  --rm2-text-secondary: rgba(243, 241, 236, 0.72);
+  --rm2-text-muted: rgba(243, 241, 236, 0.48);
+  --rm2-success: #16865C;
+  --rm2-warning: #C47A12;
+  --rm2-error: #C53B3B;
 }
 
 html {
@@ -58,7 +79,7 @@ body {
   }
 
   .card {
-    @apply rounded-lg border border-border bg-surface p-4 shadow-card;
+    @apply rounded-md border border-border bg-surface p-4 shadow-[0_1px_0_rgba(201,206,211,0.06)_inset];
   }
 
   .card-signal {
@@ -66,7 +87,7 @@ body {
   }
 
   .btn {
-    @apply inline-flex min-h-touch items-center justify-center rounded-md px-4 py-2.5 text-body font-semibold transition duration-normal active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2;
+    @apply inline-flex min-h-touch items-center justify-center rounded-md px-4 py-2.5 text-body font-semibold transition duration-normal active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas;
   }
 
   @media (max-width: 767px) {
@@ -76,11 +97,11 @@ body {
   }
 
   .btn-primary {
-    @apply btn bg-signal text-white hover:bg-signal-hover;
+    @apply btn bg-v2-exchange text-v2-warm hover:bg-v2-deep-navy;
   }
 
   .btn-secondary {
-    @apply btn border border-border-strong bg-surface text-text-primary hover:bg-surface-secondary;
+    @apply btn border border-border-strong bg-transparent text-text-primary hover:bg-surface-secondary;
   }
 
   .btn-ghost {
@@ -92,7 +113,7 @@ body {
   }
 
   .input {
-    @apply w-full rounded-sm border border-border bg-surface px-4 py-3 text-body outline-none focus:border-signal focus:ring-2 focus:ring-signal/20;
+    @apply w-full rounded-sm border border-border-strong bg-surface-secondary px-4 py-3 text-body text-text-primary placeholder:text-text-muted outline-none focus:border-signal focus:ring-2 focus:ring-signal/20;
   }
 
   .label {
@@ -104,7 +125,7 @@ body {
   }
 
   .badge-signal {
-    @apply badge bg-signal-soft text-success;
+    @apply badge bg-signal-soft text-signal;
   }
 
   .badge-neutral {
@@ -120,7 +141,7 @@ body {
   }
 
   .badge-connection {
-    @apply badge bg-signal-soft text-success font-semibold;
+    @apply badge bg-signal-soft text-signal font-semibold;
   }
 
   .badge-info {
@@ -179,29 +200,7 @@ body {
     @apply h-full rounded-sm bg-signal transition-all duration-normal;
   }
 
-  /* ── Brand UI v2 (scoped) ───────────────────────────── */
   [data-brand-ui="2"] {
-    --rm2-midnight: #070C14;
-    --rm2-graphite: #111A26;
-    --rm2-deep-navy: #163A5F;
-    --rm2-exchange-blue: #174A73;
-    --rm2-signal-blue: #2D78A8;
-    --rm2-signal-blue-soft: rgba(45, 120, 168, 0.12);
-    --rm2-platinum: #C9CED3;
-    --rm2-warm-white: #F3F1EC;
-    --rm2-canvas: #0A1018;
-    --rm2-surface: #111A26;
-    --rm2-surface-raised: #162030;
-    --rm2-surface-secondary: #1A2535;
-    --rm2-border: rgba(201, 206, 211, 0.12);
-    --rm2-border-strong: rgba(201, 206, 211, 0.22);
-    --rm2-text-primary: #F3F1EC;
-    --rm2-text-secondary: rgba(243, 241, 236, 0.72);
-    --rm2-text-muted: rgba(243, 241, 236, 0.48);
-    --rm2-success: #16865C;
-    --rm2-warning: #C47A12;
-    --rm2-error: #C53B3B;
-
     @apply bg-v2-canvas text-v2-text-primary;
   }
 
@@ -285,7 +284,6 @@ body {
     @apply v2-btn border border-v2-border-strong bg-transparent text-v2-text-secondary transition duration-normal hover:border-v2-border-strong hover:bg-v2-surface-secondary hover:text-v2-warm;
   }
 
-  /* Motion primitives */
   @keyframes v2-search-pulse {
     0%, 100% { opacity: 0.55; }
     50% { opacity: 1; }

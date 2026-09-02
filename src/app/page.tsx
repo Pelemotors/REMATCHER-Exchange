@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { getPostAuthRedirect } from "@/lib/auth-routing";
 import { PublicLayout } from "@/components/public/public-layout";
 import { HeroV2 } from "@/components/landing/hero-v2";
+import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
 import { APP_CONFIG } from "@/config/app";
 
@@ -53,53 +54,53 @@ export default async function LandingPage() {
       <HeroV2 />
 
       <PublicLayout showHeader={false}>
-      <section id="how-it-works" className="border-t border-border bg-surface py-16">
-        <div className="container-app">
-          <h2 className="mb-10 text-center text-h2 font-bold">איך Exchange עובד</h2>
-          <div className="grid gap-6 md:grid-cols-3">
-            {steps.map((step, i) => (
-              <div key={step.title} className="card">
-                <span className="text-sm font-semibold text-signal">{i + 1}</span>
-                <h3 className="mt-2 font-semibold">{step.title}</h3>
-                <p className="mt-2 text-sm text-text-secondary">{step.body}</p>
-              </div>
-            ))}
+        <section id="how-it-works" className="border-t border-v2-border bg-v2-surface py-16">
+          <div className="container-app">
+            <h2 className="mb-10 text-center text-h2 font-bold text-v2-warm">איך Exchange עובד</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {steps.map((step, i) => (
+                <Surface key={step.title} depth="raised" className="p-5">
+                  <span className="text-sm font-semibold text-v2-signal">{i + 1}</span>
+                  <h3 className="mt-2 font-semibold text-v2-text-primary">{step.title}</h3>
+                  <p className="mt-2 text-sm text-v2-text-secondary">{step.body}</p>
+                </Surface>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="container-app py-16">
-        <div className="card mx-auto max-w-2xl text-center">
-          <h2 className="text-h2 font-bold">המלאי שלך נשאר פרטי</h2>
-          <p className="mt-4 text-text-secondary">
-            סוחרים אחרים לא מקבלים גישה למלאי שלך ולא יכולים לעבור עליו.{" "}
-            {BRAND.product} מציג רק הזדמנות רלוונטית כאשר יש סיבה עסקית אמיתית
-            לחיבור.
+        <section className="container-app py-16">
+          <Surface depth="raised" className="mx-auto max-w-2xl p-8 text-center">
+            <h2 className="text-h2 font-bold text-v2-warm">המלאי שלך נשאר פרטי</h2>
+            <p className="mt-4 text-v2-text-secondary">
+              סוחרים אחרים לא מקבלים גישה למלאי שלך ולא יכולים לעבור עליו.{" "}
+              {BRAND.product} מציג רק הזדמנות רלוונטית כאשר יש סיבה עסקית אמיתית
+              לחיבור.
+            </p>
+          </Surface>
+        </section>
+
+        <section className="border-t border-v2-border bg-v2-signal-soft/20 py-16">
+          <div className="container-app text-center">
+            <h2 className="text-h2 font-bold text-v2-warm">5 החיבורים הראשונים ללא עלות</h2>
+            <p className="mx-auto mt-4 max-w-xl text-v2-text-secondary">
+              מתחילים להשתמש ברשת, בודקים את הערך בפועל ורק לאחר מכן מחליטים איך
+              להמשיך.
+            </p>
+          </div>
+        </section>
+
+        <section className="container-app py-16 text-center">
+          <ButtonV2 variant="signal" href="/signup" className="px-10 py-3">
+            הצטרפות ל-{BRAND.productShort}
+          </ButtonV2>
+          <p className="mt-4 text-sm text-v2-text-secondary">
+            כבר יש לך חשבון?{" "}
+            <Link href="/login" className="font-medium text-v2-signal">
+              התחבר
+            </Link>
           </p>
-        </div>
-      </section>
-
-      <section className="border-t border-border bg-signal-soft/30 py-16">
-        <div className="container-app text-center">
-          <h2 className="text-h2 font-bold">5 החיבורים הראשונים ללא עלות</h2>
-          <p className="mx-auto mt-4 max-w-xl text-text-secondary">
-            מתחילים להשתמש ברשת, בודקים את הערך בפועל ורק לאחר מכן מחליטים איך
-            להמשיך.
-          </p>
-        </div>
-      </section>
-
-      <section className="container-app py-16 text-center">
-        <Link href="/signup" className="btn-primary inline-block px-10 py-3">
-          הצטרפות ל-{BRAND.productShort}
-        </Link>
-        <p className="mt-4 text-sm text-text-secondary">
-          כבר יש לך חשבון?{" "}
-          <Link href="/login" className="font-medium text-signal">
-            התחבר
-          </Link>
-        </p>
-      </section>
+        </section>
       </PublicLayout>
     </>
   );

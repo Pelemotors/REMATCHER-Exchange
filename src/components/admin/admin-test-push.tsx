@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ButtonV2 } from "@/components/ui/brand-v2";
 
 export function AdminTestPushButton() {
   const [loading, setLoading] = useState(false);
@@ -30,14 +31,14 @@ export function AdminTestPushButton() {
 
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        className="btn-primary text-sm"
+      <ButtonV2
+        variant="signal"
+        className="text-sm"
         onClick={sendTest}
         disabled={loading}
       >
         {loading ? "שולח..." : "שלח התראת בדיקה"}
-      </button>
+      </ButtonV2>
       {message && (
         <p className={`text-sm ${isError ? "text-error" : "text-success"}`}>
           {message}

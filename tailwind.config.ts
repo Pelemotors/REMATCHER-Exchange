@@ -1,7 +1,8 @@
 import type { Config } from "tailwindcss";
 import { TOKENS, TOKENS_V2 } from "./src/config/brand";
 
-const c = TOKENS.color;
+/** Product UI uses Brand v2 palette globally; v1 TOKENS kept for legacy references only */
+const c = TOKENS_V2.color;
 const v2 = TOKENS_V2.color;
 
 const config: Config = {
@@ -10,15 +11,15 @@ const config: Config = {
     extend: {
       colors: {
         midnight: c.midnight,
-        ink: c.ink,
+        ink: c.warmWhite,
         signal: {
-          DEFAULT: c.signal,
-          hover: c.signalHover,
-          soft: c.signalSoft,
+          DEFAULT: c.signalBlue,
+          hover: c.exchangeBlue,
+          soft: c.signalBlueSoft,
         },
         canvas: c.canvas,
         surface: {
-          DEFAULT: c.surface,
+          DEFAULT: c.surfaceRaised,
           secondary: c.surfaceSecondary,
         },
         border: {

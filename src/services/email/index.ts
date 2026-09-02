@@ -117,7 +117,7 @@ ${content}
 }
 
 function ctaButton(href: string, label: string): string {
-  return `<p style="margin-top:24px;"><a href="${href}" style="display:inline-block;background:#18C37E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">${label}</a></p>`;
+  return `<p style="margin-top:24px;"><a href="${href}" style="display:inline-block;background:#174A73;color:#F3F1EC;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">${label}</a></p>`;
 }
 
 function textFooter(): string {
