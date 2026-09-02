@@ -114,6 +114,41 @@ export async function getPushClientSnapshot(): Promise<PushClientSnapshot> {
   };
 }
 
+/**
+ * Complete server registration when permission is already granted but the
+ * browser subscription was never persisted (e.g. failed save after opt-in).
+ */
+export async function syncPushSubscriptionIfGranted(): Promise<{
+  ok: boolean;
+  reason?: "not_granted" | "denied" | "not_configured" | "save_failed" | "error";
+}> {
+  if (getClientPushSupport() !== "supported") {
+    return { ok: false, reason: "error" };
+  }
+  if (Notification.permission === "denied") {
+    return { ok: false, reason: "denied" };
+  }
+  if (Notification.permission !== "granted") {
+    return { ok: false, reason: "not_granted" };
+  }
+
+  const snapshot = await getPushClientSnapshot();
+  if (snapshot.deviceSubscribed) {
+    return { ok: true };
+  }
+
+  const result = await subscribeToPush();
+  if (result.ok) return { ok: true };
+  if (result.reason === "denied") return { ok: false, reason: "denied" };
+  if (result.reason === "not_configured") {
+    return { ok: false, reason: "not_configured" };
+  }
+  if (result.reason === "save_failed") {
+    return { ok: false, reason: "save_failed" };
+  }
+  return { ok: false, reason: "error" };
+}
+
 /** Request permission only when user explicitly opts in */
 export async function subscribeToPush(): Promise<{
   ok: boolean;

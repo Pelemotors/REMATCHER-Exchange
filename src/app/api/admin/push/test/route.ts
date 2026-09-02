@@ -21,7 +21,8 @@ export async function POST() {
   if (result.sent === 0 && result.failed === 0) {
     return NextResponse.json(
       {
-        error: "No active push subscriptions",
+        error:
+          "No active push subscriptions for the logged-in account. Enable Push on this device/account, then retry.",
         sent: 0,
         failed: 0,
       },

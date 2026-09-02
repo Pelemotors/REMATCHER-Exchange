@@ -66,12 +66,24 @@ describe("push-support", () => {
     ).toBe(false);
   });
 
-  it("does not show onboarding when permission granted", () => {
+  it("shows onboarding when permission granted but not subscribed (retry)", () => {
     expect(
       shouldShowPushOnboarding({
         support: "supported",
         permission: "granted",
         deviceSubscribed: false,
+        dismissed: false,
+        isMobileViewport: true,
+      })
+    ).toBe(true);
+  });
+
+  it("does not show onboarding when subscribed", () => {
+    expect(
+      shouldShowPushOnboarding({
+        support: "supported",
+        permission: "granted",
+        deviceSubscribed: true,
         dismissed: false,
         isMobileViewport: true,
       })

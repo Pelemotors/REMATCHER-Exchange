@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ButtonV2, PageHeaderV2, Surface } from "@/components/ui/brand-v2";
 import { PushSettings } from "@/components/pwa/push-settings";
+import { syncPushSubscriptionIfGranted } from "@/lib/push-client";
 import { BRAND, COPY } from "@/config/brand";
 import styles from "./onboarding.module.css";
 
@@ -28,6 +29,7 @@ export function DealerOnboardingFlow() {
     region: "",
     phone: "",
   });
+  const [pushSyncError, setPushSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/onboarding")
@@ -88,6 +90,25 @@ export function DealerOnboardingFlow() {
     });
     setSaving(false);
     await advance("inventory", "profile");
+  }
+
+  async function finishPushStep() {
+    setPushSyncError(null);
+    setSaving(true);
+    const sync = await syncPushSubscriptionIfGranted();
+    if (
+      !sync.ok &&
+      sync.reason !== "not_granted" &&
+      sync.reason !== "denied"
+    ) {
+      setPushSyncError(
+        "ההרשמה להתראות לא הושלמה. הפעילו את המתג למעלה ונסו שוב."
+      );
+      setSaving(false);
+      return;
+    }
+    await advance("done", "push");
+    setSaving(false);
   }
 
   async function skipOnboarding() {
@@ -214,8 +235,11 @@ export function DealerOnboardingFlow() {
             קבל התראה כשיש התאמה, הזדמנות או חיבור — ישירות למסך הרלוונטי.
           </p>
           <PushSettings compact />
+          {pushSyncError && (
+            <p className="text-sm text-error">{pushSyncError}</p>
+          )}
           <div className={styles.actions}>
-            <ButtonV2 variant="signal" disabled={saving} onClick={() => advance("done", "push")}>
+            <ButtonV2 variant="signal" disabled={saving} onClick={finishPushStep}>
               סיים והיכנס ל-{BRAND.product}
             </ButtonV2>
             <button type="button" className={styles.skipLink} onClick={() => advance("done", "push")}>

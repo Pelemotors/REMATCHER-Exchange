@@ -19,6 +19,7 @@ export function PushOnboardingPrompt() {
   const userId = session?.user?.id;
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const evaluate = useCallback(async () => {
     if (!userId) {
@@ -46,9 +47,19 @@ export function PushOnboardingPrompt() {
 
   async function handleEnable() {
     setBusy(true);
-    await subscribeToPush();
+    setError(null);
+    const result = await subscribeToPush();
     setBusy(false);
-    setVisible(false);
+    if (result.ok) {
+      setVisible(false);
+      return;
+    }
+    if (result.reason === "denied") {
+      setVisible(false);
+      return;
+    }
+    setError("לא הצלחנו להשלים את הרישום להתראות. נסה שוב.");
+    await evaluate();
   }
 
   function handleDismiss() {
@@ -63,6 +74,7 @@ export function PushOnboardingPrompt() {
         onDismiss={handleDismiss}
         busy={busy}
       />
+      {error && <p className="mt-2 text-sm text-error">{error}</p>}
     </div>
   );
 }
