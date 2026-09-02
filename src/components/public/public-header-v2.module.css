@@ -1,0 +1,192 @@
+.header {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(7, 12, 20, 0.75);
+  backdrop-filter: blur(12px);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-inline: auto;
+  max-width: 1280px;
+  height: 68px;
+  padding-inline: 1.25rem;
+}
+
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.markIcon {
+  flex-shrink: 0;
+  width: 32px;
+  height: auto;
+}
+
+.lockupText {
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.brandParent {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.brandProduct {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktopNav {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.navLink {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 150ms;
+}
+
+.navLink:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.navCta {
+  border-radius: 6px;
+  border: 1px solid #163a5f;
+  background: #163a5f;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #f3f1ec;
+  transition: border-color 150ms, background-color 150ms;
+}
+
+.navCta:hover {
+  border-color: #2d78a8;
+  background: #174a73;
+}
+
+.menuButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.menuIcon {
+  width: 18px;
+  height: 2px;
+  background: currentColor;
+  position: relative;
+  display: block;
+}
+
+.menuIcon::before,
+.menuIcon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 18px;
+  height: 2px;
+  background: currentColor;
+}
+
+.menuIcon::before {
+  top: -6px;
+}
+
+.menuIcon::after {
+  top: 6px;
+}
+
+.mobileMenu {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(7, 12, 20, 0.95);
+  padding: 0.75rem 1.25rem 1rem;
+}
+
+.mobileMenuLink {
+  display: block;
+  padding: 0.75rem 0;
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.65);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mobileMenuLink:last-child {
+  border-bottom: none;
+}
+
+.mobileMenuLink:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+@media (min-width: 768px) {
+  .inner {
+    height: auto;
+    padding-block: 1rem;
+    padding-inline: 2rem;
+  }
+
+  .markIcon {
+    width: 44px;
+  }
+
+  .brandParent {
+    font-size: 0.625rem;
+  }
+
+  .brandProduct {
+    font-size: 0.875rem;
+  }
+
+  .menuButton {
+    display: none;
+  }
+
+  .desktopNav {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .mobileMenu {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .inner {
+    padding-inline: 3rem;
+  }
+}
