@@ -18,6 +18,10 @@ export async function getLifecycleMetrics(days: number) {
     sellerInterested,
     reveals,
     dealClosed,
+    mutualInterest,
+    staleMatches,
+    revealsWithOutcome,
+    totalOutcomes,
   ] = await Promise.all([
     prisma.demand.count({ where: { createdAt: { gte: since } } }),
     prisma.demand.count({ where: { status: "ACTIVE", createdAt: { gte: since } } }),
@@ -38,19 +42,19 @@ export async function getLifecycleMetrics(days: number) {
     prisma.outcome.count({
       where: { reportedAt: { gte: since }, status: "DEAL_CLOSED" },
     }),
+    prisma.mutualInterest.count({ where: { createdAt: { gte: since } } }),
+    prisma.candidateMatch.count({
+      where: {
+        createdAt: { gte: since, lte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+        buyerInterests: { none: { status: "INTERESTED" } },
+        status: { in: ["CANDIDATE", "VALIDATED"] },
+      },
+    }),
+    prisma.reveal.count({
+      where: { revealedAt: { gte: since }, outcome: { isNot: null } },
+    }),
+    prisma.outcome.count({ where: { reportedAt: { gte: since } } }),
   ]);
-
-  const mutualInterest = await prisma.mutualInterest.count({
-    where: { createdAt: { gte: since } },
-  });
-
-  const staleMatches = await prisma.candidateMatch.count({
-    where: {
-      createdAt: { gte: since, lte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
-      buyerInterests: { none: { status: "INTERESTED" } },
-      status: { in: ["CANDIDATE", "VALIDATED"] },
-    },
-  });
 
   const demandToFirstMatchMs = await computeDemandToFirstMatchTimings(since);
   const matchToInterestMs = await computeMatchToFirstInterestTimings(since);
@@ -80,12 +84,7 @@ export async function getLifecycleMetrics(days: number) {
     reveal: {
       total: reveals,
       revealFromMatchPct: pct(reveals, totalMatches),
-      withOutcomePct: pct(
-        await prisma.reveal.count({
-          where: { revealedAt: { gte: since }, outcome: { isNot: null } },
-        }),
-        reveals
-      ),
+      withOutcomePct: pct(revealsWithOutcome, reveals),
       timeFromMutual: formatTiming(mutualToRevealMs),
       timeToOutcome: formatTiming(revealToOutcomeMs),
     },
@@ -99,7 +98,7 @@ export async function getLifecycleMetrics(days: number) {
       firstInterest: buyerInterested,
       mutualInterest,
       reveals,
-      outcomes: await prisma.outcome.count({ where: { reportedAt: { gte: since } } }),
+      outcomes: totalOutcomes,
       deals: dealClosed,
     },
   };
@@ -115,14 +114,18 @@ function formatTiming(dist: ReturnType<typeof timingDistribution>) {
   };
 }
 
+/** Full-period timing — no arbitrary row cap (counts use prisma.count elsewhere). */
 async function computeDemandToFirstMatchTimings(since: Date) {
   const demands = await prisma.demand.findMany({
     where: { createdAt: { gte: since } },
     select: {
       createdAt: true,
-      candidateMatches: { select: { createdAt: true }, orderBy: { createdAt: "asc" }, take: 1 },
+      candidateMatches: {
+        select: { createdAt: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
     },
-    take: 500,
   });
   const ms = demands
     .filter((d) => d.candidateMatches[0])
@@ -135,9 +138,12 @@ async function computeMatchToFirstInterestTimings(since: Date) {
     where: { createdAt: { gte: since } },
     select: {
       createdAt: true,
-      buyerInterests: { select: { createdAt: true }, orderBy: { createdAt: "asc" }, take: 1 },
+      buyerInterests: {
+        select: { createdAt: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
     },
-    take: 500,
   });
   const ms = matches
     .filter((m) => m.buyerInterests[0])
@@ -153,7 +159,6 @@ async function computeInterestToMutualTimings(since: Date) {
         include: { opportunity: { include: { buyerInterest: true } } },
       },
     },
-    take: 500,
   });
   const ms = mutual
     .map((m) => {
@@ -168,7 +173,6 @@ async function computeMutualToRevealTimings(since: Date) {
   const reveals = await prisma.reveal.findMany({
     where: { revealedAt: { gte: since } },
     include: { mutualInterest: true },
-    take: 500,
   });
   const ms = reveals.map(
     (r) => r.revealedAt.getTime() - r.mutualInterest.createdAt.getTime()
@@ -180,7 +184,6 @@ async function computeRevealToOutcomeTimings(since: Date) {
   const outcomes = await prisma.outcome.findMany({
     where: { reportedAt: { gte: since } },
     include: { reveal: true },
-    take: 500,
   });
   const ms = outcomes.map(
     (o) => o.reportedAt.getTime() - o.reveal.revealedAt.getTime()
@@ -193,21 +196,29 @@ export async function getEngagementMetrics() {
   const week = periodStart(7);
   const month = periodStart(30);
 
+  const humanEngagementFilter = {
+    userId: { not: null },
+    NOT: {
+      OR: [
+        { eventType: { startsWith: "push_" } },
+        { source: "push_pipeline" },
+        { source: "smart_reminders" },
+      ],
+    },
+  };
+
   const [dau, wau, mau, activeDealers] = await Promise.all([
-    prisma.appEvent.findMany({
-      where: { userId: { not: null }, createdAt: { gte: day }, eventType: { not: { startsWith: "push_" } } },
-      select: { userId: true },
-      distinct: ["userId"],
+    prisma.appEvent.groupBy({
+      by: ["userId"],
+      where: { ...humanEngagementFilter, createdAt: { gte: day } },
     }),
-    prisma.appEvent.findMany({
-      where: { userId: { not: null }, createdAt: { gte: week } },
-      select: { userId: true },
-      distinct: ["userId"],
+    prisma.appEvent.groupBy({
+      by: ["userId"],
+      where: { ...humanEngagementFilter, createdAt: { gte: week } },
     }),
-    prisma.appEvent.findMany({
-      where: { userId: { not: null }, createdAt: { gte: month } },
-      select: { userId: true },
-      distinct: ["userId"],
+    prisma.appEvent.groupBy({
+      by: ["userId"],
+      where: { ...humanEngagementFilter, createdAt: { gte: month } },
     }),
     (await import("./active-dealer")).countActiveDealers(30),
   ]);
@@ -229,7 +240,6 @@ export async function getDealerResponseAnalytics() {
       createdAt: true,
       candidateMatch: { select: { createdAt: true } },
     },
-    take: 500,
   });
 
   const sellerTimes = await prisma.sellerInterest.findMany({
@@ -238,7 +248,6 @@ export async function getDealerResponseAnalytics() {
       createdAt: true,
       opportunity: { select: { createdAt: true } },
     },
-    take: 500,
   });
 
   const buyerMs = buyerTimes.map(
@@ -268,36 +277,47 @@ export async function getCommunicationAnalytics(excludeTest = true) {
     ? { source: { not: "ADMIN_TEST" as const } }
     : {};
 
-  const campaigns = await prisma.pushCampaign.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    select: {
-      id: true,
-      title: true,
-      source: true,
-      selectedCount: true,
-      eligibleCount: true,
-      sentCount: true,
-      failedCount: true,
-      receivedCount: true,
-      clickedCount: true,
-      destinationOpenedCount: true,
-      createdAt: true,
-    },
-  });
-
-  const totals = campaigns.reduce(
-    (acc, c) => ({
-      selected: acc.selected + c.selectedCount,
-      eligible: acc.eligible + c.eligibleCount,
-      sent: acc.sent + c.sentCount,
-      received: acc.received + c.receivedCount,
-      clicked: acc.clicked + c.clickedCount,
-      opened: acc.opened + c.destinationOpenedCount,
+  const [campaigns, totalsAgg] = await Promise.all([
+    prisma.pushCampaign.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        source: true,
+        selectedCount: true,
+        eligibleCount: true,
+        sentCount: true,
+        failedCount: true,
+        receivedCount: true,
+        clickedCount: true,
+        destinationOpenedCount: true,
+        createdAt: true,
+      },
     }),
-    { selected: 0, eligible: 0, sent: 0, received: 0, clicked: 0, opened: 0 }
-  );
+    prisma.pushCampaign.aggregate({
+      where,
+      _sum: {
+        selectedCount: true,
+        eligibleCount: true,
+        sentCount: true,
+        failedCount: true,
+        receivedCount: true,
+        clickedCount: true,
+        destinationOpenedCount: true,
+      },
+    }),
+  ]);
+
+  const totals = {
+    selected: totalsAgg._sum.selectedCount ?? 0,
+    eligible: totalsAgg._sum.eligibleCount ?? 0,
+    sent: totalsAgg._sum.sentCount ?? 0,
+    received: totalsAgg._sum.receivedCount ?? 0,
+    clicked: totalsAgg._sum.clickedCount ?? 0,
+    opened: totalsAgg._sum.destinationOpenedCount ?? 0,
+  };
 
   return {
     campaigns,

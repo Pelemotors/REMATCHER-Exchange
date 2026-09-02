@@ -177,3 +177,51 @@ describe("searchAudienceUsers", () => {
     expect(await searchAudienceUsers("")).toEqual([]);
   });
 });
+
+describe("multi-device audience semantics", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("counts one user with three subscriptions as one eligible recipient", async () => {
+    mockUserFind.mockResolvedValue([
+      {
+        id: "u1",
+        email: "a@test.com",
+        name: "A",
+        role: "DEALER_USER",
+        pushSubs: [{ id: "s1" }, { id: "s2" }, { id: "s3" }],
+        memberships: [{ dealer: { businessName: "X", verificationStatus: "VERIFIED" } }],
+      },
+    ]);
+
+    const result = await resolveAudience({
+      audienceType: "SINGLE",
+      userIds: ["u1"],
+    });
+
+    expect(result.selectedCount).toBe(1);
+    expect(result.eligibleCount).toBe(1);
+    expect(result.selected[0].subscriptionCount).toBe(3);
+  });
+});
+
+describe("timing distribution edge cases", () => {
+  it("handles single record", () => {
+    const dist = timingDistribution([5000]);
+    expect(dist.count).toBe(1);
+    expect(dist.medianMs).toBe(5000);
+    expect(dist.p90Ms).toBe(5000);
+  });
+
+  it("handles even sample size median", () => {
+    const dist = timingDistribution([100, 200, 300, 400]);
+    expect(dist.medianMs).toBe(250);
+  });
+
+  it("handles outlier with interpolated p90", () => {
+    const dist = timingDistribution([100, 100, 100, 100, 1_000_000]);
+    expect(dist.p90Ms).toBe(600_040);
+    expect(dist.medianMs).toBe(100);
+  });
+});
