@@ -122,23 +122,31 @@ export async function executeDemandClosure(dealerId: string, demandId: string) {
 /** Resolve dealer's own active searches and propose bulk close — no mutation yet. */
 export async function prepareBulkDemandClosure(dealerId: string) {
   const { executeToolsParallel } = await import("./read-tools");
+  const { formatBulkSearchCloseMessage } = await import("@/lib/demand-display");
   const { results } = await executeToolsParallel(["getMyActiveDemands"], dealerId);
   const demands = (results.getMyActiveDemands ?? []) as Array<{
     id: string;
     title: string;
+    displayLabel?: string;
   }>;
   if (demands.length === 0) {
     return { ok: true as const, empty: true as const, demands: [] as typeof demands };
   }
-  const titles = demands.map((d) => d.title).slice(0, 8);
-  const more = demands.length > titles.length ? ` ועוד ${demands.length - titles.length}` : "";
+  const labels = demands.map((d) => d.displayLabel ?? d.title);
   return {
     ok: true as const,
     empty: false as const,
     demands,
     action: "close_demands_bulk",
-    label: `לסגור ${demands.length} חיפושים פעילים (${titles.join(", ")}${more})?`,
-    payload: { demandIds: demands.map((d) => d.id) },
+    label: formatBulkSearchCloseMessage(labels),
+    payload: {
+      demandIds: demands.map((d) => d.id),
+      capability: "SEARCHES",
+      operation: "CLOSE",
+      scope: "ALL_AUTHORIZED",
+      targetCount: demands.length,
+      targetSummary: labels.slice(0, 6).join(" · "),
+    },
   };
 }
 

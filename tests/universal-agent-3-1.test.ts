@@ -93,7 +93,7 @@ function plan(partial: Partial<AgentTurnPlan["action"]>): AgentTurnPlan {
 
 describe("Universal Agent 3.1", () => {
   it("same Agent, version 3.1", () => {
-    expect(AGENT_VERSION).toBe("3.1");
+    expect(AGENT_VERSION).toBe("3.1.1");
   });
 
   it("TURN_PLAN_SCHEMA remains recursively strict and includes operation/scope", () => {
@@ -138,6 +138,9 @@ describe("Universal Agent 3.1", () => {
     expect(toolGoalToReadTools("get_my_commercial")).toEqual([
       "getMyCommercialStatus",
     ]);
+    expect(toolGoalToReadTools("get_dealer_attention")).toContain(
+      "getMyExpiringDemands"
+    );
   });
 
   it("normalizes capability aliases", () => {

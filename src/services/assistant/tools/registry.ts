@@ -18,7 +18,7 @@ export const ALL_READ_TOOLS = [
 
 export type ReadToolName = (typeof ALL_READ_TOOLS)[number];
 
-export const AGENT_VERSION = "3.1";
+export const AGENT_VERSION = "3.1.1";
 
 export type ActionIntent =
   | "read"

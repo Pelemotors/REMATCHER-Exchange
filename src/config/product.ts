@@ -88,7 +88,7 @@ export const AI_PROMPT_VERSIONS = {
   inventoryClarification: "inventory-clarification-v1",
   inventoryUnderstanding: "inventory-understanding-v1",
   turnInterpreter: "turn-interpreter-v1",
-  turnPlanner: "turn-planner-v1",
+  turnPlanner: "turn-planner-v1.1",
   matchExplainer: "match-explainer-v1",
 } as const;
 

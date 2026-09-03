@@ -6,7 +6,7 @@ import {
   getPendingActionsForDealer,
 } from "@/services/demand/demand-queries";
 import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
-import { confirmedFromJson, demandTitle } from "@/lib/demand-display";
+import { confirmedFromJson, demandTitle, formatSearchDisplayLabel } from "@/lib/demand-display";
 import type { ReadToolName } from "./registry";
 
 export async function executeReadTool(
@@ -66,10 +66,11 @@ export async function executeReadTool(
         .filter((d) => ["ACTIVE", "EXPIRING"].includes(d.uxStatus))
         .map((d) => ({
           id: d.id,
-          title: d.title,
+          title: formatSearchDisplayLabel(d.confirmed),
           uxStatus: d.uxStatus,
           daysLeft: d.daysLeft,
           reflection: d.reflection,
+          displayLabel: formatSearchDisplayLabel(d.confirmed),
         }));
     }
     case "getMyExpiringDemands":

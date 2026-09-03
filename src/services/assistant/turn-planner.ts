@@ -142,8 +142,22 @@ export function planTurnFallback(params: {
     event.relation === "CONTEXT_QUESTION" ||
     isWorkflowHelpRequest(params.message)
   ) {
-    kind = "ANSWER_ONLY";
-    capability = "HELP";
+    const about = event.questionAbout;
+    const productHowTo =
+      about === "INPUT_FORMAT" ||
+      about === "LISTING_GUIDANCE" ||
+      about === "MATCHING_TIPS" ||
+      about === "WHY_NEEDED" ||
+      about === "REQUIREMENT" ||
+      isWorkflowHelpRequest(params.message);
+    if (event.relation === "CONTEXT_QUESTION" || productHowTo) {
+      kind = "ANSWER_ONLY";
+      capability = "HELP";
+    } else {
+      kind = "READ";
+      capability = "GENERAL";
+      toolGoal = "get_dealer_attention";
+    }
   } else if (event.intent === "read_matches") {
     kind = "READ";
     capability = "MATCHES";
@@ -301,6 +315,20 @@ export async function planConversationTurn(params: {
         title: item.title,
       })),
       lastAuthorizedSnapshot: params.conversation?.lastAuthorizedSnapshot ?? null,
+      pendingConfirmation: params.conversation?.pendingConfirmation
+        ? {
+            action: params.conversation.pendingConfirmation.action,
+            label: params.conversation.pendingConfirmation.label,
+            capability: params.conversation.pendingConfirmation.payload.capability ?? null,
+            operation: params.conversation.pendingConfirmation.payload.operation ?? null,
+            scope: params.conversation.pendingConfirmation.payload.scope ?? null,
+            targetCount: params.conversation.pendingConfirmation.payload.targetCount ??
+              (Array.isArray(params.conversation.pendingConfirmation.payload.demandIds)
+                ? (params.conversation.pendingConfirmation.payload.demandIds as string[]).length
+                : null),
+            targetSummary: params.conversation.pendingConfirmation.payload.targetSummary ?? null,
+          }
+        : null,
       suspended: params.conversation?.suspendedContext
         ? { kind: params.conversation.suspendedContext.kind }
         : null,
@@ -315,7 +343,7 @@ export async function planConversationTurn(params: {
       operation: "turn_plan",
       promptVersion: AI_PROMPT_VERSIONS.turnPlanner,
       model: AI_MODELS.turnPlanner,
-      systemPrompt: `You are the Conversation Brain for the REMATCHER Exchange Agent (v3).
+      systemPrompt: `You are the Conversation Brain for the REMATCHER Exchange Agent (v3.1).
 
 YOUR ROLE:
 - Understand free Hebrew dealer speech freely (GPT-like conversation).
@@ -325,26 +353,26 @@ YOUR ROLE:
 
 RULES:
 1. CURRENT MESSAGE > PENDING WORKFLOW. Pending draft is context, not a prison.
-2. If the dealer asks a question (advice, template, what's missing, why), set action.kind=ANSWER_ONLY and responseNeed.shouldAnswerNow=true. Keep the draft.
-3. Workflow help / input template ("טמפלייט", "כמה רכבים ביחד") → ANSWER_ONLY, telemetryHint.questionAbout=INPUT_FORMAT. Never treat as network fishing.
-4. Topic switch to matches/searches while draft open → SUSPEND_AND_READ + toolGoal.
-5. Corrections → facts.correct + keepCurrentTask.
-6. Explicit confirm of pending save → CONFIRM_PENDING_MUTATION.
-7. Explicit cancel → CANCEL_PENDING_MUTATION.
-8. Mixed turns: capture ALL facts AND set answer/read needs.
-9. UNKNOWN / unclear → CLARIFY — never force next inventory gap.
-10. Matching questions: propose READ get_my_matches — never invent match counts.
-11. Never invent year/mileage/price/model.
-12. Inventory page / inventoryMode is only a HINT. It does NOT mean this message is a vehicle.
-13. capability MUST be one of: GENERAL, INVENTORY, SEARCHES, MATCHES, OPPORTUNITIES, REVEALS, OUTCOMES, ACTIVITY, VALIDATIONS, COMMERCIAL, HELP.
-14. For mutations set action.operation explicitly: CREATE, UPDATE, CLOSE, RENEW, MARK_SOLD. NEVER treat SEARCHES + PROPOSE_MUTATION as close unless operation=CLOSE.
-15. "תפתח חיפוש" → capability=SEARCHES, kind=PROPOSE_MUTATION, operation=CREATE.
-16. "תבטל את כל החיפושים" → SEARCHES, PROPOSE_MUTATION, operation=CLOSE, scope=ALL_AUTHORIZED.
-17. "תסגור את אלה שפגו" → SEARCHES, CLOSE, scope=EXPIRED.
-18. "תעדכן את החיפוש" → SEARCHES, UPDATE, scope=ONE, targetReference=the search.
-19. "תחדש" → SEARCHES, RENEW.
-20. Reads: MATCHES/REVEALS/OUTCOMES/OPPORTUNITIES/ACTIVITY/VALIDATIONS/COMMERCIAL/SEARCHES with kind=READ and matching toolGoal (get_my_reveals, get_my_outcomes, get_my_activity, get_my_commercial, get_my_inventory_attention).
-21. Mixed clauses: put the second request in conversation.queuedFollowUp (e.g. "ואז תראה התאמות").
+2. HELP is product how-to (how Exchange works, templates, why a field exists). HELP never reads dealer state.
+3. JUDGMENT is different: "ממה כדאי להתחיל?", "מה הכי דחוף?", "בהינתן הנתונים שלי...", "מה כדאי לעשות עכשיו?", "יש משהו שאני מפספס?" → capability=GENERAL, kind=READ, operation=READ, toolGoal=get_dealer_attention. NEVER HELP. NEVER ANSWER_ONLY. NEVER a capability menu.
+4. Workflow help / input template → ANSWER_ONLY, questionAbout=INPUT_FORMAT.
+5. Topic switch to matches/searches while draft open → SUSPEND_AND_READ + toolGoal.
+6. Corrections → facts.correct + keepCurrentTask.
+7. If pendingConfirmation exists and the user affirms THAT pending action (including natural phrasing that confirms it), set kind=CONFIRM_PENDING_MUTATION. Do NOT emit another PROPOSE_MUTATION for the same close/update.
+8. If pendingConfirmation exists and the user rejects it, set CANCEL_PENDING_MUTATION.
+9. If the user changes scope of a pending mutation (only some of the targets), set PROPOSE_MUTATION with the NEW scope (ONE/MANY/REFERENCED_SET). Do NOT CONFIRM the original ALL_AUTHORIZED set.
+10. If pendingConfirmation exists and the user asks a different question, READ that question and keepCurrentTask=true (do not confirm or cancel).
+11. Mixed turns: capture ALL facts AND set answer/read needs.
+12. UNKNOWN / unclear → CLARIFY — never force next inventory gap.
+13. Matching questions: propose READ get_my_matches — never invent match counts.
+14. Never invent year/mileage/price/model.
+15. Inventory page / inventoryMode is only a HINT. It does NOT mean this message is a vehicle.
+16. capability MUST be one of: GENERAL, INVENTORY, SEARCHES, MATCHES, OPPORTUNITIES, REVEALS, OUTCOMES, ACTIVITY, VALIDATIONS, COMMERCIAL, HELP.
+17. For mutations set action.operation explicitly: CREATE, UPDATE, CLOSE, RENEW, MARK_SOLD.
+18. "תפתח חיפוש" → SEARCHES, PROPOSE_MUTATION, CREATE.
+19. "תבטל את כל החיפושים" → SEARCHES, PROPOSE_MUTATION, CLOSE, ALL_AUTHORIZED — unless a matching pendingConfirmation already exists, then CONFIRM_PENDING_MUTATION.
+20. Reads: use matching toolGoal including get_dealer_attention, get_my_reveals, get_my_outcomes.
+21. Mixed clauses: conversation.queuedFollowUp.
 22. Do not invent IDs. targetReference is human language only.
 23. HELP questions never start inventory or search drafts.
 

@@ -16,6 +16,7 @@ import type { ReadToolName } from "@/services/assistant/tools/registry";
 import {
   normalizeCapability,
   normalizeOperation,
+  normalizeScope,
 } from "@/services/assistant/capability-model";
 
 /** Map approved tool goals → registry tools (model cannot invent endpoints). */
@@ -43,6 +44,17 @@ export function toolGoalToReadTools(
       return ["getMyCommercialStatus"];
     case "get_my_inventory_attention":
       return ["getMyInventoryRequiringAttention", "getMyStaleInventory"];
+    case "get_dealer_attention":
+      return [
+        "getMyExchangeState",
+        "getMyExpiringDemands",
+        "getMyPendingValidations",
+        "getMyAuthorizedMatches",
+        "getMyOpportunities",
+        "getMyInventoryRequiringAttention",
+        "getMyStaleInventory",
+        "getMyPendingOutcomes",
+      ];
     default:
       return [];
   }
@@ -208,4 +220,78 @@ export function shouldProposeDemandClosure(params: {
     normalizeCapability(plan.action.capability) === "SEARCHES" &&
     normalizeOperation(plan.action.operation) === "CLOSE"
   );
+}
+
+/** Data-grounded "what should I do now?" — not product HELP. */
+export function isJudgmentPlan(plan: AgentTurnPlan): boolean {
+  if (isExplicitProductHowTo(plan)) return false;
+  const cap = normalizeCapability(plan.action.capability);
+  const op = normalizeOperation(plan.action.operation);
+  if (op === "HELP") return false;
+  if (plan.action.toolGoal === "get_dealer_attention") return true;
+  if (
+    cap === "GENERAL" &&
+    (plan.action.kind === "READ" || plan.action.kind === "SUSPEND_AND_READ")
+  ) {
+    return true;
+  }
+  if (plan.telemetryHint.relation === "CONTEXT_QUESTION") return false;
+  return (
+    plan.action.kind === "ANSWER_ONLY" &&
+    cap !== "INVENTORY" &&
+    op !== "CREATE" &&
+    op !== "UPDATE" &&
+    op !== "CLOSE"
+  );
+}
+
+function isExplicitProductHowTo(plan: AgentTurnPlan): boolean {
+  const about = plan.telemetryHint.questionAbout;
+  return (
+    about === "INPUT_FORMAT" ||
+    about === "LISTING_GUIDANCE" ||
+    about === "MATCHING_TIPS" ||
+    about === "WHY_NEEDED" ||
+    about === "REQUIREMENT"
+  );
+}
+
+export function isProductHelpPlan(plan: AgentTurnPlan): boolean {
+  if (isJudgmentPlan(plan)) return false;
+  if (isExplicitProductHowTo(plan)) return true;
+  const cap = normalizeCapability(plan.action.capability);
+  const op = normalizeOperation(plan.action.operation);
+  return cap === "HELP" || op === "HELP";
+}
+
+export function pendingSearchCloseMatchesPlan(
+  pending: ConversationState["pendingConfirmation"],
+  plan: AgentTurnPlan
+): boolean {
+  if (!pending) return false;
+  if (
+    pending.action !== "close_demands_bulk" &&
+    pending.action !== "close_demand"
+  ) {
+    return false;
+  }
+  if (normalizeCapability(plan.action.capability) !== "SEARCHES") return false;
+  if (normalizeOperation(plan.action.operation) !== "CLOSE") return false;
+  const scope = normalizeScope(plan.action.scope);
+  if (pending.action === "close_demands_bulk") {
+    return scope === "ALL_AUTHORIZED" || scope == null;
+  }
+  return scope === "ONE" || scope == null;
+}
+
+export function isSearchCloseAmendment(
+  pending: ConversationState["pendingConfirmation"],
+  plan: AgentTurnPlan
+): boolean {
+  if (!pending || pending.action !== "close_demands_bulk") return false;
+  if (normalizeCapability(plan.action.capability) !== "SEARCHES") return false;
+  if (normalizeOperation(plan.action.operation) !== "CLOSE") return false;
+  if (plan.action.kind !== "PROPOSE_MUTATION") return false;
+  const scope = normalizeScope(plan.action.scope);
+  return scope === "ONE" || scope === "MANY" || scope === "REFERENCED_SET";
 }

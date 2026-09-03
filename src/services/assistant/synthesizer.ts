@@ -117,7 +117,9 @@ function buildActionItems(
   const state = toolResults.getMyExchangeState as
     | { openOpportunities?: number; authorizedMatches?: number }
     | undefined;
-  const oppCount = opportunities?.count ?? state?.openOpportunities ?? 0;
+  const oppCount = Array.isArray(opportunities)
+    ? opportunities.length
+    : opportunities?.count ?? state?.openOpportunities ?? 0;
   if (oppCount > 0) {
     items.push({
       text: "יש עניין חדש ברכב שלך שכדאי לבדוק.",
@@ -202,7 +204,7 @@ function emptyStateMessage(activeDemands: number, intent: string): string {
   if (activeDemands > 0) {
     return `יש לך ${activeDemands} חיפושים פעילים, אבל כרגע אין משהו חדש שדורש פעולה.`;
   }
-  return "כרגע אין משהו דחוף שמחכה לך.";
+  return "כרגע אין משהו דחוף שמחכה לטיפול. אם תרצה, אפשר לעבור על המלאי או לפתוח חיפוש חדש.";
 }
 
 function judgmentInput(
@@ -409,6 +411,7 @@ function buildDeterministicResponse(
 }
 
 function shouldPreferDeterministic(userMessage: string, goal?: string): boolean {
+  if (goal === "dealer_next_best_action") return false;
   if (goal && DETERMINISTIC_GOALS.has(goal)) return true;
   const intent = detectResponseIntent(userMessage, goal);
   return ["prioritize", "count_demands", "hot", "arrived", "match_inquiry"].includes(

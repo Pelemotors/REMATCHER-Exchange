@@ -31,6 +31,87 @@ export function confirmedFromJson(json: unknown): DemandConfirmed {
   };
 }
 
+/** Display-only make labels. Does not change stored matching data. */
+const DISPLAY_MAKE: Record<string, string> = {
+  מאזדה: "Mazda",
+  mazda: "Mazda",
+  טויוטה: "Toyota",
+  toyota: "Toyota",
+  יונדאי: "Hyundai",
+  hyundai: "Hyundai",
+  קיה: "Kia",
+  kia: "Kia",
+  שברולט: "Chevrolet",
+  chevrolet: "Chevrolet",
+  סקודה: "Skoda",
+  skoda: "Skoda",
+  פולקסווגן: "Volkswagen",
+  volkswagen: "Volkswagen",
+  vw: "Volkswagen",
+  הונדה: "Honda",
+  honda: "Honda",
+  ניסאן: "Nissan",
+  nissan: "Nissan",
+  רנו: "Renault",
+  renault: "Renault",
+  "פיג'ו": "Peugeot",
+  peugeot: "Peugeot",
+  סיטרואן: "Citroen",
+  citroen: "Citroen",
+  מרצדס: "Mercedes",
+  mercedes: "Mercedes",
+  במוו: "BMW",
+  bmw: "BMW",
+  אאודי: "Audi",
+  audi: "Audi",
+  אודי: "Audi",
+};
+
+export function displayMakeName(make: string | null | undefined): string {
+  if (!make) return "";
+  const trimmed = make.trim();
+  return (
+    DISPLAY_MAKE[trimmed] ??
+    DISPLAY_MAKE[trimmed.toLowerCase()] ??
+    trimmed
+  );
+}
+
+export function formatSearchDisplayLabel(confirmed: DemandConfirmed): string {
+  const make = displayMakeName(confirmed.make);
+  const model = (confirmed.model ?? "").trim();
+  const identity = [make, model].filter(Boolean).join(" ") || "חיפוש";
+  const details: string[] = [];
+  if (confirmed.yearMin && confirmed.yearMax && confirmed.yearMin !== confirmed.yearMax) {
+    details.push(`${confirmed.yearMin}–${confirmed.yearMax}`);
+  } else if (confirmed.yearMin) {
+    details.push(`${confirmed.yearMin} ומעלה`);
+  } else if (confirmed.yearMax) {
+    details.push(`עד ${confirmed.yearMax}`);
+  }
+  if (confirmed.budgetMax) {
+    const n = Number(confirmed.budgetMax);
+    if (n >= 1000) details.push(`עד ${Math.round(n / 1000)} אלף`);
+    else details.push(`עד ${n}`);
+  }
+  return details.length ? `${identity} — ${details.join(", ")}` : identity;
+}
+
+export function formatBulkSearchCloseMessage(
+  labels: string[],
+  options?: { emptyMessage?: string }
+): string {
+  if (!labels.length) {
+    return options?.emptyMessage ?? "אין לך חיפושים פעילים לסגור כרגע.";
+  }
+  const unique = [...new Set(labels)];
+  if (unique.length === 1) {
+    return `מצאתי ${labels.length} חיפושים פעילים ל-${unique[0]}. לסגור את כולם?`;
+  }
+  const lines = labels.map((l) => `• ${l}`).join("\n");
+  return `מצאתי ${labels.length} חיפושים פעילים:\n${lines}\nלסגור את כולם?`;
+}
+
 export function demandTitle(confirmed: DemandConfirmed): string {
   const parts = [confirmed.make, confirmed.model].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : "חיפוש";

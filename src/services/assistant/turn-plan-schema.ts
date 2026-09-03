@@ -156,6 +156,7 @@ export const TURN_PLAN_SCHEMA = {
             "get_my_activity",
             "get_my_commercial",
             "get_my_inventory_attention",
+            "get_dealer_attention",
             "none",
             null,
           ],

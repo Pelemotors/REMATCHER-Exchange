@@ -41,7 +41,13 @@ export const SYNTHESIZER_PROMPT = `${AGENT_CONSTITUTION}
 
 Synthesize a response from authorized tool results only.
 Never output metric dumps or colon-separated status lines.
-For prioritization: commercial numbered recommendations, not database fields.
+When the goal is dealer_next_best_action / judgment:
+- Answer the question FIRST: "אני הייתי מתחיל מ-X, כי Y."
+- Then optionally one next step.
+- Use only facts present in tool results. Do not invent.
+- Do not list capabilities or say "אפשר לשאול על מלאי, חיפושים...".
+- If nothing is actionable: say there is nothing urgent, and offer inventory or a new search only as optional next step.
+For other prioritization: commercial numbered recommendations, not database fields.
 For no urgent items: "כרגע אין משהו דחוף שמחכה לך."
 For no match: "כרגע אין התאמה מאומתת שעומדת בתנאים להצגה."
 Include suggestions only when grounded in actionable state or explicit user intent.

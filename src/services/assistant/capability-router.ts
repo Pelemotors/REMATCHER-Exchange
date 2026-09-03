@@ -10,7 +10,7 @@ import {
   normalizeScope,
   type AgentCapability,
 } from "@/services/assistant/capability-model";
-import { toolGoalToReadTools, inventoryOwnsTurn } from "@/services/assistant/turn-policy";
+import { toolGoalToReadTools, inventoryOwnsTurn, isJudgmentPlan, isProductHelpPlan, pendingSearchCloseMatchesPlan, isSearchCloseAmendment } from "@/services/assistant/turn-policy";
 import { productHelpAnswer } from "@/services/assistant/help-responses";
 import {
   executeSearchMutation,
@@ -55,7 +55,7 @@ function defaultToolGoal(cap: AgentCapability | null): AgentTurnPlan["action"]["
       return "get_my_outcomes";
     case "ACTIVITY":
     case "GENERAL":
-      return "get_my_activity";
+      return "get_dealer_attention";
     case "VALIDATIONS":
       return "get_my_validations";
     case "COMMERCIAL":
@@ -81,7 +81,10 @@ async function runRead(params: {
     mapped.length ? mapped : toolGoalToReadTools(defaultToolGoal(cap))
   );
   params.meta.tools = [...params.meta.tools, ...tools];
-  params.meta.executor = "read_tools";
+  params.meta.executor =
+    params.plan.action.toolGoal === "get_dealer_attention"
+      ? "dealer_attention"
+      : "read_tools";
   const { results, durations, errors } = await executeToolsParallel(
     tools,
     params.dealerId
@@ -110,7 +113,10 @@ async function runRead(params: {
     toolResults: results,
     toolErrors: errors,
     userId: params.userId,
-    goal: params.plan.understanding.userGoal,
+    goal:
+      params.plan.action.toolGoal === "get_dealer_attention"
+        ? "dealer_next_best_action"
+        : params.plan.understanding.userGoal,
     sessionContext: params.conversation?.sessionContext,
   });
   params.meta.synthesizerUsed = synth.synthesizerUsed;
@@ -144,6 +150,7 @@ async function runRead(params: {
       },
       pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
       pendingSearchDraft: params.conversation?.pendingSearchDraft,
+      pendingConfirmation: params.conversation?.pendingConfirmation,
       sessionContext: params.conversation?.sessionContext,
       suspendedContext: params.conversation?.suspendedContext,
       queuedFollowUp: params.plan.conversation.queuedFollowUp ?? undefined,
@@ -185,30 +192,45 @@ export async function routeTurnPlan(params: {
   }
 
   if (
-    plan.action.kind === "ANSWER_ONLY" ||
-    cap === "HELP" ||
-    op === "HELP" ||
-    turn.relation === "ADVISORY_QUESTION" ||
+    conversation?.pendingInventoryDraft &&
     turn.relation === "CONTEXT_QUESTION"
   ) {
-    if (
-      conversation?.pendingInventoryDraft &&
-      (turn.relation === "CONTEXT_QUESTION" || plan.conversation.keepCurrentTask)
-    ) {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message: params.message,
-        conversation,
-        meta,
-        turn,
-        forceStart: false,
-      });
-      if (inventoryTurn) {
-        meta.executor = "inventory_ingest_context";
-        return inventoryTurn;
-      }
+    const inventoryTurn = await handleInventoryIngestTurn({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      conversation,
+      meta,
+      turn,
+      forceStart: false,
+    });
+    if (inventoryTurn) {
+      meta.executor = "inventory_ingest_context";
+      return inventoryTurn;
     }
+  }
+
+  if (isJudgmentPlan(plan)) {
+    return runRead({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      plan: {
+        ...plan,
+        action: {
+          ...plan.action,
+          kind: plan.action.kind === "ANSWER_ONLY" ? "READ" : plan.action.kind,
+          capability: "GENERAL",
+          operation: "READ",
+          toolGoal: "get_dealer_attention",
+        },
+      },
+      conversation,
+      meta,
+    });
+  }
+
+  if (isProductHelpPlan(plan) || plan.action.kind === "ANSWER_ONLY") {
     meta.executor = "help";
     meta.responseType = "help";
     return {
@@ -333,6 +355,25 @@ export async function routeTurnPlan(params: {
       conversation,
       meta,
     });
+  }
+
+  if (
+    conversation?.pendingConfirmation &&
+    plan.action.kind === "PROPOSE_MUTATION" &&
+    pendingSearchCloseMatchesPlan(conversation.pendingConfirmation, plan) &&
+    !isSearchCloseAmendment(conversation.pendingConfirmation, plan)
+  ) {
+    const searchDone = await executeSearchMutation({
+      dealerId: params.dealerId,
+      pending: conversation.pendingConfirmation,
+      conversation,
+      meta,
+    });
+    if (searchDone) {
+      meta.executor = "search_confirm_restated";
+      meta.responseType = "mutation_close";
+      return searchDone;
+    }
   }
 
   if (cap === "SEARCHES" && op === "READ") {

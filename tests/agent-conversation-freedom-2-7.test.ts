@@ -34,7 +34,7 @@ const root = join(__dirname, "..");
 
 describe("Agent Conversation Freedom → Core 3.0", () => {
   it("bumps AGENT_VERSION to 3.0 without a second Agent", () => {
-    expect(AGENT_VERSION).toBe("3.1");
+    expect(AGENT_VERSION).toBe("3.1.1");
     const orch = readFileSync(
       join(root, "src/services/assistant/v2-orchestrator.ts"),
       "utf8"

@@ -320,48 +320,7 @@ export async function handleSearchCapability(params: {
   }
 
   if (operation === "CLOSE") {
-    if (scope === "ALL_AUTHORIZED" || scope === "EXPIRED" || scope === "MANY") {
-      if (scope === "EXPIRED") {
-        const targets = await resolveAuthorizedDemands({
-          dealerId,
-          scope: "EXPIRED",
-          reference: plan.action.targetReference,
-          conversation,
-          preferExpiring: true,
-        });
-        if (!targets.length) {
-          return {
-            intent: "CLOSE_DEMAND",
-            message: "אין חיפושים שפגו לסגור.",
-            meta,
-          };
-        }
-        const label = `לסגור ${targets.length} חיפושים שפגו (${targets.map((t) => t.title).join(", ")})?`;
-        meta.responseType = "confirmation_close";
-        return {
-          intent: "CLOSE_DEMAND",
-          message: label,
-          requiresConfirmation: {
-            action: "close_demands_bulk",
-            label,
-            payload: {
-              demandIds: targets.map((t) => t.id),
-              queuedFollowUp: queued,
-            },
-          },
-          conversation: withDraft(conversation, {
-            pendingConfirmation: {
-              action: "close_demands_bulk",
-              label,
-              payload: {
-                demandIds: targets.map((t) => t.id),
-                queuedFollowUp: queued,
-              },
-            },
-          }),
-          meta,
-        };
-      }
+    if (scope === "ALL_AUTHORIZED") {
       const prep = await prepareBulkDemandClosure(dealerId);
       meta.responseType = "confirmation_close";
       if (prep.empty) {
@@ -408,20 +367,69 @@ export async function handleSearchCapability(params: {
       scope: scope ?? "ONE",
       reference: plan.action.targetReference ?? plan.understanding.targetReference,
       conversation,
+      preferExpiring: scope === "EXPIRED",
     });
-    if (targets.length !== 1) {
+    if (scope === "MANY" && (targets.length === 0 || targets.length > 2)) {
+      meta.responseType = "search_close_clarify";
       return {
         intent: "CLOSE_DEMAND",
         message:
           targets.length === 0
-            ? "לא מצאתי חיפוש מאושר לסגור."
-            : "מצאתי כמה חיפושים. איזה לסגור?",
+            ? "לא מצאתי חיפושים מאושרים לסגור בטווח שביקשת. איזה מהם להשאיר?"
+            : `מצאתי ${targets.length} חיפושים. לאילו שניים התכוונת?`,
         conversation: withDraft(conversation, {
           lastList: targets.map((t) => ({
             id: t.id,
             title: t.title,
             type: "demand",
           })),
+          pendingConfirmation: conversation?.pendingConfirmation,
+        }),
+        meta,
+      };
+    }
+    if (targets.length === 0) {
+      return {
+        intent: "CLOSE_DEMAND",
+        message: "לא מצאתי חיפוש מאושר לסגור.",
+        conversation: withDraft(conversation, {
+          pendingConfirmation: conversation?.pendingConfirmation,
+        }),
+        meta,
+      };
+    }
+    if (targets.length > 1) {
+      const { formatBulkSearchCloseMessage } = await import("@/lib/demand-display");
+      const label = formatBulkSearchCloseMessage(targets.map((t) => t.title));
+      meta.responseType = "confirmation_close";
+      return {
+        intent: "CLOSE_DEMAND",
+        message: label,
+        requiresConfirmation: {
+          action: "close_demands_bulk",
+          label,
+          payload: {
+            demandIds: targets.map((t) => t.id),
+            capability: "SEARCHES",
+            operation: "CLOSE",
+            scope: "REFERENCED_SET",
+            targetCount: targets.length,
+            queuedFollowUp: queued,
+          },
+        },
+        conversation: withDraft(conversation, {
+          pendingConfirmation: {
+            action: "close_demands_bulk",
+            label,
+            payload: {
+              demandIds: targets.map((t) => t.id),
+              capability: "SEARCHES",
+              operation: "CLOSE",
+              scope: "REFERENCED_SET",
+              targetCount: targets.length,
+              queuedFollowUp: queued,
+            },
+          },
         }),
         meta,
       };
