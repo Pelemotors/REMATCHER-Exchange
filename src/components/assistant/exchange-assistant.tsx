@@ -36,6 +36,7 @@ interface PendingConfirmation {
 }
 
 export const OPEN_ASSISTANT_EVENT = "rematcher:open-assistant";
+export const INVENTORY_WORKSPACE_EVENT = "rematcher:inventory-workspace";
 
 export type OpenAssistantDetail = {
   mode?: "create_inventory" | "create_demand";
@@ -97,6 +98,7 @@ function routeAssistantBootstrap(pathname: string | null): {
 export function ExchangeAssistant() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [hideFab, setHideFab] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [conversation, setConversation] = useState<ConversationState>({});
@@ -245,6 +247,18 @@ export function ExchangeAssistant() {
   useEffect(() => {
     function onOpen(e: Event) {
       const detail = (e as CustomEvent<OpenAssistantDetail>).detail ?? {};
+      // Inventory create should use embedded workspace — redirect event to inventory page CTA
+      if (
+        detail.mode === "create_inventory" &&
+        pathname?.startsWith("/inventory")
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("rematcher:open-inventory-workspace", {
+            detail: { tab: "agent" },
+          })
+        );
+        return;
+      }
       if (detail.mode === "create_inventory" && !detail.vehicleId) {
         openInCreateInventoryMode();
         return;
@@ -255,9 +269,22 @@ export function ExchangeAssistant() {
       }
       void openAssistant();
     }
+    function onWorkspace(e: Event) {
+      const detail = (e as CustomEvent<{ open?: boolean }>).detail;
+      setHideFab(Boolean(detail?.open));
+      if (detail?.open) setOpen(false);
+    }
     window.addEventListener(OPEN_ASSISTANT_EVENT, onOpen);
-    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, onOpen);
-  }, [openInCreateInventoryMode, openWithObjectContext]);
+    window.addEventListener(INVENTORY_WORKSPACE_EVENT, onWorkspace);
+    return () => {
+      window.removeEventListener(OPEN_ASSISTANT_EVENT, onOpen);
+      window.removeEventListener(INVENTORY_WORKSPACE_EVENT, onWorkspace);
+    };
+  }, [openInCreateInventoryMode, openWithObjectContext, pathname]);
+
+  if (hideFab && pathname?.startsWith("/inventory")) {
+    return null;
+  }
 
   return (
     <>

@@ -89,12 +89,21 @@ export function heuristicPlan(message: string): AgentPlan {
     };
   }
 
-  if (/סימנתי|נמכר|mark.*sold/i.test(m)) {
+  if (/סימנתי|נמכר|mark.*sold|תוריד.*מלאי|לא זמין/i.test(m)) {
     return {
       tools: ["getMyInventoryRequiringAttention"],
       actionIntent: "mark_sold",
       referencedObjectId: null,
       goal: "mark_vehicle_sold",
+    };
+  }
+
+  if (/עדכן.*b2b|תעדכן.*b2b|עדכן.*מחיר|תעדכן.*ל-/i.test(m)) {
+    return {
+      tools: [],
+      actionIntent: "update_inventory",
+      referencedObjectId: null,
+      goal: "update_inventory",
     };
   }
 

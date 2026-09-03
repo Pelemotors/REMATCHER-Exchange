@@ -11,7 +11,7 @@ export interface PendingConfirmation {
 }
 
 export interface SessionContext {
-  operatingMode?: "broker_only";
+  operatingMode?: "broker_only" | "inventory_management";
   /** Forced intent from UI CTA — e.g. inventory page "הוסף עם הסוכן" */
   forcedIntent?: "create_inventory";
 }
@@ -40,10 +40,20 @@ export interface PendingInventoryDraft {
   ambiguities?: string[];
 }
 
+export type PendingInventoryMutation = {
+  type: "UPDATE" | "MARK_SOLD";
+  vehicleId: string;
+  proposedChanges?: { b2bPrice?: number; retailPrice?: number };
+  status: "WAITING_CONFIRMATION" | "WAITING_SELECTION";
+  candidates?: Array<{ id: string; label: string }>;
+  label: string;
+};
+
 export interface ConversationState {
   lastList?: ConversationListItem[];
   pendingConfirmation?: PendingConfirmation;
   pendingInventoryDraft?: PendingInventoryDraft;
+  pendingInventoryMutation?: PendingInventoryMutation;
   goal?: string;
   /** Short-lived turn context — not persisted to dealer profile */
   sessionContext?: SessionContext;
@@ -81,7 +91,9 @@ export function resolveListReference(
 }
 
 export function isConfirmation(message: string): boolean {
-  return /^(כן|אשר|מאשר|בצע|אישור|ok|yes)$/i.test(message.trim());
+  return /^(כן|אשר|מאשר|בצע|אישור|ok|yes|שמור|שמור במלאי|כן,?\s*נמכרה|עדכן)$/i.test(
+    message.trim()
+  );
 }
 
 export function isRejection(message: string): boolean {

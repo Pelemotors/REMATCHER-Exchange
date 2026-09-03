@@ -32,6 +32,7 @@ import {
   prepareMarkSold,
 } from "@/services/assistant/tools/action-tools";
 import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
+import { handleInventoryManageTurn } from "@/services/assistant/inventory-manage";
 import { planAgentTurn } from "@/services/assistant/planner";
 import { mergeSessionContext } from "@/services/assistant/commercial-judgment";
 import {
@@ -74,6 +75,22 @@ export async function runExchangeAssistantV2(params: {
     responseType: "read",
   };
 
+  // Merge UI context into conversation session (inventory workspace)
+  if (params.context.mode === "inventory_management") {
+    params.conversation = {
+      ...params.conversation,
+      sessionContext: {
+        ...params.conversation?.sessionContext,
+        operatingMode: "inventory_management",
+      },
+      focusedObject:
+        params.conversation?.focusedObject ??
+        (params.context.entityType === "vehicle" && params.context.entityId
+          ? { type: "vehicle", id: params.context.entityId }
+          : undefined),
+    };
+  }
+
   const privacy = checkPrivacyGate(params.message);
   if (privacy.blocked && privacy.reason) {
     await logAppEvent({
@@ -106,6 +123,57 @@ export async function runExchangeAssistantV2(params: {
       forceStart:
         params.conversation?.sessionContext?.forcedIntent === "create_inventory" &&
         !params.conversation?.pendingInventoryDraft,
+    });
+    if (inventoryTurn) return inventoryTurn;
+  }
+
+  // --- Inventory manage mutations (update / sold / read) ---
+  const inInventoryWorkspace =
+    params.context.mode === "inventory_management" ||
+    params.conversation?.sessionContext?.operatingMode ===
+      "inventory_management";
+
+  if (
+    params.conversation?.pendingInventoryMutation ||
+    params.conversation?.pendingConfirmation?.action === "update_inventory" ||
+    params.conversation?.pendingConfirmation?.action === "mark_sold" ||
+    inInventoryWorkspace
+  ) {
+    const manageTurn = await handleInventoryManageTurn({
+      dealerId: params.dealerId,
+      message: params.message,
+      conversation: params.conversation,
+      meta,
+      focusedVehicleId:
+        params.conversation?.focusedObject?.type === "vehicle"
+          ? params.conversation.focusedObject.id
+          : params.context.entityType === "vehicle"
+            ? params.context.entityId
+            : undefined,
+    });
+    if (manageTurn) return manageTurn;
+  }
+
+  // Inventory workspace: remaining free text is inventory create (not demand)
+  if (
+    inInventoryWorkspace &&
+    !params.conversation?.pendingInventoryDraft &&
+    params.conversation?.pendingConfirmation?.action !== "create_inventory"
+  ) {
+    const inventoryTurn = await handleInventoryIngestTurn({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      conversation: {
+        ...params.conversation,
+        sessionContext: {
+          ...params.conversation?.sessionContext,
+          forcedIntent: "create_inventory",
+          operatingMode: "inventory_management",
+        },
+      },
+      meta,
+      forceStart: true,
     });
     if (inventoryTurn) return inventoryTurn;
   }
@@ -198,16 +266,26 @@ export async function runExchangeAssistantV2(params: {
         if (!result.ok) {
           return {
             intent: "UNKNOWN",
-            message: "לא הצלחתי לסמן את הרכב כנמכר.",
+            message: "לא הצלחתי לסמן את הרכב כנמכר. שום דבר לא השתנה.",
             meta,
           };
         }
         return {
           intent: "UPDATE_INVENTORY",
-          message: "סימנתי את הרכב כנמכר.",
+          message: "הרכב הוסר מהמלאי הפעיל.",
           suggestions: [{ label: "למלאי", href: "/inventory" }],
+          conversation: {},
           meta,
         };
+      }
+      if (pending.action === "update_inventory") {
+        const manageTurn = await handleInventoryManageTurn({
+          dealerId: params.dealerId,
+          message: params.message,
+          conversation: params.conversation,
+          meta,
+        });
+        if (manageTurn) return manageTurn;
       }
     }
     if (isRejection(params.message)) {
@@ -302,6 +380,20 @@ export async function runExchangeAssistantV2(params: {
       forceStart: true,
     });
     if (inventoryTurn) return inventoryTurn;
+  }
+
+  if (
+    plan.actionIntent === "mark_sold" ||
+    plan.actionIntent === "update_inventory"
+  ) {
+    const manageTurn = await handleInventoryManageTurn({
+      dealerId: params.dealerId,
+      message: params.message,
+      conversation: params.conversation,
+      meta,
+      focusedVehicleId: plan.referencedObjectId ?? undefined,
+    });
+    if (manageTurn) return manageTurn;
   }
 
   if (plan.actionIntent === "create_demand") {
@@ -401,6 +493,12 @@ export async function runExchangeAssistantV2(params: {
           action: prep.action,
           label: prep.label,
           payload: prep.payload,
+        },
+        pendingInventoryMutation: {
+          type: "MARK_SOLD",
+          vehicleId: plan.referencedObjectId,
+          status: "WAITING_CONFIRMATION",
+          label: prep.label,
         },
       },
       meta,

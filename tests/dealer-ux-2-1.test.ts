@@ -108,15 +108,14 @@ describe("dealer UX 2.1 product-flow guards", () => {
     expect(src).toContain("showOutcome");
   });
 
-  it("inventory opens agent in create_inventory context", () => {
+  it("inventory embeds management workspace", () => {
     const src = readFileSync(
       join(root, "src/app/(dealer)/inventory/page.tsx"),
       "utf8"
     );
-    expect(src).toContain('mode: "create_inventory"');
+    expect(src).toContain("InventoryAgentWorkspace");
+    expect(src).toContain("ניהול מלאי");
     expect(src).toContain("הוסף עם הסוכן");
-    expect(src).toContain("SnapshotBar");
-    expect(src).toContain("דורש טיפול");
   });
 
   it("validations explain why now commercially", () => {

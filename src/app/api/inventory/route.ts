@@ -23,6 +23,8 @@ export async function GET() {
         mileage: true,
         b2bPrice: true,
         retailPrice: true,
+        trim: true,
+        color: true,
         status: true,
         freshnessState: true,
         updatedAt: true,
@@ -119,23 +121,58 @@ export async function PATCH(req: Request) {
   }
 
   const body = await req.json();
-  const { vehicleId, status } = body as {
+  const { vehicleId, status, fields } = body as {
     vehicleId?: string;
     status?: string;
+    fields?: Record<string, unknown>;
   };
 
-  if (!vehicleId || status !== "SOLD") {
+  if (!vehicleId) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const updated = await prisma.vehicle.updateMany({
-    where: { id: vehicleId, dealerId: session.user.dealerId },
-    data: { status: "SOLD", archivedAt: new Date() },
-  });
-
-  if (updated.count === 0) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (status === "SOLD") {
+    const { markVehicleSoldForDealer } = await import(
+      "@/services/inventory/mark-sold"
+    );
+    const result = await markVehicleSoldForDealer({
+      dealerId: session.user.dealerId,
+      vehicleId,
+      source: "inventory_api",
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, vehicle: result.vehicle });
   }
 
-  return NextResponse.json({ ok: true });
+  if (fields && typeof fields === "object") {
+    const { updateVehicleForDealer } = await import(
+      "@/services/inventory/update-vehicle"
+    );
+    const result = await updateVehicleForDealer({
+      dealerId: session.user.dealerId,
+      vehicleId,
+      fields: {
+        make: fields.make as string | null | undefined,
+        model: fields.model as string | null | undefined,
+        trim: fields.trim as string | null | undefined,
+        year: fields.year as number | null | undefined,
+        mileage: fields.mileage as number | null | undefined,
+        color: fields.color as string | null | undefined,
+        ownershipHand: fields.ownershipHand as number | null | undefined,
+        retailPrice: fields.retailPrice as number | null | undefined,
+        b2bPrice: fields.b2bPrice as number | null | undefined,
+        region: fields.region as string | null | undefined,
+        status: fields.status as "ACTIVE" | "SOLD" | undefined,
+      },
+      source: "inventory_api",
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, vehicle: result.vehicle });
+  }
+
+  return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 }

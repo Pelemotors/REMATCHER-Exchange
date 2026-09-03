@@ -120,23 +120,15 @@ export async function executeDemandClosure(dealerId: string, demandId: string) {
 }
 
 export async function markMyVehicleSold(dealerId: string, vehicleId: string) {
-  const vehicle = await prisma.vehicle.findFirst({
-    where: { id: vehicleId, dealerId },
-  });
-  if (!vehicle) return { ok: false as const, error: "not_found" };
-
-  await prisma.vehicle.update({
-    where: { id: vehicleId },
-    data: { status: "SOLD", archivedAt: new Date() },
-  });
-
-  await logAppEvent({
-    eventType: "vehicle_marked_sold",
-    entityType: "Vehicle",
-    entityId: vehicleId,
+  const { markVehicleSoldForDealer } = await import(
+    "@/services/inventory/mark-sold"
+  );
+  const result = await markVehicleSoldForDealer({
     dealerId,
+    vehicleId,
+    source: "agent",
   });
-
+  if (!result.ok) return { ok: false as const, error: "not_found" as const };
   return { ok: true as const };
 }
 
@@ -180,7 +172,7 @@ export async function prepareMarkSold(dealerId: string, vehicleId: string) {
   return {
     ok: true as const,
     action: "mark_sold",
-    label: `לסמן את "${title || "הרכב"}" כנמכר?`,
+    label: `לסמן את "${title || "הרכב"}" כנמכרה ולהסיר מהמלאי הפעיל?`,
     payload: { vehicleId },
   };
 }

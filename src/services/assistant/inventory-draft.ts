@@ -73,11 +73,11 @@ export function gapQuestion(gap: InventoryGapId): string {
   if (gap === "mileage") {
     return 'לא ראיתי קילומטראז׳ — כמה יש על הרכב? אפשר גם לכתוב "לא יודע" ונמשיך.';
   }
-  return 'יש מחיר אחד או שחסר מחיר B2B. רוצה להוסיף מחיר B2B לסוחרים ברשת? אפשר גם לדלג.';
+  return 'חסר לי מחיר B2B — רוצה להוסיף או להמשיך בלי?';
 }
 
 export function isSkipAnswer(message: string): boolean {
-  return /^(לא|לא יודע|לא ידוע|דלג|אין|skip|later|אחר כך|תמשיך)$/i.test(
+  return /^(לא|לא יודע|לא ידוע|דלג|אין|skip|later|אחר כך|תמשיך|תמשיך בלי|בלי)$/i.test(
     message.trim()
   );
 }
