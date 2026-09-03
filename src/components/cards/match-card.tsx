@@ -170,13 +170,24 @@ export function OpportunityCard({
         loading && "pointer-events-none opacity-65"
       )}
     >
-      <BadgeV2 variant="signal">{COPY.opportunity}</BadgeV2>
+      <BadgeV2 variant="signal">{headline || "יש עניין ברכב שלך"}</BadgeV2>
       <div>
-        <p className="text-label text-v2-text-muted">מחפשים</p>
+        <p className="text-label text-v2-text-muted">הרכב שלך</p>
         <h3 className="text-h3 font-bold text-v2-warm">
+          {[vehicleSummary.make, vehicleSummary.model].filter(Boolean).join(" ")}{" "}
+          {vehicleSummary.year ? String(vehicleSummary.year) : ""}
+        </h3>
+        <p className="mt-1 text-sm text-v2-text-secondary">
+          הביקוש מתאים לרכב שלך
+        </p>
+      </div>
+
+      <div>
+        <p className="text-label text-v2-text-muted">סוג הביקוש</p>
+        <p className="font-medium text-v2-text-primary">
           {String(demandSummary.make ?? "")}{" "}
           {String(demandSummary.model ?? "")}
-        </h3>
+        </p>
         <p className="vehicle-meta mt-1 text-v2-text-secondary">
           {[
             demandSummary.yearMin && `${demandSummary.yearMin} ומעלה`,
@@ -186,20 +197,6 @@ export function OpportunityCard({
             .join(" · ")}
         </p>
       </div>
-
-      <Surface depth="secondary" className="p-3">
-        <p className="text-label text-v2-text-muted">הרכב שלך</p>
-        <p className="mt-1 font-semibold text-v2-text-primary">
-          {[vehicleSummary.make, vehicleSummary.model]
-            .filter(Boolean)
-            .join(" ")}{" "}
-          {vehicleSummary.trim ? `· ${vehicleSummary.trim}` : ""}{" "}
-          {vehicleSummary.year ? `· ${vehicleSummary.year}` : ""}
-        </p>
-        {headline && (
-          <p className="mt-2 text-small font-semibold text-success">{headline}</p>
-        )}
-      </Surface>
 
       {summary && <p className="text-body text-v2-text-secondary">{summary}</p>}
 

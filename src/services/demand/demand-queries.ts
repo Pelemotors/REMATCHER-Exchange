@@ -75,9 +75,11 @@ export async function getEnrichedDemandsForDealer(
 
     const hasAuthorizedMatch = authorizedMatchCount > 0;
     const matchHint = hasAuthorizedMatch
-      ? "נמצאה התאמה רלוונטית"
+      ? authorizedMatchCount === 1
+        ? "נמצאה התאמה"
+        : `${authorizedMatchCount} התאמות`
       : uxStatus === "ACTIVE" || uxStatus === "EXPIRING"
-        ? "החיפוש פעיל. כרגע אין התאמה מאומתת להצגה."
+        ? "הרשת ממשיכה לחפש"
         : null;
 
     results.push({
@@ -144,26 +146,26 @@ export async function getPendingActionsForDealer(dealerId: string) {
   if (matches > 0) {
     items.push({
       type: "match",
-      label: "התאמות חדשות לבדיקה",
+      label: "התאמות מחכות להחלטה",
       count: matches,
-      href: "/matches",
+      href: "/matches?tab=action",
     });
   }
   if (validations > 0) {
     items.push({
       type: "validation",
-      label: "רכבים שדורשים אישור זמינות",
+      label: "רכבים שדורשים אימות",
       count: validations,
-      href: "/validations",
+      href: "/inventory?filter=attention",
       urgent: true,
     });
   }
   if (expiringDemands > 0) {
     items.push({
       type: "demand_expiry",
-      label: "חיפושים שעומדים להסתיים",
+      label: "חיפושים שמסתיימים בקרוב",
       count: expiringDemands,
-      href: "/demand",
+      href: "/demand?filter=attention",
       urgent: true,
     });
   }
@@ -172,7 +174,7 @@ export async function getPendingActionsForDealer(dealerId: string) {
       type: "opportunity",
       label: "יש עניין ברכבים שלך",
       count: opportunities,
-      href: "/opportunities",
+      href: "/opportunities?source=inventory",
     });
   }
 

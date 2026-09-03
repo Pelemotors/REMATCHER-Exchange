@@ -88,5 +88,17 @@ export async function POST(req: Request) {
 
   await runMatchingForDemand(demandId);
 
-  return NextResponse.json(updated);
+  const immediateMatchCount = await prisma.candidateMatch.count({
+    where: {
+      demandId,
+      status: "VALIDATED",
+      buyerInterests: { none: { dealerId: session.user.dealerId } },
+    },
+  });
+
+  return NextResponse.json({
+    ...updated,
+    immediateMatchCount,
+    hasImmediateMatch: immediateMatchCount > 0,
+  });
 }

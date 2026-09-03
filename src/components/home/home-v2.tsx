@@ -147,7 +147,7 @@ export function HomeV2({
           subtitle="התאמות ועניין ברכבים שלך"
         />
         <div className={styles.opportunityGrid}>
-          <Link href="/matches" className="block">
+          <Link href="/matches?tab=action" className="block">
             <Surface
               depth="raised"
               className={`${styles.opportunityCard} ${
@@ -169,13 +169,13 @@ export function HomeV2({
               </p>
               {matches > 0 && (
                 <p className="mt-2 text-small text-v2-signal">
-                  יש התאמות שמחכות לך
+                  דורשות החלטה ממך
                 </p>
               )}
             </Surface>
           </Link>
 
-          <Link href="/opportunities" className="block">
+          <Link href="/opportunities?source=inventory" className="block">
             <Surface
               depth="raised"
               className={`${styles.opportunityCard} ${
@@ -199,7 +199,7 @@ export function HomeV2({
               </p>
               {opportunities > 0 && (
                 <p className="mt-2 text-small text-v2-signal">
-                  סוחרים מתעניינים ברכב שלך
+                  יש עניין ברכב שלך
                 </p>
               )}
             </Surface>

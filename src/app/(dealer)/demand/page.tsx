@@ -1,15 +1,22 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ButtonV2,
+  EmptyStateV2,
   PageHeaderV2,
   SkeletonBlockV2,
   Surface,
 } from "@/components/ui/brand-v2";
-import { MySearchesPanel } from "@/components/demand/my-searches-panel";
+import { DemandCard } from "@/components/demand/demand-card";
 import { CreateDemandFlow } from "@/components/demand/create-demand-flow";
+import {
+  AttentionList,
+  FilterPills,
+  SnapshotBar,
+  WorkspaceSection,
+} from "@/components/ux/snapshot-attention";
 import type { EnrichedDemand } from "@/services/demand/demand-queries";
 
 export default function DemandPage() {
@@ -24,6 +31,7 @@ function DemandPageContent() {
   const searchParams = useSearchParams();
   const showNew = searchParams.get("new") === "1";
   const editId = searchParams.get("edit");
+  const filterParam = searchParams.get("filter");
   const [mode, setMode] = useState<"list" | "create" | "edit">(
     showNew ? "create" : editId ? "edit" : "list"
   );
@@ -34,6 +42,9 @@ function DemandPageContent() {
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showAttentionOnly, setShowAttentionOnly] = useState(
+    filterParam === "attention"
+  );
 
   const load = useCallback(async () => {
     const res = await fetch("/api/demands?history=true");
@@ -48,6 +59,10 @@ function DemandPageContent() {
   }, [load]);
 
   useEffect(() => {
+    if (filterParam === "attention") setShowAttentionOnly(true);
+  }, [filterParam]);
+
+  useEffect(() => {
     if (editId && active.length + ended.length > 0) {
       const all = [...active, ...ended];
       const found = all.find((d) => d.id === editId);
@@ -59,6 +74,51 @@ function DemandPageContent() {
     }
   }, [editId, active, ended]);
 
+  const snapshot = useMemo(() => {
+    const withMatches = active.filter((d) => d.hasAuthorizedMatch).length;
+    const expiring = active.filter((d) => d.uxStatus === "EXPIRING").length;
+    return {
+      active: active.length,
+      withMatches,
+      expiring,
+    };
+  }, [active]);
+
+  const attentionItems = useMemo(() => {
+    return active
+      .filter(
+        (d) => d.hasAuthorizedMatch || d.uxStatus === "EXPIRING"
+      )
+      .map((d) => ({
+        id: d.id,
+        title: d.title,
+        body: d.hasAuthorizedMatch
+          ? `${d.authorizedMatchCount} התאמות חדשות`
+          : "מסתיים בקרוב",
+        href: d.hasAuthorizedMatch
+          ? "/matches?tab=action"
+          : `/demand?edit=${d.id}`,
+        badge: d.hasAuthorizedMatch ? "נמצאה התאמה" : "מסתיים בקרוב",
+        urgent: true,
+      }));
+  }, [active]);
+
+  const sortedActive = useMemo(() => {
+    const list = showAttentionOnly
+      ? active.filter(
+          (d) => d.hasAuthorizedMatch || d.uxStatus === "EXPIRING"
+        )
+      : [...active];
+    return list.sort((a, b) => {
+      const score = (d: EnrichedDemand) => {
+        if (d.hasAuthorizedMatch) return 0;
+        if (d.uxStatus === "EXPIRING") return 1;
+        return 2;
+      };
+      return score(a) - score(b);
+    });
+  }, [active, showAttentionOnly]);
+
   async function saveEdit() {
     if (!editDemand) return;
     setSaving(true);
@@ -69,6 +129,26 @@ function DemandPageContent() {
     });
     setSaving(false);
     setMode("list");
+    load();
+  }
+
+  async function handleRenew(id: string) {
+    await fetch("/api/demands/lifecycle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ demandId: id, action: "renew" }),
+    });
+    load();
+    setTab("active");
+  }
+
+  async function handleClose(id: string) {
+    if (!confirm("לסיים את החיפוש?")) return;
+    await fetch("/api/demands/lifecycle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ demandId: id, action: "close" }),
+    });
     load();
   }
 
@@ -105,7 +185,6 @@ function DemandPageContent() {
           }
         />
         <Surface depth="raised" className="space-y-4 p-4">
-          <p className="text-sm text-v2-text-secondary">{editDemand.reflection}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">יצרן</label>
@@ -169,7 +248,7 @@ function DemandPageContent() {
     <div>
       <PageHeaderV2
         title="החיפושים שלי"
-        subtitle="מה REMATCHER Exchange מחפש עבורך ברקע"
+        subtitle="מה REMATCHER מחפש עבורך ברקע"
         action={
           <ButtonV2 variant="signal" onClick={() => setMode("create")}>
             + חיפוש חדש
@@ -177,79 +256,105 @@ function DemandPageContent() {
         }
       />
 
-      {active.length > 0 && (
-        <section className="mb-6">
-          <Surface depth="secondary" className="border border-v2-signal/20 px-4 py-3">
-            <p className="text-sm font-medium text-v2-text-primary">סיכום החיפושים הפעילים</p>
-            <p className="mt-1 text-sm text-v2-text-secondary">
-              {active.map((d) => d.reflection).join(" ")}
-            </p>
-          </Surface>
-        </section>
+      <SnapshotBar
+        metrics={[
+          { label: "פעילים", value: snapshot.active },
+          {
+            label: "עם התאמות",
+            value: snapshot.withMatches,
+            href: "/matches?tab=action",
+            emphasize: snapshot.withMatches > 0,
+          },
+          {
+            label: "מסתיים בקרוב",
+            value: snapshot.expiring,
+            emphasize: snapshot.expiring > 0,
+          },
+        ]}
+      />
+
+      {attentionItems.length > 0 && tab === "active" && !showAttentionOnly && (
+        <AttentionList title="דורשים תשומת לב" items={attentionItems} />
       )}
 
-      <div className="mb-4 flex gap-2">
-        <ButtonV2
-          variant={tab === "active" ? "signal" : "secondary"}
-          onClick={() => setTab("active")}
-        >
-          פעילים ({active.length})
-        </ButtonV2>
-        <ButtonV2
-          variant={tab === "ended" ? "signal" : "secondary"}
-          onClick={() => setTab("ended")}
-        >
-          הסתיימו ({ended.length})
-        </ButtonV2>
-      </div>
+      <FilterPills
+        value={tab}
+        onChange={(id) => {
+          setTab(id as "active" | "ended");
+          setShowAttentionOnly(false);
+        }}
+        options={[
+          { id: "active", label: `פעילים ברקע (${active.length})` },
+          { id: "ended", label: `הסתיימו (${ended.length})` },
+        ]}
+      />
 
       {loading ? (
         <SkeletonBlockV2 lines={4} className="py-12" />
       ) : tab === "active" ? (
-        active.length > 0 ? (
-          <MySearchesPanel />
-        ) : (
-          <Surface depth="raised" className="p-6 text-center text-sm text-v2-text-secondary">
-            <p>אין חיפושים פעילים.</p>
-            <ButtonV2 variant="signal" className="mt-4" onClick={() => setMode("create")}>
-              פתח חיפוש ראשון
-            </ButtonV2>
-          </Surface>
-        )
-      ) : ended.length > 0 ? (
-        <div className="space-y-3">
-          {ended.map((d) => (
-            <Surface key={d.id} depth="raised" className="p-4">
-              <h3 className="font-bold text-v2-text-primary">{d.title}</h3>
-              <p className="text-sm text-v2-text-secondary">{d.subtitle}</p>
-              <p className="mt-2 text-xs text-v2-text-muted">
-                הסתיים · עודכן {new Date(d.updatedAt).toLocaleDateString("he-IL")}
-              </p>
-              <ButtonV2
-                variant="secondary"
-                className="mt-3 text-sm"
-                onClick={async () => {
-                  await fetch("/api/demands/lifecycle", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ demandId: d.id, action: "renew" }),
-                  });
-                  load();
-                  setTab("active");
-                }}
-              >
-                הפעל מחדש
-              </ButtonV2>
-            </Surface>
-          ))}
-        </div>
+        <WorkspaceSection>
+          {sortedActive.length > 0 ? (
+            <div className="space-y-3">
+              {sortedActive.map((d) => (
+                <DemandCard
+                  key={d.id}
+                  demand={d}
+                  onRenew={handleRenew}
+                  onClose={handleClose}
+                  onEdit={() => {
+                    setEditDemand(d);
+                    setEditForm({ ...d.confirmed });
+                    setMode("edit");
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyStateV2
+              title={
+                showAttentionOnly
+                  ? "אין חיפושים שדורשים תשומת לב כרגע"
+                  : "אין חיפושים פעילים"
+              }
+              description={
+                showAttentionOnly
+                  ? "כל החיפושים הפעילים ממשיכים ברקע."
+                  : "פתח חיפוש כדי ש-REMATCHER יבדוק את הרשת עבורך."
+              }
+              action={
+                showAttentionOnly ? (
+                  <ButtonV2
+                    variant="secondary"
+                    onClick={() => setShowAttentionOnly(false)}
+                  >
+                    הצג את כל החיפושים
+                  </ButtonV2>
+                ) : (
+                  <ButtonV2 variant="signal" onClick={() => setMode("create")}>
+                    פתח חיפוש ראשון
+                  </ButtonV2>
+                )
+              }
+            />
+          )}
+        </WorkspaceSection>
       ) : (
-        <p className="text-sm text-v2-text-muted">אין חיפושים שהסתיימו.</p>
+        <WorkspaceSection>
+          {ended.length > 0 ? (
+            <div className="space-y-3">
+              {ended.map((d) => (
+                <DemandCard
+                  key={d.id}
+                  demand={d}
+                  onRenew={handleRenew}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-v2-text-muted">אין חיפושים שהסתיימו.</p>
+          )}
+        </WorkspaceSection>
       )}
-
-      <ButtonV2 variant="secondary" href="/home" className="mt-8">
-        חזרה לבית
-      </ButtonV2>
     </div>
   );
 }

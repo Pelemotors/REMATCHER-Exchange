@@ -9,12 +9,67 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const vehicles = await prisma.vehicle.findMany({
-    where: { dealerId: session.user.dealerId, status: { not: "ARCHIVED" } },
-    orderBy: { updatedAt: "desc" },
-  });
+  const dealerId = session.user.dealerId;
 
-  return NextResponse.json(vehicles);
+  const [vehicles, openOpps, pendingValidations] = await Promise.all([
+    prisma.vehicle.findMany({
+      where: { dealerId, status: { not: "ARCHIVED" } },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        make: true,
+        model: true,
+        year: true,
+        mileage: true,
+        b2bPrice: true,
+        retailPrice: true,
+        status: true,
+        freshnessState: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+    }),
+    prisma.sellerOpportunity.groupBy({
+      by: ["vehicleId"],
+      where: { vehicle: { dealerId }, status: "OPEN" },
+      _count: { _all: true },
+    }),
+    prisma.validationEvent.groupBy({
+      by: ["vehicleId"],
+      where: { dealerId, status: "PENDING" },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const oppByVehicle = new Map(
+    openOpps.map((o) => [o.vehicleId, o._count._all])
+  );
+  const valByVehicle = new Map(
+    pendingValidations.map((v) => [v.vehicleId, v._count._all])
+  );
+
+  const enriched = vehicles.map((v) => ({
+    ...v,
+    openInterestCount: oppByVehicle.get(v.id) ?? 0,
+    pendingValidationCount: valByVehicle.get(v.id) ?? 0,
+  }));
+
+  const snapshot = {
+    total: enriched.filter((v) => v.status === "ACTIVE").length,
+    needsAttention: enriched.filter(
+      (v) =>
+        v.status === "ACTIVE" &&
+        (v.freshnessState === "STALE" ||
+          v.freshnessState === "VALIDATION_REQUIRED" ||
+          v.pendingValidationCount > 0 ||
+          (v.b2bPrice == null && v.retailPrice == null))
+    ).length,
+    withInterest: enriched.filter((v) => v.openInterestCount > 0).length,
+    pendingValidation: enriched.filter((v) => v.pendingValidationCount > 0)
+      .length,
+  };
+
+  return NextResponse.json({ vehicles: enriched, snapshot });
 }
 
 export async function POST(req: Request) {
@@ -55,4 +110,32 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(result.vehicle);
+}
+
+export async function PATCH(req: Request) {
+  const session = await auth();
+  if (!session?.user?.dealerId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { vehicleId, status } = body as {
+    vehicleId?: string;
+    status?: string;
+  };
+
+  if (!vehicleId || status !== "SOLD") {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const updated = await prisma.vehicle.updateMany({
+    where: { id: vehicleId, dealerId: session.user.dealerId },
+    data: { status: "SOLD", archivedAt: new Date() },
+  });
+
+  if (updated.count === 0) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

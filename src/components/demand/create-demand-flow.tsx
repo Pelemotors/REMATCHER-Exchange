@@ -1,20 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ButtonV2, Surface } from "@/components/ui/brand-v2";
+import {
+  ButtonV2,
+  Surface,
+} from "@/components/ui/brand-v2";
 import type { ParsedDemand } from "@/lib/schemas/ai";
 import { extractKnownNumber, extractKnownString } from "@/lib/schemas/ai";
 import type { DuplicateCheckResult } from "@/services/demand/duplicate-detection";
+import { EMPTY_COPY } from "@/lib/commercial-ux";
+import { formatCurrency } from "@/lib/utils";
 
 interface Props {
   onCreated?: () => void;
   onCancel?: () => void;
 }
 
+type EditField = "make" | "model" | "yearMin" | "budgetMax" | "color" | null;
+
 export function CreateDemandFlow({ onCreated, onCancel }: Props) {
-  const router = useRouter();
-  const [step, setStep] = useState<"input" | "confirm" | "duplicate">("input");
+  const [step, setStep] = useState<"input" | "confirm" | "duplicate" | "done">(
+    "input"
+  );
   const [rawText, setRawText] = useState("");
   const [loading, setLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -22,6 +29,8 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
   const [parsed, setParsed] = useState<ParsedDemand | null>(null);
   const [confirmed, setConfirmed] = useState<Record<string, unknown>>({});
   const [duplicate, setDuplicate] = useState<DuplicateCheckResult | null>(null);
+  const [editing, setEditing] = useState<EditField>(null);
+  const [immediateMatchCount, setImmediateMatchCount] = useState(0);
 
   async function handleParse(e: React.FormEvent) {
     e.preventDefault();
@@ -72,15 +81,82 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
 
   async function handleConfirm() {
     setLoading(true);
-    await fetch("/api/demands/confirm", {
+    const res = await fetch("/api/demands/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ demandId, confirmed }),
     });
+    const data = await res.json();
     setLoading(false);
+    setImmediateMatchCount(data.immediateMatchCount ?? 0);
+    setStep("done");
     onCreated?.();
-    router.push("/matches");
-    router.refresh();
+  }
+
+  if (step === "done") {
+    const title = [confirmed.make, confirmed.model].filter(Boolean).join(" ");
+    return (
+      <Surface depth="raised" className="space-y-4 border border-v2-signal/30 p-5">
+        <p className="text-sm font-medium text-success">✓ {EMPTY_COPY.demandActivated.title}</p>
+        <div>
+          <h3 className="text-h3 font-bold text-v2-warm">{title || "החיפוש שלך"}</h3>
+          <ul className="mt-2 space-y-1 text-sm text-v2-text-primary">
+            {confirmed.yearMin != null && (
+              <li>{String(confirmed.yearMin)} ומעלה</li>
+            )}
+            {confirmed.budgetMax != null && (
+              <li>עד {formatCurrency(Number(confirmed.budgetMax))}</li>
+            )}
+            {Array.isArray(confirmed.colorExclusions) &&
+              confirmed.colorExclusions.length > 0 && (
+                <li>ללא {confirmed.colorExclusions.join(", ")}</li>
+              )}
+          </ul>
+        </div>
+        <p className="text-sm text-v2-text-secondary">{EMPTY_COPY.demandActivated.body}</p>
+
+        {immediateMatchCount > 0 && (
+          <Surface depth="secondary" className="border border-v2-signal/20 p-3">
+            <p className="font-medium text-v2-signal">
+              נמצאה התאמה כבר עכשיו
+              {immediateMatchCount > 1 ? ` (${immediateMatchCount})` : ""}
+            </p>
+            <ButtonV2
+              variant="signal"
+              href="/matches?tab=action"
+              className="mt-3 w-full"
+            >
+              צפה בהתאמה
+            </ButtonV2>
+          </Surface>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <ButtonV2
+            variant={immediateMatchCount > 0 ? "secondary" : "signal"}
+            href="/demand"
+            className="w-full"
+          >
+            חזור לחיפושים
+          </ButtonV2>
+          <ButtonV2
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              setStep("input");
+              setRawText("");
+              setParsed(null);
+              setConfirmed({});
+              setDemandId(null);
+              setImmediateMatchCount(0);
+              setEditing(null);
+            }}
+          >
+            פתח חיפוש נוסף
+          </ButtonV2>
+        </div>
+      </Surface>
+    );
   }
 
   if (step === "input") {
@@ -159,23 +235,9 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
 
   if (!parsed) return null;
 
-  const reflectionParts = [
-    confirmed.make && confirmed.model
-      ? `מחפש ${confirmed.make} ${confirmed.model}`
-      : null,
-    confirmed.yearMin ? `מ-${confirmed.yearMin} ומעלה` : null,
-    confirmed.budgetMax
-      ? `עד ${Number(confirmed.budgetMax).toLocaleString("he-IL")} ₪`
-      : null,
-    Array.isArray(confirmed.colorExclusions) && confirmed.colorExclusions.length > 0
-      ? `ללא ${confirmed.colorExclusions.join(", ")}`
-      : null,
-  ].filter(Boolean);
-
-  const reflectionText =
-    reflectionParts.length > 0
-      ? `${reflectionParts.join(" · ")}.`
-      : "לא הצלחנו לחלץ פרטים מספיקים — ערוך ידנית לפני האישור.";
+  const colors = Array.isArray(confirmed.colorExclusions)
+    ? (confirmed.colorExclusions as string[])
+    : [];
 
   return (
     <div className="space-y-4">
@@ -184,65 +246,114 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
           <p className="text-xs font-medium text-v2-text-muted">מה שכתבת</p>
           <p className="mt-1 text-sm text-v2-text-primary">&ldquo;{rawText}&rdquo;</p>
         </Surface>
-        <Surface depth="secondary" className="bg-v2-signal-soft/30 px-4 py-3">
-          <p className="text-sm font-medium text-v2-text-primary">כך הבנו את החיפוש שלך</p>
-          <p className="mt-2 text-body text-v2-text-primary">{reflectionText}</p>
-          {parsed.rawSummary && (
-            <p className="mt-2 text-xs text-v2-text-muted">{parsed.rawSummary}</p>
-          )}
-        </Surface>
-        <p className="text-sm text-v2-text-secondary">
-          בדוק שהבנו נכון את החיפוש שלך. החיפוש יופעל רק לאחר אישורך.
-        </p>
 
-        <div className="space-y-3">
-          <div>
-            <label className="label">יצרן</label>
-            <input
-              className="input"
-              value={String(confirmed.make ?? "")}
-              onChange={(e) => setConfirmed({ ...confirmed, make: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">דגם</label>
-            <input
-              className="input"
-              value={String(confirmed.model ?? "")}
-              onChange={(e) => setConfirmed({ ...confirmed, model: e.target.value })}
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="label">שנתון מינימום</label>
-              <input
-                className="input"
-                type="number"
-                value={String(confirmed.yearMin ?? "")}
-                onChange={(e) =>
-                  setConfirmed({
-                    ...confirmed,
-                    yearMin: parseInt(e.target.value, 10) || null,
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label className="label">תקציב מקסימום</label>
-              <input
-                className="input"
-                type="number"
-                value={String(confirmed.budgetMax ?? "")}
-                onChange={(e) =>
-                  setConfirmed({
-                    ...confirmed,
-                    budgetMax: parseInt(e.target.value, 10) || null,
-                  })
-                }
-              />
-            </div>
+        <div>
+          <p className="text-sm font-medium text-v2-text-primary">כך הבנתי:</p>
+          <div className="mt-3 space-y-2">
+            <p className="text-h3 font-bold text-v2-warm">
+              {[confirmed.make, confirmed.model].filter(Boolean).join(" ") || "—"}
+            </p>
+            {confirmed.yearMin != null && (
+              <p className="text-sm text-v2-text-primary">
+                {String(confirmed.yearMin)} ומעלה
+              </p>
+            )}
+            {confirmed.budgetMax != null && (
+              <p className="text-sm text-v2-text-primary">
+                עד {formatCurrency(Number(confirmed.budgetMax))}
+              </p>
+            )}
+            {colors.length > 0 && (
+              <p className="text-sm text-v2-text-primary">ללא {colors.join(", ")}</p>
+            )}
           </div>
         </div>
+
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["yearMin", "ערוך שנתון"],
+              ["budgetMax", "ערוך תקציב"],
+              ["color", "ערוך צבע"],
+              ["make", "ערוך יצרן"],
+              ["model", "ערוך דגם"],
+            ] as const
+          ).map(([field, label]) => (
+            <button
+              key={field}
+              type="button"
+              onClick={() => setEditing(editing === field ? null : field)}
+              className="rounded-lg bg-v2-surface-secondary px-3 py-1.5 text-sm text-v2-text-primary"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {editing === "make" && (
+          <input
+            className="input"
+            value={String(confirmed.make ?? "")}
+            onChange={(e) => setConfirmed({ ...confirmed, make: e.target.value })}
+            placeholder="יצרן"
+          />
+        )}
+        {editing === "model" && (
+          <input
+            className="input"
+            value={String(confirmed.model ?? "")}
+            onChange={(e) => setConfirmed({ ...confirmed, model: e.target.value })}
+            placeholder="דגם"
+          />
+        )}
+        {editing === "yearMin" && (
+          <input
+            className="input"
+            type="number"
+            value={String(confirmed.yearMin ?? "")}
+            onChange={(e) =>
+              setConfirmed({
+                ...confirmed,
+                yearMin: parseInt(e.target.value, 10) || null,
+              })
+            }
+            placeholder="שנתון מינימום"
+          />
+        )}
+        {editing === "budgetMax" && (
+          <input
+            className="input"
+            type="number"
+            value={String(confirmed.budgetMax ?? "")}
+            onChange={(e) =>
+              setConfirmed({
+                ...confirmed,
+                budgetMax: parseInt(e.target.value, 10) || null,
+              })
+            }
+            placeholder="תקציב מקסימום"
+          />
+        )}
+        {editing === "color" && (
+          <input
+            className="input"
+            value={colors.join(", ")}
+            onChange={(e) =>
+              setConfirmed({
+                ...confirmed,
+                colorExclusions: e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+            placeholder="צבעים להחריג (מופרדים בפסיק)"
+          />
+        )}
+
+        <p className="text-sm text-v2-text-secondary">
+          החיפוש יופעל רק לאחר אישורך.
+        </p>
       </Surface>
 
       <div className="flex gap-3">
@@ -252,7 +363,7 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
           onClick={handleConfirm}
           disabled={loading}
         >
-          {loading ? "מפעיל..." : "אשר וחפש התאמות"}
+          {loading ? "מפעיל..." : "אשר והפעל חיפוש"}
         </ButtonV2>
         <ButtonV2 variant="secondary" onClick={() => setStep("input")}>
           חזור
