@@ -8,6 +8,7 @@ import type { AssistantResponse } from "@/services/assistant/orchestrator";
 import {
   applyFields,
   buildStructuredSummary,
+  gapQuestion,
   hasInventoryIdentity,
   identityPartialMessage,
   isCommerciallyComplete,
@@ -21,7 +22,7 @@ import {
   createInventoryDraftFromText,
   executeConfirmInventoryCreate,
 } from "@/services/assistant/tools/action-tools";
-import type { QuestionAbout, StructuredTurnEvent } from "@/services/assistant/turn-event";
+import type { QuestionAbout, StructuredTurnEvent, TurnRelation } from "@/services/assistant/turn-event";
 import {
   applyTurnToConversationState,
   draftFromTurnFacts,
@@ -351,6 +352,110 @@ function answerInventoryContextQuestion(
   };
 }
 
+/** Optional reminder about open draft gap — appended AFTER answering the question. */
+function draftContinuationHint(draft: PendingInventoryDraft | undefined): string {
+  if (!draft) return "";
+  const gap = nextGapToAsk(draft);
+  if (!gap) return "";
+  return `\n\nברכב שאנחנו מוסיפים כרגע ${gapQuestion(gap, draft.fields).replace(/^חסר לי\s*/, "עדיין חסר ").replace(/\?$/, "")}.`;
+}
+
+/**
+ * Answer general advisory / knowledge questions using product/commercial playbook.
+ * Does NOT mutate draft. May optionally remind about open gap afterward.
+ */
+function answerInventoryAdvisoryQuestion(
+  draft: PendingInventoryDraft | undefined,
+  questionAbout: QuestionAbout,
+  meta: AgentMeta,
+  baseConversation: ConversationState,
+  turn: StructuredTurnEvent | undefined
+): InventoryTurnResponse {
+  meta.responseType = "inventory_advisory_question";
+
+  let message: string;
+  switch (questionAbout) {
+    case "LISTING_GUIDANCE":
+    case "GENERAL_ADVISORY":
+      message =
+        "הכי חשוב שיהיה לי דגם ושנה מדויקים, ק״מ ומחיר לסוחר.\nגם רמת גימור, בעלות וצבע יכולים לעזור לדייק התאמות.";
+      break;
+    case "MATCHING_TIPS":
+      message =
+        "פרטים שמשפרים התאמות: דגם+שנה מדויקים, קילומטראז׳, מחיר לסוחר, מקור הרכב (פרטי/ליסינג), ורמת גימור כשיש.";
+      break;
+    case "WHY_NEEDED":
+      message =
+        "מחיר לסוחר עוזר להציג את הרכב לקונים בטווח הנכון. קילומטראז׳ ומקור הרכב מדייקים את סינון ההתאמות.";
+      break;
+    default:
+      message =
+        "הכי חשוב: דגם, שנה, ק״מ ומחיר לסוחר. שאר הפרטים משפרים את איכות ההתאמות.";
+  }
+
+  message += draftContinuationHint(draft);
+
+  const conversation = withTurnMemory(
+    {
+      ...baseConversation,
+      pendingInventoryDraft: draft,
+      pendingConfirmation:
+        draft?.status === "WAITING_CONFIRMATION"
+          ? confirmPayload(draft)
+          : baseConversation.pendingConfirmation,
+      sessionContext: {
+        ...baseConversation.sessionContext,
+        forcedIntent: draft ? "create_inventory" : baseConversation.sessionContext?.forcedIntent,
+        operatingMode: "inventory_management",
+      },
+    },
+    turn,
+    { kind: "advisory_question", text: message }
+  );
+
+  return {
+    intent: "UPDATE_INVENTORY",
+    message,
+    conversation,
+    suggestions: draft
+      ? [{ label: "המשך" }, { label: "ערוך" }]
+      : [{ label: "הוסף רכב" }],
+    meta,
+  };
+}
+
+/**
+ * Clarify when turn is UNKNOWN — never force next gap or normalize as vehicle text.
+ */
+function clarifyUnknownInDraft(
+  draft: PendingInventoryDraft,
+  meta: AgentMeta,
+  baseConversation: ConversationState,
+  turn: StructuredTurnEvent | undefined
+): InventoryTurnResponse {
+  meta.responseType = "inventory_clarify_intent";
+  const conversation = withTurnMemory(
+    {
+      ...baseConversation,
+      pendingInventoryDraft: draft,
+      sessionContext: {
+        ...baseConversation.sessionContext,
+        forcedIntent: "create_inventory",
+        operatingMode: "inventory_management",
+      },
+    },
+    turn
+  );
+  return {
+    intent: "UPDATE_INVENTORY",
+    message:
+      "לא בטוח שהבנתי. אתה רוצה לשנות משהו ברכב, לשאול עליו משהו, או להמשיך להוסיף פרטים?",
+    conversation,
+    suggestions: [{ label: "המשך" }, { label: "ערוך" }],
+    meta,
+  };
+}
+
 /**
  * Inventory create accompaniment — facts-first, turn-event driven.
  * parseGapAnswer is NOT the turn owner.
@@ -370,6 +475,46 @@ export async function handleInventoryIngestTurn(params: {
     ...params.conversation,
   };
   const existing = baseConversation.pendingInventoryDraft;
+
+  // --- ADVISORY_QUESTION — answer FIRST, preserve draft, never start/force gap ---
+  if (turn?.relation === "ADVISORY_QUESTION") {
+    await logAppEvent({
+      eventType: "agent_advisory_question",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        questionAbout: turn.questionAbout ?? "unknown",
+        hadDraft: Boolean(existing),
+      },
+    });
+    return answerInventoryAdvisoryQuestion(
+      existing,
+      turn.questionAbout ?? "GENERAL_ADVISORY",
+      meta,
+      baseConversation,
+      turn
+    );
+  }
+
+  // --- CONTEXT_QUESTION — answer from draft state (DRAFT or WAITING_CONFIRMATION) ---
+  if (turn?.relation === "CONTEXT_QUESTION" && existing) {
+    await logAppEvent({
+      eventType: "agent_context_question",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        questionAbout: turn.questionAbout ?? "unknown",
+        draftStatus: existing.status,
+      },
+    });
+    return answerInventoryContextQuestion(
+      existing,
+      turn.questionAbout ?? "OTHER",
+      meta,
+      baseConversation,
+      turn
+    );
+  }
 
   // --- WORDING CORRECTION (no field mutation) ---
   if (turn?.relation === "WORDING_CORRECTION" && existing) {
@@ -523,27 +668,7 @@ export async function handleInventoryIngestTurn(params: {
       };
     }
 
-    // 3. CONTEXT_QUESTION — dealer asks about the active draft (never mutates)
-    if (turn?.relation === "CONTEXT_QUESTION") {
-      await logAppEvent({
-        eventType: "agent_context_question",
-        dealerId: params.dealerId,
-        metadata: {
-          agentVersion: AGENT_VERSION,
-          questionAbout: turn.questionAbout ?? "unknown",
-          draftStatus: "WAITING_CONFIRMATION",
-        },
-      });
-      return answerInventoryContextQuestion(
-        existing,
-        turn.questionAbout ?? "OTHER",
-        meta,
-        baseConversation,
-        turn
-      );
-    }
-
-    // 4. Merge facts / amendments while confirming
+    // 5. Merge facts / amendments while confirming
     if (
       turn?.extractedFacts ||
       turn?.correctedFacts ||
@@ -641,34 +766,11 @@ export async function handleInventoryIngestTurn(params: {
         ...draft,
         sourceText: `${existing.sourceText}\n${params.message}`.trim(),
       };
-    } else if (turn?.relation === "UNKNOWN" || !turn) {
-      // Soft merge via create path helpers without wiping known facts
-      const started = await createInventoryDraftFromText(
-        params.userId,
-        params.message
-      );
-      draft = mergeFactsIntoDraft(existing, {
-        relation: "ADDITIONAL_INFO",
-        intent: "continue_current",
-        targetCapability: "inventory",
-        extractedFacts: {
-          make: started.draft.fields.make ?? undefined,
-          model: started.draft.fields.model ?? undefined,
-          year: started.draft.fields.year ?? undefined,
-          mileage: started.draft.fields.mileage ?? undefined,
-          b2bPrice: started.draft.fields.b2bPrice ?? undefined,
-          retailPrice: started.draft.fields.retailPrice ?? undefined,
-          color: started.draft.fields.color ?? undefined,
-          ownershipHand: started.draft.fields.ownershipHand ?? undefined,
-          ownershipType: started.draft.fields.ownershipType ?? undefined,
-          trim: started.draft.fields.trim ?? undefined,
-        },
-        confirms: false,
-        cancels: false,
-        skipRequested: false,
-        resumeRequested: false,
-        source: "fallback",
-      });
+    } else if (turn?.relation === "UNKNOWN") {
+      // Do NOT normalize advisory/unknown text as vehicle data — clarify instead
+      return clarifyUnknownInDraft(existing, meta, baseConversation, turn);
+    } else if (!turn) {
+      return clarifyUnknownInDraft(existing, meta, baseConversation, turn);
     }
 
     if (!hasInventoryIdentity(draft.fields)) {
@@ -699,12 +801,20 @@ export async function handleInventoryIngestTurn(params: {
     );
   }
 
-  // --- Start new draft ---
+  // --- Start new draft — only for messages that are actually vehicle input ---
+  const relation = turn?.relation as TurnRelation | undefined;
+  const isQuestionTurn =
+    relation === "ADVISORY_QUESTION" ||
+    relation === "CONTEXT_QUESTION" ||
+    turn?.intent === "help" ||
+    (relation === "UNKNOWN" && turn?.needsClarification);
+
   if (
-    params.forceStart ||
-    baseConversation.sessionContext?.forcedIntent === "create_inventory" ||
-    turn?.intent === "create_inventory" ||
-    params.message === "הוסף עוד רכב"
+    !isQuestionTurn &&
+    (params.forceStart ||
+      baseConversation.sessionContext?.forcedIntent === "create_inventory" ||
+      turn?.intent === "create_inventory" ||
+      params.message === "הוסף עוד רכב")
   ) {
     if (
       params.message === "הוסף עוד רכב" ||

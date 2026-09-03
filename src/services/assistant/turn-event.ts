@@ -16,10 +16,11 @@ export type TurnRelation =
   | "WORDING_CORRECTION"
   | "RESUME"
   | "CONTEXT_QUESTION"
+  | "ADVISORY_QUESTION"
   | "UNKNOWN";
 
 /**
- * What the dealer is asking about when relation = CONTEXT_QUESTION.
+ * What the dealer is asking about when relation = CONTEXT_QUESTION or ADVISORY_QUESTION.
  * - COMPLETENESS: "לא חסר מידע?" / "זה מספיק?"
  * - MISSING_FIELDS: "מה עוד חסר?" / "מה אתה צריך עוד?"
  * - CURRENT_STATE: "מה כבר רשמת?" / "מה אמרתי לך עד עכשיו?"
@@ -27,7 +28,10 @@ export type TurnRelation =
  * - REQUIREMENT: "חייב מחיר?" / "חובה להכניס קילומטר?"
  * - WHY_NEEDED: "למה צריך מחיר לסוחר?"
  * - CAN_PROCEED: "אפשר לשמור ככה?" / "אפשר להמשיך?"
- * - OTHER: any other context question
+ * - LISTING_GUIDANCE: "מה הכי חשוב בפרטי מודעה?" (ADVISORY_QUESTION)
+ * - MATCHING_TIPS: "איזה פרטים עוזרים להתאמה?" (ADVISORY_QUESTION)
+ * - GENERAL_ADVISORY: other product/commercial advice questions
+ * - OTHER: any other context/advisory question
  */
 export type QuestionAbout =
   | "COMPLETENESS"
@@ -37,6 +41,9 @@ export type QuestionAbout =
   | "REQUIREMENT"
   | "WHY_NEEDED"
   | "CAN_PROCEED"
+  | "LISTING_GUIDANCE"
+  | "MATCHING_TIPS"
+  | "GENERAL_ADVISORY"
   | "OTHER"
   | null;
 

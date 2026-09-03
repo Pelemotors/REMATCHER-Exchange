@@ -156,6 +156,7 @@ describe("TURN_SCHEMA — OpenAI Structured Outputs compliance", () => {
     const props = schema.properties as Record<string, Record<string, unknown>>;
     const relation = props.relation;
     expect(relation.enum).toContain("CONTEXT_QUESTION");
+    expect(relation.enum).toContain("ADVISORY_QUESTION");
   });
 
   it("questionAbout is in the schema properties and in required", () => {

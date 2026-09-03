@@ -324,7 +324,7 @@ describe("D. Confirmation safety preserved", () => {
   it('"שמור במלאי" → confirms with pendingDraft present', async () => {
     vi.mocked(executeConfirmInventoryCreate).mockResolvedValueOnce({
       ok: true,
-      vehicle: { id: "v-1", make: "Audi", model: "Q7", year: 2012 },
+      vehicle: { id: "v-1", make: "Audi", model: "Q7", year: 2012 } as never,
     });
 
     const draft = buildConfirmingDraft();
@@ -401,6 +401,127 @@ describe("D. Confirmation safety preserved", () => {
 // E. Topic switch at WAITING_CONFIRMATION (suspend/resume)
 // ============================================================
 import { suspendInventoryDraft, resumeSuspendedInventory } from "@/services/assistant/turn-reconcile";
+
+describe("F. Advisory questions — general knowledge while draft open", () => {
+  const baseMeta = () => ({
+    agentVersion: "2.7",
+    plannerUsed: false,
+    synthesizerUsed: false,
+    model: null,
+    tools: [] as string[],
+    toolDurations: {},
+    plannerDurationMs: 0,
+    synthesisDurationMs: 0,
+    fallbackReason: null,
+    responseType: "read" as const,
+  });
+
+  function draftMissingMake(): PendingInventoryDraft {
+    return {
+      status: "DRAFT",
+      sourceText: "",
+      fields: {
+        make: null,
+        model: null,
+        year: null,
+        mileage: null,
+        ownershipType: null,
+        ownershipHand: null,
+        b2bPrice: null,
+        retailPrice: null,
+        color: null,
+        trim: null,
+        region: null,
+      },
+      askedGaps: [],
+      skippedGaps: [],
+    };
+  }
+
+  it('"מה הכי חשוב בפרטי מודעה?" → ADVISORY_QUESTION / LISTING_GUIDANCE', () => {
+    const conv = buildConversationWithDraft(draftMissingMake());
+    const event = interpretTurnFallback({
+      message: "מה הכי חשוב בפרטי מודעה?",
+      conversation: conv,
+      inventoryMode: true,
+    });
+    expect(event.relation).toBe("ADVISORY_QUESTION");
+    expect(event.questionAbout).toBe("LISTING_GUIDANCE");
+    expect(event.intent).toBe("help");
+  });
+
+  it("advisory question answers first and preserves draft — production bug regression", async () => {
+    const draft = draftMissingMake();
+    const conversation = buildConversationWithDraft(draft);
+    const turn = interpretTurnFallback({
+      message: "מה הכי חשוב בפרטי מודעה?",
+      conversation,
+      inventoryMode: true,
+    });
+
+    const result = await handleInventoryIngestTurn({
+      dealerId: "dealer-1",
+      userId: "user-1",
+      message: "מה הכי חשוב בפרטי מודעה?",
+      conversation,
+      meta: baseMeta(),
+      turn,
+      forceStart: true,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.message).toMatch(/דגם|שנה|ק״מ|מחיר/);
+    expect(result!.message).not.toMatch(/^חסר לי היצרן/);
+    expect(result!.conversation?.pendingInventoryDraft).toBeDefined();
+    expect(result!.inventoryMutationResult).toBeUndefined();
+  });
+
+  it('"למה צריך מחיר לסוחר?" → explains purpose, preserves draft', async () => {
+    const draft = draftMissingMake();
+    const conversation = buildConversationWithDraft(draft);
+    const turn = interpretTurnFallback({
+      message: "למה צריך מחיר לסוחר?",
+      conversation,
+      inventoryMode: true,
+    });
+
+    const result = await handleInventoryIngestTurn({
+      dealerId: "dealer-1",
+      userId: "user-1",
+      message: "למה צריך מחיר לסוחר?",
+      conversation,
+      meta: baseMeta(),
+      turn,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.message).toMatch(/מחיר|התאמ/);
+    expect(result!.conversation?.pendingInventoryDraft).toBeDefined();
+  });
+
+  it('"מה חסר ברכב הזה?" → CONTEXT_QUESTION not ADVISORY', () => {
+    const conv = buildConversationWithDraft(draftMissingMake());
+    const event = interpretTurnFallback({
+      message: "מה חסר ברכב הזה?",
+      conversation: conv,
+      inventoryMode: true,
+    });
+    // "מה חסר" pattern → MISSING_FIELDS context question
+    expect(event.relation).toBe("CONTEXT_QUESTION");
+    expect(event.relation).not.toBe("ADVISORY_QUESTION");
+  });
+
+  it('"טויוטה" → treated as vehicle fact, not advisory', () => {
+    const conv = buildConversationWithDraft(draftMissingMake());
+    const event = interpretTurnFallback({
+      message: "טויוטה",
+      conversation: conv,
+      inventoryMode: true,
+    });
+    expect(event.relation).not.toBe("ADVISORY_QUESTION");
+    expect(event.extractedFacts?.make ?? event.relation).toBeTruthy();
+  });
+});
 
 describe("E. Topic switch + suspend/resume across WAITING_CONFIRMATION", () => {
   it("suspendInventoryDraft preserves WAITING_CONFIRMATION status", () => {

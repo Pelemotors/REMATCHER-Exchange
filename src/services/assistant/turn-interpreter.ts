@@ -119,8 +119,12 @@ function detectContextQuestion(m: string): QuestionAbout | null {
     return "COMPLETENESS";
   }
 
-  // MISSING_FIELDS: "מה עוד חסר?" / "מה אתה צריך עוד?" / "מה עוד צריך?"
-  if (/מה\s*עוד\s*(חסר|צריך)|מה\s*אתה\s*צריך\s*עוד|עוד\s*מה\s*חסר|מה\s*חסר\s*עוד/i.test(m)) {
+  // MISSING_FIELDS: "מה עוד חסר?" / "מה חסר ברכב?" / "מה אתה צריך עוד?"
+  if (
+    /מה\s*עוד\s*(?:חסר|צריך)|מה\s*אתה\s*צריך\s*עוד|עוד\s*מה\s*חסר|מה\s*חסר\s*עוד|מה\s*חסר(?:\s*ברכב|\s*פה)?\??/i.test(
+      m
+    )
+  ) {
     return "MISSING_FIELDS";
   }
 
@@ -150,6 +154,53 @@ function detectContextQuestion(m: string): QuestionAbout | null {
   // WHY_NEEDED: "למה צריך מחיר לסוחר?" / "למה אתה צריך את זה?"
   if (/למה\s*(?:צריך|אתה\s*צריך|נצרך|חשוב)\s*(?:את\s*זה|מחיר|קילומטר|הגימור|הצבע|הבעלות)/i.test(m)) {
     return "WHY_NEEDED";
+  }
+
+  return null;
+}
+
+/**
+ * Detect general advisory / knowledge questions about listing or matching.
+ * NOT about the specific current draft state — use CONTEXT_QUESTION for those.
+ * Runs when inventory workspace is active; may coexist with an open draft.
+ */
+function detectAdvisoryQuestion(m: string): QuestionAbout | null {
+  // LISTING_GUIDANCE: "מה הכי חשוב בפרטי מודעה?" / "מה חשוב לרשום?"
+  if (
+    /מה\s*(?:ה)?כי\s*חשוב|מה\s*חשוב\s*(?:ל)?(?:רשום|במודעה|בפרטי)|איך\s*כדאי\s*ל(?:תאר|רשום)|מה\s*לרשום\s*במודעה/i.test(
+      m
+    )
+  ) {
+    return "LISTING_GUIDANCE";
+  }
+
+  // MATCHING_TIPS: "איזה פרטים עוזרים להתאמה?" / "מה משפר התאמות?"
+  if (
+    /(?:איזה|מה)\s*פרטים\s*(?:ה)?כי\s*עוזר|מה\s*(?:משפר|מגדיל|מעלה)\s*(?:את\s*)?(?:ה)?התאמ|כדאי\s*להוסיף\s*(?:מחיר|קילומטר|גימור)/i.test(
+      m
+    )
+  ) {
+    return "MATCHING_TIPS";
+  }
+
+  // General "why is X important" without referencing current draft
+  if (
+    /למה\s*(?:חשוב|כדאי|שווה)\s*(?:ל)?(?:רשום|להוסיף|לכתוב)/i.test(m) &&
+    !/רשמת|יש\s*לך|אמרתי/i.test(m)
+  ) {
+    return "GENERAL_ADVISORY";
+  }
+
+  // Ends with ? and asks for advice/guidance (not a field value)
+  if (
+    /\?\s*$/.test(m) &&
+    /(?:מה|איך|למה|כדאי|חשוב|מומלץ|עוזר|הכרחי)/i.test(m) &&
+    !/(?:רשמת|כתבת|יש\s*לך|אמרתי|נתתי)/i.test(m) &&
+    !/\b(טויוטה|יונדאי|מאזדה|קורולה|אודי|BMW|מרcedes|הונדה|נissan|פולקס|סקודה|קיה|רenault)\b/i.test(m) &&
+    !/\b(20\d{2}|\d{2})\b/.test(m) &&
+    !/\d{4,}/.test(m)
+  ) {
+    return "GENERAL_ADVISORY";
   }
 
   return null;
@@ -334,8 +385,6 @@ export function interpretTurnFallback(params: {
   }
 
   // Context question detection — dealer asks about active work
-  // Must run BEFORE fact detection to avoid misclassifying question words as facts
-  // IMPORTANT: "לא חסר?" is a question, NOT rejection. Check question patterns first.
   if (pendingDraft || pendingMutation) {
     const ctxQ = detectContextQuestion(m);
     if (ctxQ) {
@@ -344,6 +393,25 @@ export function interpretTurnFallback(params: {
         intent: "continue_current",
         targetCapability: "inventory",
         questionAbout: ctxQ,
+        confirms: false,
+        cancels: false,
+        skipRequested: false,
+        resumeRequested: false,
+        confidence: { overall: "medium" },
+        source: "deterministic",
+      };
+    }
+  }
+
+  // Advisory question — general product/commercial knowledge (may coexist with draft)
+  if (params.inventoryMode || pendingDraft) {
+    const advisory = detectAdvisoryQuestion(m);
+    if (advisory) {
+      return {
+        relation: "ADVISORY_QUESTION",
+        intent: "help",
+        targetCapability: "inventory",
+        questionAbout: advisory,
         confirms: false,
         cancels: false,
         skipRequested: false,
@@ -401,17 +469,24 @@ export function interpretTurnFallback(params: {
   }
 
   if (params.inventoryMode || pendingDraft) {
+    // Question-shaped message in inventory workspace — do NOT assume create_inventory intent
+    const looksLikeQuestion =
+      /\?\s*$/.test(m) ||
+      /^(?:מה|איך|למה|האם|כדאי|מומלץ)/i.test(m);
     return {
-      relation: pendingDraft ? "UNKNOWN" : "NEW_REQUEST",
-      intent: "create_inventory",
+      relation: pendingDraft ? "UNKNOWN" : looksLikeQuestion ? "ADVISORY_QUESTION" : "NEW_REQUEST",
+      intent: looksLikeQuestion ? "help" : "create_inventory",
       targetCapability: "inventory",
+      questionAbout: looksLikeQuestion ? "GENERAL_ADVISORY" : null,
       confirms: false,
       cancels: false,
       skipRequested: false,
       resumeRequested: false,
       confidence: { overall: "low" },
       needsClarification: true,
-      clarificationReason: "unparsed_inventory_message",
+      clarificationReason: looksLikeQuestion
+        ? "unparsed_advisory_question"
+        : "unparsed_inventory_message",
       source: "fallback",
     };
   }
@@ -567,6 +642,7 @@ RELATIONS:
 - WORDING_CORRECTION: dealer corrects Agent phrasing (not a field value)
 - ADDITIONAL_INFO: dealer adds info without being asked
 - CONTEXT_QUESTION: dealer asks a question about the active work/draft
+- ADVISORY_QUESTION: dealer asks general product/commercial advice (NOT about current draft state)
 - TOPIC_SWITCH: dealer switches to a different capability (matches, searches, etc.)
 - CONFIRMATION: explicit yes/confirm/save
 - CANCEL: explicit no/cancel
@@ -589,6 +665,16 @@ CONTEXT_QUESTION examples (dealer asks about active inventory draft):
 - "למה צריך מחיר לסוחר?" → CONTEXT_QUESTION, questionAbout: WHY_NEEDED
 - "אפשר לשמור ככה?" → CONTEXT_QUESTION, questionAbout: CAN_PROCEED
 - "אפשר להמשיך?" → CONTEXT_QUESTION, questionAbout: CAN_PROCEED
+
+ADVISORY_QUESTION examples (general knowledge, NOT about current draft):
+- "מה הכי חשוב בפרטי מודעה?" → ADVISORY_QUESTION, questionAbout: LISTING_GUIDANCE
+- "איזה פרטים הכי עוזרים להתאמה?" → ADVISORY_QUESTION, questionAbout: MATCHING_TIPS
+- "כדאי להוסיף מחיר לסוחר?" → ADVISORY_QUESTION, questionAbout: MATCHING_TIPS
+- "איך כדאי לתאר את הרכב?" → ADVISORY_QUESTION, questionAbout: LISTING_GUIDANCE
+
+DISTINCTION:
+- "מה חסר?" / "מה רשמת?" → CONTEXT_QUESTION (about active draft)
+- "מה הכי חשוב במודעה?" → ADVISORY_QUESTION (general advice)
 
 IMPORTANT: "לא חסר מידע?" contains "לא" but is a QUESTION (CONTEXT_QUESTION), NOT a rejection.
 Hebrew "לא" in question form ≠ cancellation.

@@ -197,6 +197,10 @@ export async function runExchangeAssistantV2(params: {
         turn: turn ?? undefined,
         forceStart:
           !params.conversation?.pendingInventoryDraft &&
+          turn?.relation !== "ADVISORY_QUESTION" &&
+          turn?.relation !== "CONTEXT_QUESTION" &&
+          turn?.intent !== "help" &&
+          !(turn?.relation === "UNKNOWN" && turn?.needsClarification) &&
           (params.conversation?.sessionContext?.forcedIntent ===
             "create_inventory" ||
             turn?.intent === "create_inventory" ||
