@@ -34,15 +34,21 @@ const root = join(__dirname, "..");
 
 describe("Agent Conversation Freedom → Core 3.0", () => {
   it("bumps AGENT_VERSION to 3.0 without a second Agent", () => {
-    expect(AGENT_VERSION).toBe("3.0");
+    expect(AGENT_VERSION).toBe("3.1");
     const orch = readFileSync(
       join(root, "src/services/assistant/v2-orchestrator.ts"),
       "utf8"
     );
     expect(orch).toContain("planConversationTurn");
     expect(orch).toContain("validateTurnPlan");
-    expect(orch).toContain("suspendInventoryDraft");
+    expect(orch).toContain("routeTurnPlan");
+    expect(orch).not.toMatch(/planAgentTurn/);
     expect(orch).not.toMatch(/new InventoryAgent|createInventoryAgent/);
+    const router = readFileSync(
+      join(root, "src/services/assistant/capability-router.ts"),
+      "utf8"
+    );
+    expect(router).toContain("suspendInventoryDraft");
   });
 
   it("orchestrator calls Conversation Brain before free-text inventory ingest", () => {
@@ -52,9 +58,10 @@ describe("Agent Conversation Freedom → Core 3.0", () => {
     );
     const body = orch.slice(orch.indexOf("export async function runExchangeAssistantV2"));
     const planIdx = body.indexOf("await planConversationTurn");
-    const ingestIdx = body.indexOf("await handleInventoryIngestTurn");
+    const routeIdx = body.indexOf("await routeTurnPlan");
     expect(planIdx).toBeGreaterThan(0);
-    expect(ingestIdx).toBeGreaterThan(planIdx);
+    expect(routeIdx).toBeGreaterThan(planIdx);
+    expect(body).not.toMatch(/planAgentTurn/);
   });
 });
 

@@ -1,3 +1,8 @@
+/**
+ * Exchange Assistant v1 (regex intents) — NOT the production chat path.
+ * Production uses runExchangeAssistantV2. Types below are shared.
+ */
+
 import {
   getEnrichedDemandsForDealer,
   getPendingActionsForDealer,

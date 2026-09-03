@@ -5,55 +5,17 @@ import {
   type ConversationState,
   isConfirmation,
   isRejection,
-  resolveListReference,
 } from "@/services/assistant/conversation-state";
-import {
-  executeToolsParallel,
-  getDemandByIdForDealer,
-} from "@/services/assistant/tools/read-tools";
-import {
-  AGENT_VERSION,
-  type AgentMeta,
-  type ReadToolName,
-} from "@/services/assistant/tools/registry";
-import {
-  createDemandDraft,
-  executeConfirmValidation,
-  executeBulkDemandClosure,
-  executeDemandClosure,
-  executeDemandRenewal,
-  markMyVehicleSold,
-  prepareBulkDemandClosure,
-  prepareConfirmValidation,
-  prepareDemandClosure,
-  prepareDemandRenewal,
-  prepareMarkSold,
-} from "@/services/assistant/tools/action-tools";
+import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
+import { AGENT_VERSION, type AgentMeta } from "@/services/assistant/tools/registry";
+import { planConversationTurn } from "@/services/assistant/turn-planner";
+import { validateTurnPlan } from "@/services/assistant/turn-policy";
+import { routeTurnPlan } from "@/services/assistant/capability-router";
+import { executeSearchMutation } from "@/services/assistant/search-capability";
 import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
-import { handleInventoryManageTurn } from "@/services/assistant/inventory-manage";
-import { planAgentTurn } from "@/services/assistant/planner";
-import { mergeSessionContext } from "@/services/assistant/commercial-judgment";
-import {
-  helpOnlyResponse,
-  synthesizeResponse,
-} from "@/services/assistant/synthesizer";
-import {
-  planConversationTurn,
-  turnPlanToEvent,
-} from "@/services/assistant/turn-planner";
-import {
-  inventoryOwnsTurn,
-  shouldProposeDemandClosure,
-  toolGoalToReadTools,
-  validateTurnPlan,
-} from "@/services/assistant/turn-policy";
-import {
-  resumeSuspendedInventory,
-  suspendInventoryDraft,
-} from "@/services/assistant/turn-reconcile";
+import { privacyBlockedMessage } from "@/services/assistant/privacy-gate";
 import type {
   AssistantContext,
-  AssistantIntent,
   AssistantResponse,
 } from "@/services/assistant/orchestrator";
 
@@ -61,10 +23,6 @@ export interface AssistantV2Response extends AssistantResponse {
   cards?: AssistantCard[];
   conversation?: ConversationState;
   meta?: AgentMeta;
-}
-
-function uniqueTools(tools: ReadToolName[]): ReadToolName[] {
-  return [...new Set(tools)];
 }
 
 export async function runExchangeAssistantV2(params: {
@@ -85,9 +43,9 @@ export async function runExchangeAssistantV2(params: {
     synthesisDurationMs: 0,
     fallbackReason: null,
     responseType: "read",
+    legacyPlannerUsed: false,
   };
 
-  // Merge UI context into conversation session (inventory workspace)
   if (params.context.mode === "inventory_management") {
     params.conversation = {
       ...params.conversation,
@@ -103,15 +61,6 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
-  // Narrow high-confidence fishing only — ambiguous language goes to Conversation Brain first
-  // (policy layer re-checks after understanding)
-
-  const inInventoryWorkspace =
-    params.context.mode === "inventory_management" ||
-    params.conversation?.sessionContext?.operatingMode ===
-      "inventory_management";
-
-  // Machine-known exact CTA with concrete pending confirmation — no AI needed
   const pendingConf = params.conversation?.pendingConfirmation;
   const exactConfirm =
     pendingConf &&
@@ -124,726 +73,143 @@ export async function runExchangeAssistantV2(params: {
     isRejection(params.message) &&
     /^(לא|בטל|ביטול|cancel|no)$/i.test(params.message.trim());
 
-  // --- Conversation Brain (Turn Planner) BEFORE pending locks ---
-  // CURRENT MESSAGE > PENDING WORKFLOW. State is context, not prison.
-  const turnPlan =
-    exactConfirm || exactCancel
-      ? null
-      : await planConversationTurn({
-          message: params.message,
-          userId: params.userId,
-          conversation: params.conversation,
-          inventoryMode: inInventoryWorkspace,
-        });
-
-  if (turnPlan) {
-    meta.tools = [...meta.tools, `turn_plan:${turnPlan.source}`];
-    await logAppEvent({
-      eventType: "agent_turn_planned",
-      dealerId: params.dealerId,
-      metadata: {
-        agentVersion: AGENT_VERSION,
-        kind: turnPlan.action.kind,
-        source: turnPlan.source,
-        relation: turnPlan.telemetryHint.relation,
-        confidence: turnPlan.confidence,
-        capability: turnPlan.action.capability,
-        toolGoal: turnPlan.action.toolGoal,
-        userGoal: turnPlan.understanding.userGoal?.slice(0, 120),
-      },
-    });
-  }
-
-  // Policy / Authority — understand first, authorize second
-  if (turnPlan) {
-    const policy = validateTurnPlan({
-      message: params.message,
-      plan: turnPlan,
-      conversation: params.conversation,
-    });
-    if (policy.decision === "DENY") {
-      await logAppEvent({
-        eventType: "assistant_privacy_block",
-        dealerId: params.dealerId,
-        metadata: {
-          reason: policy.reason,
-          agentVersion: AGENT_VERSION,
-          via: "turn_policy",
-        },
-      });
-      meta.responseType = "privacy_blocked";
-      return {
-        intent: "FISHING_BLOCKED",
-        privacyBlocked: true,
-        message: policy.userMessage,
-        suggestions: [],
-        meta,
-      };
-    }
-  }
-
-  // Bridge to StructuredTurnEvent for capability handlers
-  const turn = turnPlan ? turnPlanToEvent(turnPlan) : null;
-
-  // Resume suspended inventory draft
-  if (
-    turnPlan?.action.kind === "RESUME" ||
-    turn?.resumeRequested ||
-    turn?.relation === "RESUME"
-  ) {
-    params.conversation = resumeSuspendedInventory(params.conversation ?? {});
-    await logAppEvent({
-      eventType: "agent_task_resumed",
-      dealerId: params.dealerId,
-      metadata: { agentVersion: AGENT_VERSION, kind: "inventory_draft" },
-    });
-  }
-
-  // Topic switch / SUSPEND_AND_READ — suspend draft, then read tools
-  if (
-    turnPlan?.action.kind === "SUSPEND_AND_READ" ||
-    (turn?.relation === "TOPIC_SWITCH" &&
-      (params.conversation?.pendingInventoryDraft ||
-        params.conversation?.pendingInventoryMutation))
-  ) {
-    if (params.conversation?.pendingInventoryDraft) {
-      params.conversation = suspendInventoryDraft(params.conversation);
-    }
-    await logAppEvent({
-      eventType: "agent_task_suspended",
-      dealerId: params.dealerId,
-      metadata: {
-        agentVersion: AGENT_VERSION,
-        kind: turnPlan?.action.kind ?? "TOPIC_SWITCH",
-        toolGoal: turnPlan?.action.toolGoal ?? null,
-      },
-    });
-
-    const tools = uniqueTools(
-      toolGoalToReadTools(turnPlan?.action.toolGoal ?? "get_my_matches")
-    );
-    if (tools.length) {
-      meta.tools = tools;
-      const { results, durations, errors } = await executeToolsParallel(
-        tools,
-        params.dealerId
-      );
-      meta.toolDurations = durations;
-      const {
-        response,
-        synthesizerUsed,
-        model: synthModel,
-        durationMs: synthesisDurationMs,
-      } = await synthesizeResponse({
-        userMessage: params.message,
-        toolResults: results,
-        toolErrors: errors,
-        userId: params.userId,
-        goal: turnPlan?.understanding.userGoal ?? "read after topic switch",
-        sessionContext: params.conversation?.sessionContext,
-      });
-      meta.synthesizerUsed = synthesizerUsed;
-      meta.synthesisDurationMs = synthesisDurationMs;
-      if (synthModel) meta.model = synthModel;
-      meta.responseType = "state_answer";
-      return {
-        intent: "PENDING_ACTIONS" as AssistantIntent,
-        message:
-          response.message +
-          (params.conversation?.suspendedContext?.kind === "inventory_draft"
-            ? "\n\nואם תרצה, אפשר לחזור לרכב שהתחלנו להוסיף."
-            : ""),
-        cards: response.cards,
-        suggestions: response.suggestions,
-        conversation: {
-          lastList: response.lastList,
-          lastAuthorizedSnapshot: {
-            ...params.conversation?.lastAuthorizedSnapshot,
-            activeDemandCount: response.lastList.filter((i) => i.type === "demand")
-              .length,
-            activeDemandIds: response.lastList
-              .filter((i) => i.type === "demand")
-              .map((i) => i.id),
-            activeDemandTitles: response.lastList
-              .filter((i) => i.type === "demand")
-              .map((i) => i.title),
-          },
-          sessionContext: params.conversation?.sessionContext,
-          suspendedContext: params.conversation?.suspendedContext,
-          lastInterpretation: turn ?? undefined,
-        },
-        meta,
-      };
-    }
-  } else {
-    const answerOnly =
-      turnPlan?.action.kind === "ANSWER_ONLY" ||
-      turn?.relation === "ADVISORY_QUESTION" ||
-      turn?.relation === "CONTEXT_QUESTION" ||
-      turn?.intent === "help";
-
-    const searchClose =
-      Boolean(turnPlan) &&
-      shouldProposeDemandClosure({
-        plan: turnPlan!,
-        conversation: params.conversation,
-      });
-
-    if (searchClose) {
-      const prep = await prepareBulkDemandClosure(params.dealerId);
-      meta.responseType = "confirmation_close";
-      if (prep.empty) {
-        return {
-          intent: "CLOSE_DEMAND",
-          message: "אין לך חיפושים פעילים לסגור כרגע.",
-          conversation: {
-            lastList: params.conversation?.lastList,
-            lastAuthorizedSnapshot: {
-              ...params.conversation?.lastAuthorizedSnapshot,
-              activeDemandCount: 0,
-              activeDemandIds: [],
-              activeDemandTitles: [],
-            },
-            pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
-            sessionContext: params.conversation?.sessionContext,
-            lastInterpretation: turn ?? undefined,
-          },
-          meta,
-        };
-      }
-      return {
-        intent: "CLOSE_DEMAND",
-        message: prep.label,
-        requiresConfirmation: {
-          action: prep.action,
-          label: prep.label,
-          payload: prep.payload,
-        },
-        conversation: {
-          lastList: params.conversation?.lastList,
-          lastAuthorizedSnapshot: {
-            activeDemandCount: prep.demands.length,
-            activeDemandIds: prep.demands.map((d) => d.id),
-            activeDemandTitles: prep.demands.map((d) => d.title),
-          },
-          pendingConfirmation: {
-            action: prep.action,
-            label: prep.label,
-            payload: prep.payload,
-          },
-          pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
-          sessionContext: params.conversation?.sessionContext,
-          lastInterpretation: turn ?? undefined,
-        },
-        meta,
-      };
-    }
-
-    const shouldIngest =
-      Boolean(turnPlan) &&
-      inventoryOwnsTurn({
-        plan: turnPlan!,
-        conversation: params.conversation,
-      });
-
-    if (
-      (answerOnly || turnPlan?.action.kind === "CLARIFY") &&
-      params.conversation?.pendingInventoryDraft
-    ) {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message: params.message,
-        conversation: params.conversation,
-        meta,
-        turn: turn ?? undefined,
-        forceStart: false,
-      });
-      if (inventoryTurn) return inventoryTurn;
-    }
-
-    if (shouldIngest) {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message: params.message,
-        conversation: params.conversation,
-        meta,
-        turn: turn ?? undefined,
-        forceStart: false,
-      });
-      if (inventoryTurn) return inventoryTurn;
-    }
-
-    if (
-      params.conversation?.pendingInventoryMutation ||
-      params.conversation?.pendingConfirmation?.action === "update_inventory" ||
-      params.conversation?.pendingConfirmation?.action === "mark_sold" ||
-      params.conversation?.pendingConfirmation?.action === "mark_unavailable" ||
-      turn?.intent === "update_inventory" ||
-      turn?.intent === "mark_sold" ||
-      turn?.intent === "mark_unavailable"
-    ) {
-      const manageTurn = await handleInventoryManageTurn({
-        dealerId: params.dealerId,
-        message: params.message,
-        conversation: params.conversation,
-        meta,
-        turn: turn ?? undefined,
-        focusedVehicleId:
-          params.conversation?.focusedObject?.type === "vehicle"
-            ? params.conversation.focusedObject.id
-            : params.context.entityType === "vehicle"
-              ? params.context.entityId
-              : undefined,
-      });
-      if (manageTurn) return manageTurn;
-    }
-  }
-
-  // --- Confirmation flow (demand/validation + exact CTAs) ---
-  if (params.conversation?.pendingConfirmation) {
-    const pending = params.conversation.pendingConfirmation;
-    if (pending.action === "create_inventory") {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message: params.message,
-        conversation: params.conversation,
-        meta,
-        turn: turn ?? undefined,
-      });
-      if (inventoryTurn) return inventoryTurn;
-    }
-    if (
-      exactConfirm ||
-      (turn?.confirms &&
-        turn.relation === "CONFIRMATION" &&
-        !/התאמ|חיפוש/i.test(params.message))
-    ) {
-      const demandId = pending.payload.demandId as string;
-      if (pending.action === "renew_demand") {
-        const result = await executeDemandRenewal(params.dealerId, demandId);
-        meta.responseType = "mutation_renew";
-        if (!result.ok) {
-          return {
-            intent: "UNKNOWN",
-            message: "לא הצלחתי לחדש את החיפוש. נסה שוב מהמסך הרלוונטי.",
-            meta,
-          };
-        }
-        return {
-          intent: "UPDATE_DEMAND",
-          message: `חידשתי את "${result.demand?.title ?? "החיפוש"}". Exchange מחפש התאמות מחדש.`,
-          cards: [
-            {
-              type: "result",
-              title: "החיפוש חודש",
-              body: result.demand?.title,
-              demandId,
-              href: `/demand?edit=${demandId}`,
-            },
-          ],
-          conversation: { lastList: params.conversation.lastList },
-          meta,
-        };
-      }
-      if (pending.action === "close_demands_bulk") {
-        const demandIds = (pending.payload.demandIds as string[]) ?? [];
-        const result = await executeBulkDemandClosure(
-          params.dealerId,
-          demandIds
-        );
-        meta.responseType = "mutation_close";
-        return {
-          intent: "CLOSE_DEMAND",
-          message:
-            result.closed > 0
-              ? `סגרתי ${result.closed} חיפושים פעילים.`
-              : "לא הצלחתי לסגור את החיפושים.",
-          conversation: {
-            lastAuthorizedSnapshot: {
-              activeDemandCount: 0,
-              activeDemandIds: [],
-              activeDemandTitles: [],
-            },
-            pendingInventoryDraft: params.conversation.pendingInventoryDraft,
-            sessionContext: params.conversation.sessionContext,
-          },
-          meta,
-        };
-      }
-      if (pending.action === "close_demand") {
-        const demand = await getDemandByIdForDealer(params.dealerId, demandId);
-        const result = await executeDemandClosure(params.dealerId, demandId);
-        meta.responseType = "mutation_close";
-        if (!result.ok) {
-          return {
-            intent: "UNKNOWN",
-            message: "לא הצלחתי לסגור את החיפוש.",
-            meta,
-          };
-        }
-        return {
-          intent: "CLOSE_DEMAND",
-          message: `סגרתי את החיפוש "${demand?.title ?? ""}".`,
-          conversation: {},
-          meta,
-        };
-      }
-      if (pending.action === "confirm_validation") {
-        const validationId = pending.payload.validationId as string;
-        const result = await executeConfirmValidation(
-          params.dealerId,
-          validationId,
-          true
-        );
-        meta.responseType = "mutation_validation";
-        if (!result.ok) {
-          return {
-            intent: "UNKNOWN",
-            message: "לא הצלחתי לאשר את הזמינות.",
-            meta,
-          };
-        }
-        return {
-          intent: "VALIDATION",
-          message: "אישרת זמינות. Exchange ממשיך לבדוק התאמות.",
-          suggestions: [{ label: "לאימותים", href: "/validations" }],
-          meta,
-        };
-      }
-      if (pending.action === "mark_sold") {
-        const vehicleId = pending.payload.vehicleId as string;
-        const result = await markMyVehicleSold(params.dealerId, vehicleId);
-        meta.responseType = "mutation_sold";
-        if (!result.ok) {
-          return {
-            intent: "UNKNOWN",
-            message: "לא הצלחתי לסמן את הרכב כנמכר. שום דבר לא השתנה.",
-            meta,
-          };
-        }
-        return {
-          intent: "UPDATE_INVENTORY",
-          message: "הרכב הוסר מהמלאי הפעיל.",
-          suggestions: [{ label: "למלאי", href: "/inventory" }],
-          conversation: {},
-          meta,
-        };
-      }
-      if (pending.action === "update_inventory") {
-        const manageTurn = await handleInventoryManageTurn({
-          dealerId: params.dealerId,
-          message: params.message,
-          conversation: params.conversation,
-          meta,
-        });
-        if (manageTurn) return manageTurn;
-      }
-    }
-    if (isRejection(params.message)) {
-      return {
-        intent: "UNKNOWN",
-        message: "בוטל. לא בוצעה פעולה.",
-        conversation: { lastList: params.conversation.lastList },
-        meta,
-      };
-    }
-  }
-
-  // --- Reference resolution (renew/close by name or position) ---
-  const ref = resolveListReference(params.message, params.conversation);
-  if (ref && /חדש|renew|תחדש/i.test(params.message)) {
-    const prep = await prepareDemandRenewal(params.dealerId, ref.id);
-    if (!prep.ok) {
-      return { intent: "UNKNOWN", message: "לא מצאתי את החיפוש.", meta };
-    }
-    meta.responseType = "confirmation_renew";
-    return {
-      intent: "UPDATE_DEMAND",
-      message: prep.label,
-      requiresConfirmation: {
-        action: prep.action,
-        label: prep.label,
-        payload: prep.payload,
-      },
-      cards: [{ type: "confirmation", title: prep.label, demandId: ref.id }],
-      conversation: {
-        lastList: params.conversation?.lastList,
-        pendingConfirmation: {
-          action: prep.action,
-          label: prep.label,
-          payload: prep.payload,
-        },
-      },
-      meta,
-    };
-  }
-
-  if (ref && /סגור|סיים|close/i.test(params.message)) {
-    const prep = await prepareDemandClosure(params.dealerId, ref.id);
-    if (!prep.ok) {
-      return { intent: "UNKNOWN", message: "לא מצאתי את החיפוש.", meta };
-    }
-    meta.responseType = "confirmation_close";
-    return {
-      intent: "CLOSE_DEMAND",
-      message: prep.label,
-      requiresConfirmation: {
-        action: prep.action,
-        label: prep.label,
-        payload: prep.payload,
-      },
-      conversation: {
-        lastList: params.conversation?.lastList,
-        pendingConfirmation: {
-          action: prep.action,
-          label: prep.label,
-          payload: prep.payload,
-        },
-      },
-      meta,
-    };
-  }
-
-  const sessionContext = mergeSessionContext(
-    params.conversation?.sessionContext,
-    params.message
-  );
-
-  // --- Plan (demand-driven tool selection) ---
-  const {
-    plan,
-    plannerUsed,
-    model: plannerModel,
-    durationMs: plannerDurationMs,
-  } = await planAgentTurn(params.message, params.userId);
-  meta.plannerUsed = plannerUsed;
-  meta.plannerDurationMs = plannerDurationMs;
-  meta.model = plannerModel;
-
-  // --- Create demand action ---
-  // Legacy planner must not re-own a turn Conversation Core already planned.
-  if (plan.actionIntent === "create_inventory" && !turnPlan) {
-    const inventoryTurn = await handleInventoryIngestTurn({
-      dealerId: params.dealerId,
-      userId: params.userId,
-      message: params.message,
-      conversation: params.conversation,
-      meta,
-      forceStart: true,
-    });
-    if (inventoryTurn) return inventoryTurn;
-  }
-
-  if (
-    plan.actionIntent === "mark_sold" ||
-    plan.actionIntent === "update_inventory"
-  ) {
-    const manageTurn = await handleInventoryManageTurn({
-      dealerId: params.dealerId,
-      message: params.message,
-      conversation: params.conversation,
-      meta,
-      focusedVehicleId: plan.referencedObjectId ?? undefined,
-    });
-    if (manageTurn) return manageTurn;
-  }
-
-  if (plan.actionIntent === "create_demand") {
-    const draft = await createDemandDraft(
-      params.dealerId,
-      params.userId,
-      params.message
-    );
-    meta.responseType = "create_demand";
-    if (draft.duplicate && draft.existingDemandId) {
-      return {
-        intent: "CREATE_DEMAND_DRAFT",
-        message: draft.message,
-        suggestions: [
-          {
-            label: "עדכן חיפוש קיים",
-            href: `/demand?edit=${draft.existingDemandId}`,
-          },
-          { label: "פתח חיפוש חדש", href: "/demand?new=1" },
-        ],
-        meta,
-      };
-    }
-    return {
-      intent: "CREATE_DEMAND_DRAFT",
-      message: draft.message,
-      suggestions: [{ label: "המשך לפתיחת חיפוש", href: draft.href }],
-      meta,
-    };
-  }
-
-  if (plan.actionIntent === "help") {
-    const help = helpOnlyResponse();
-    meta.responseType = "help";
+  if (exactCancel && pendingConf) {
+    meta.executor = "exact_cancel";
     return {
       intent: "UNKNOWN",
-      message: help.message,
-      suggestions: help.suggestions,
-      meta,
-    };
-  }
-
-  if (plan.actionIntent === "confirm_validation" && plan.referencedObjectId) {
-    const prep = await prepareConfirmValidation(
-      params.dealerId,
-      plan.referencedObjectId
-    );
-    if (!prep.ok) {
-      return {
-        intent: "VALIDATION",
-        message: "לא מצאתי אימות ממתין. בדוק במסך האימותים.",
-        suggestions: [{ label: "לאימותים", href: "/validations" }],
-        meta,
-      };
-    }
-    meta.responseType = "confirmation_validation";
-    return {
-      intent: "VALIDATION",
-      message: prep.label,
-      requiresConfirmation: {
-        action: prep.action,
-        label: prep.label,
-        payload: prep.payload,
-      },
+      message: "בוטל. לא בוצעה פעולה.",
       conversation: {
-        pendingConfirmation: {
-          action: prep.action,
-          label: prep.label,
-          payload: prep.payload,
-        },
+        lastList: params.conversation?.lastList,
+        pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
+        pendingSearchDraft: params.conversation?.pendingSearchDraft,
+        sessionContext: params.conversation?.sessionContext,
       },
       meta,
     };
   }
 
-  if (plan.actionIntent === "mark_sold" && plan.referencedObjectId) {
-    const prep = await prepareMarkSold(params.dealerId, plan.referencedObjectId);
-    if (!prep.ok) {
-      return {
-        intent: "UPDATE_INVENTORY",
-        message: "לא מצאתי את הרכב במלאי שלך.",
-        suggestions: [{ label: "פתח מלאי", href: "/inventory" }],
-        meta,
-      };
+  if (exactConfirm && pendingConf) {
+    const searchDone = await executeSearchMutation({
+      dealerId: params.dealerId,
+      pending: pendingConf,
+      conversation: params.conversation,
+      meta,
+    });
+    if (searchDone) {
+      meta.executor = searchDone.meta?.executor ?? "search_confirm";
+      meta.legacyPlannerUsed = false;
+      return searchDone;
     }
-    meta.responseType = "confirmation_sold";
-    return {
-      intent: "UPDATE_INVENTORY",
-      message: prep.label,
-      requiresConfirmation: {
-        action: prep.action,
-        label: prep.label,
-        payload: prep.payload,
-      },
-      conversation: {
-        pendingConfirmation: {
-          action: prep.action,
-          label: prep.label,
-          payload: prep.payload,
-        },
-        pendingInventoryMutation: {
-          type: "MARK_SOLD",
-          vehicleId: plan.referencedObjectId,
-          status: "WAITING_CONFIRMATION",
-          label: prep.label,
-        },
-      },
-      meta,
-    };
+    if (pendingConf.action === "create_inventory") {
+      const inventoryTurn = await handleInventoryIngestTurn({
+        dealerId: params.dealerId,
+        userId: params.userId,
+        message: params.message,
+        conversation: params.conversation,
+        meta,
+      });
+      if (inventoryTurn) return inventoryTurn;
+    }
   }
 
-  // --- Execute only planner-selected tools ---
-  const tools = uniqueTools(
-    plan.tools.length > 0 ? plan.tools : (["getMyExchangeState"] as ReadToolName[])
-  );
-  meta.tools = tools;
-
-  const { results, durations, errors, partialFailure } = await executeToolsParallel(
-    tools,
-    params.dealerId
-  );
-  meta.toolDurations = durations;
-
-  // --- Synthesize ---
-  const {
-    response,
-    synthesizerUsed,
-    model: synthModel,
-    durationMs: synthesisDurationMs,
-  } = await synthesizeResponse({
-    userMessage: params.message,
-    toolResults: results,
-    toolErrors: errors,
+  const planStarted = Date.now();
+  const turnPlan = await planConversationTurn({
+    message: params.message,
     userId: params.userId,
-    goal: plan.goal,
-    sessionContext,
+    conversation: params.conversation,
+    inventoryMode:
+      params.context.mode === "inventory_management" ||
+      params.conversation?.sessionContext?.operatingMode ===
+        "inventory_management",
   });
-
-  meta.synthesizerUsed = synthesizerUsed;
-  meta.synthesisDurationMs = synthesisDurationMs;
-  if (synthModel) meta.model = synthModel;
-  if (!plannerUsed) meta.fallbackReason = "planner_heuristic";
-  if (!synthesizerUsed) {
-    meta.fallbackReason = meta.fallbackReason
-      ? `${meta.fallbackReason};synthesizer_deterministic`
-      : "synthesizer_deterministic";
+  meta.plannerDurationMs = Date.now() - planStarted;
+  meta.plannerUsed = turnPlan.source === "ai";
+  meta.tools = [...meta.tools, `turn_plan:${turnPlan.source}`];
+  if (turnPlan.source === "fallback") {
+    meta.fallbackReason = "turn_plan_fallback";
   }
-  meta.responseType = "state_answer";
 
   await logAppEvent({
-    eventType: "assistant_v2_response",
+    eventType: "agent_turn_planned",
     dealerId: params.dealerId,
     metadata: {
       agentVersion: AGENT_VERSION,
-      tools,
-      plannerUsed,
-      synthesizerUsed,
-      goal: plan.goal,
-      cardCount: response.cards.length,
-      partialToolFailure: partialFailure,
-      toolErrors: Object.keys(errors),
+      kind: turnPlan.action.kind,
+      source: turnPlan.source,
+      relation: turnPlan.telemetryHint.relation,
+      confidence: turnPlan.confidence,
+      capability: turnPlan.action.capability,
+      operation: turnPlan.action.operation,
+      scope: turnPlan.action.scope,
+      toolGoal: turnPlan.action.toolGoal,
+      userGoal: turnPlan.understanding.userGoal?.slice(0, 120),
+      legacyPlannerUsed: false,
     },
   });
 
-  return {
-    intent: "PENDING_ACTIONS" as AssistantIntent,
-    message:
-      response.message +
-      (params.conversation?.suspendedContext?.kind === "inventory_draft"
-        ? "\n\nואם תרצה, אפשר להמשיך גם עם הרכב שהתחלנו להוסיף."
-        : ""),
-    cards: response.cards,
-    suggestions: response.suggestions,
-    conversation: {
-      lastList: response.lastList,
-      lastAuthorizedSnapshot: {
-        ...params.conversation?.lastAuthorizedSnapshot,
-        activeDemandCount: response.lastList.filter((i) => i.type === "demand")
-          .length,
-        activeDemandIds: response.lastList
-          .filter((i) => i.type === "demand")
-          .map((i) => i.id),
-        activeDemandTitles: response.lastList
-          .filter((i) => i.type === "demand")
-          .map((i) => i.title),
+  const policy = validateTurnPlan({
+    message: params.message,
+    plan: turnPlan,
+    conversation: params.conversation,
+  });
+  meta.policyResult = policy.decision;
+
+  if (policy.decision === "DENY") {
+    await logAppEvent({
+      eventType: "assistant_privacy_block",
+      dealerId: params.dealerId,
+      metadata: {
+        reason: policy.reason,
+        agentVersion: AGENT_VERSION,
+        via: "turn_policy",
       },
-      goal: plan.goal,
-      sessionContext,
-      suspendedContext: params.conversation?.suspendedContext,
-      lastInterpretation: turn ?? params.conversation?.lastInterpretation,
-      preferredClarificationWording:
-        params.conversation?.preferredClarificationWording,
-    },
+    });
+    meta.responseType = "privacy_blocked";
+    return {
+      intent: "FISHING_BLOCKED",
+      privacyBlocked: true,
+      message: policy.userMessage ?? privacyBlockedMessage("fishing"),
+      suggestions: [],
+      meta,
+    };
+  }
+
+  if (policy.decision === "REQUIRE_CLARIFICATION" && turnPlan.action.kind === "CLARIFY") {
+    meta.executor = "policy_clarify";
+    return {
+      intent: "UNKNOWN",
+      message: policy.question,
+      conversation: params.conversation,
+      meta,
+    };
+  }
+
+  const routed = await routeTurnPlan({
+    dealerId: params.dealerId,
+    userId: params.userId,
+    message: params.message,
+    plan: turnPlan,
+    conversation: params.conversation,
+    contextRoute: params.context.route,
+    entityType: params.context.entityType,
+    entityId: params.context.entityId,
     meta,
-  };
+  });
+
+  await logAppEvent({
+    eventType: "agent_turn_routed",
+    dealerId: params.dealerId,
+    metadata: {
+      agentVersion: AGENT_VERSION,
+      executor: meta.executor,
+      capability: meta.capability,
+      operation: meta.operation,
+      legacyPlannerUsed: false,
+      responseType: meta.responseType,
+    },
+  });
+
+  return routed;
 }
 
 type ExchangeStateSnapshot = {
@@ -905,7 +271,6 @@ export async function getAssistantContext(dealerId: string) {
   } else if (activeDemands === 0) {
     suggestions.push({ label: "פתח חיפוש", href: "/demand?new=1" });
   }
-  // Healthy active searches with no commercial action: no automatic CTA (G-41, G-42)
 
   return {
     agentVersion: AGENT_VERSION,

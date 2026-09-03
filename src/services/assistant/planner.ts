@@ -213,6 +213,10 @@ export function heuristicPlan(message: string): AgentPlan {
   };
 }
 
+/**
+ * Legacy v2 planner. NOT used by runExchangeAssistantV2 after Agent 3.1.
+ * Kept for unit tests of heuristicPlan only — production free-text uses planConversationTurn.
+ */
 export async function planAgentTurn(
   message: string,
   userId: string

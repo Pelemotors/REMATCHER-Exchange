@@ -116,11 +116,18 @@ export function planTurnFallback(params: {
 
   let kind: AgentTurnPlan["action"]["kind"] = "NONE";
   let toolGoal: AgentTurnPlan["action"]["toolGoal"] = null;
+  const capMap: Record<string, string> = {
+    inventory: "INVENTORY",
+    matches: "MATCHES",
+    searches: "SEARCHES",
+    demand: "SEARCHES",
+    broker: "GENERAL",
+    unknown: "GENERAL",
+  };
   let capability: string | null =
-    event.targetCapability === "inventory" &&
-    !(add.length || correct.length || event.relation === "ADVISORY_QUESTION")
-      ? null
-      : event.targetCapability;
+    event.targetCapability && event.targetCapability !== "unknown"
+      ? capMap[event.targetCapability] ?? event.targetCapability.toUpperCase()
+      : null;
 
   if (event.relation === "CONFIRMATION") kind = "CONFIRM_PENDING_MUTATION";
   else if (event.relation === "CANCEL") kind = "CANCEL_PENDING_MUTATION";
@@ -129,18 +136,28 @@ export function planTurnFallback(params: {
     kind = "SUSPEND_AND_READ";
     toolGoal =
       event.intent === "read_matches" ? "get_my_matches" : "get_my_state";
+    capability = event.intent === "read_matches" ? "MATCHES" : capability;
   } else if (
     event.relation === "ADVISORY_QUESTION" ||
     event.relation === "CONTEXT_QUESTION" ||
     isWorkflowHelpRequest(params.message)
   ) {
     kind = "ANSWER_ONLY";
-    capability = "inventory";
+    capability = "HELP";
+  } else if (event.intent === "read_matches") {
+    kind = "READ";
+    capability = "MATCHES";
+    toolGoal = "get_my_matches";
+  } else if (event.intent === "read_state") {
+    kind = "READ";
+    capability = "GENERAL";
+    toolGoal = "get_my_state";
   } else if (event.relation === "UNKNOWN" && event.needsClarification) {
     kind = "CLARIFY";
+    capability = null;
   } else if (add.length || correct.length) {
     kind = "PROPOSE_MUTATION";
-    capability = "inventory";
+    capability = params.inventoryMode ? "INVENTORY" : "INVENTORY";
   } else if (event.needsClarification) {
     kind = "CLARIFY";
   }
@@ -171,6 +188,7 @@ export function planTurnFallback(params: {
       suspendCurrentTask: kind === "SUSPEND_AND_READ",
       resumeTaskReference: kind === "RESUME" ? "inventory_draft" : null,
       correctedUnderstanding: event.preferredWording ?? null,
+      queuedFollowUp: null,
     },
     facts: {
       add,
@@ -184,6 +202,15 @@ export function planTurnFallback(params: {
     action: {
       kind,
       capability,
+      operation:
+        kind === "READ" || kind === "SUSPEND_AND_READ"
+          ? "READ"
+          : kind === "ANSWER_ONLY"
+            ? "HELP"
+            : add.length || correct.length
+              ? "CREATE"
+              : null,
+      scope: null,
       toolGoal,
       targetReference: event.targetObject?.referenceText ?? null,
     },
@@ -309,9 +336,17 @@ RULES:
 10. Matching questions: propose READ get_my_matches — never invent match counts.
 11. Never invent year/mileage/price/model.
 12. Inventory page / inventoryMode is only a HINT. It does NOT mean this message is a vehicle.
-13. Cancelling/closing searches → capability="searches", kind=PROPOSE_MUTATION, toolGoal=get_my_searches. Resolve "כולם" from lastList / lastAuthorizedSnapshot. Never start an inventory draft.
-14. Being on /inventory does not imprison capability: searches, matches, reveals, outcomes, activity, commercial, and help are first-class.
-15. Bulk/plural: set targetReference to the scope. Do not invent IDs — REMATCHER resolves authorized IDs.
+13. capability MUST be one of: GENERAL, INVENTORY, SEARCHES, MATCHES, OPPORTUNITIES, REVEALS, OUTCOMES, ACTIVITY, VALIDATIONS, COMMERCIAL, HELP.
+14. For mutations set action.operation explicitly: CREATE, UPDATE, CLOSE, RENEW, MARK_SOLD. NEVER treat SEARCHES + PROPOSE_MUTATION as close unless operation=CLOSE.
+15. "תפתח חיפוש" → capability=SEARCHES, kind=PROPOSE_MUTATION, operation=CREATE.
+16. "תבטל את כל החיפושים" → SEARCHES, PROPOSE_MUTATION, operation=CLOSE, scope=ALL_AUTHORIZED.
+17. "תסגור את אלה שפגו" → SEARCHES, CLOSE, scope=EXPIRED.
+18. "תעדכן את החיפוש" → SEARCHES, UPDATE, scope=ONE, targetReference=the search.
+19. "תחדש" → SEARCHES, RENEW.
+20. Reads: MATCHES/REVEALS/OUTCOMES/OPPORTUNITIES/ACTIVITY/VALIDATIONS/COMMERCIAL/SEARCHES with kind=READ and matching toolGoal (get_my_reveals, get_my_outcomes, get_my_activity, get_my_commercial, get_my_inventory_attention).
+21. Mixed clauses: put the second request in conversation.queuedFollowUp (e.g. "ואז תראה התאמות").
+22. Do not invent IDs. targetReference is human language only.
+23. HELP questions never start inventory or search drafts.
 
 Return JSON matching the schema exactly. All required fields present (null for optional).`,
       userContent: JSON.stringify(ctx),

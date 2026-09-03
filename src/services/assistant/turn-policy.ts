@@ -13,6 +13,10 @@ import {
   privacyBlockedMessage,
 } from "@/services/assistant/privacy-gate";
 import type { ReadToolName } from "@/services/assistant/tools/registry";
+import {
+  normalizeCapability,
+  normalizeOperation,
+} from "@/services/assistant/capability-model";
 
 /** Map approved tool goals → registry tools (model cannot invent endpoints). */
 export function toolGoalToReadTools(
@@ -24,11 +28,21 @@ export function toolGoalToReadTools(
     case "get_my_searches":
       return ["getMyActiveDemands", "getMyExpiringDemands"];
     case "get_my_state":
-      return ["getMyExchangeState"];
+      return ["getMyExchangeState", "getMyPendingActions"];
     case "get_my_validations":
       return ["getMyPendingValidations"];
     case "get_my_opportunities":
       return ["getMyOpportunities"];
+    case "get_my_reveals":
+      return ["getMyReveals"];
+    case "get_my_outcomes":
+      return ["getMyPendingOutcomes"];
+    case "get_my_activity":
+      return ["getMyPendingActions", "getMyExchangeState"];
+    case "get_my_commercial":
+      return ["getMyCommercialStatus"];
+    case "get_my_inventory_attention":
+      return ["getMyInventoryRequiringAttention", "getMyStaleInventory"];
     default:
       return [];
   }
@@ -110,20 +124,20 @@ export function validateTurnPlan(params: {
     };
   }
 
+  // Mutations without an explicit operation — do not guess CLOSE
+  if (plan.action.kind === "PROPOSE_MUTATION") {
+    const op = normalizeOperation(plan.action.operation);
+    if (!op || op === "NONE") {
+      return {
+        decision: "REQUIRE_CLARIFICATION",
+        reason: "missing_operation",
+        question: "מה הפעולה — לקרוא, לפתוח, לעדכן או לסגור?",
+      };
+    }
+  }
+
   return { decision: "ALLOW" };
 }
-
-const SEARCH_CAPS = new Set(["searches", "search", "demands", "demand"]);
-const OTHER_CAPS = new Set([
-  "matches",
-  "match",
-  "opportunities",
-  "activity",
-  "validations",
-  "broker",
-  "commercial",
-  "help",
-]);
 
 export function planHasVehicleFacts(plan: AgentTurnPlan): boolean {
   const fields = ["make", "model", "year", "mileage", "b2bPrice", "retailPrice"];
@@ -133,18 +147,15 @@ export function planHasVehicleFacts(plan: AgentTurnPlan): boolean {
   );
 }
 
-function capabilityOf(plan: AgentTurnPlan): string {
-  return (plan.action.capability ?? "").toLowerCase();
-}
-
 /** Inventory may execute this turn only when the plan actually targets inventory work. */
 export function inventoryOwnsTurn(params: {
   plan: AgentTurnPlan;
   conversation?: ConversationState;
 }): boolean {
   const { plan, conversation } = params;
-  const cap = capabilityOf(plan);
-  if (SEARCH_CAPS.has(cap) || OTHER_CAPS.has(cap)) return false;
+  const cap = normalizeCapability(plan.action.capability);
+  const op = normalizeOperation(plan.action.operation);
+  if (cap && cap !== "INVENTORY") return false;
   if (
     plan.action.kind === "ANSWER_ONLY" ||
     plan.action.kind === "READ" ||
@@ -168,35 +179,33 @@ export function inventoryOwnsTurn(params: {
         conversation?.pendingConfirmation?.action === "create_inventory"
     );
   }
-  if (conversation?.pendingInventoryDraft) {
-    return (
-      plan.conversation.keepCurrentTask &&
-      (hasInventoryFacts || cap === "inventory")
-    );
+  if (conversation?.pendingInventoryDraft && plan.conversation.keepCurrentTask) {
+    return hasInventoryFacts || cap === "INVENTORY";
   }
-  return cap === "inventory" && hasInventoryFacts;
+  return (
+    cap === "INVENTORY" &&
+    (op === "CREATE" || op === "UPDATE" || op === "MARK_SOLD") &&
+    (hasInventoryFacts || Boolean(conversation?.pendingInventoryDraft))
+  );
 }
 
 export function searchesMutationProposed(plan: AgentTurnPlan): boolean {
-  const cap = capabilityOf(plan);
+  const cap = normalizeCapability(plan.action.capability);
+  const op = normalizeOperation(plan.action.operation);
   if (plan.action.kind !== "PROPOSE_MUTATION") return false;
-  if (SEARCH_CAPS.has(cap)) return true;
-  if (plan.action.toolGoal === "get_my_searches") return true;
-  return false;
+  return cap === "SEARCHES" && (op === "CLOSE" || op === "CREATE" || op === "UPDATE" || op === "RENEW");
 }
 
-/** Demand/search close — plan + authorized snapshot, not page route. */
+/** Demand/search close — explicit CLOSE operation only. */
 export function shouldProposeDemandClosure(params: {
   plan: AgentTurnPlan;
   conversation?: ConversationState;
 }): boolean {
-  const { plan, conversation } = params;
+  const { plan } = params;
   if (inventoryOwnsTurn(params)) return false;
-  if (searchesMutationProposed(plan)) return true;
   if (plan.action.kind !== "PROPOSE_MUTATION") return false;
-  const demandCount =
-    conversation?.lastAuthorizedSnapshot?.activeDemandCount ??
-    conversation?.lastList?.filter((i) => i.type === "demand").length ??
-    0;
-  return demandCount > 0 && !planHasVehicleFacts(plan);
+  return (
+    normalizeCapability(plan.action.capability) === "SEARCHES" &&
+    normalizeOperation(plan.action.operation) === "CLOSE"
+  );
 }

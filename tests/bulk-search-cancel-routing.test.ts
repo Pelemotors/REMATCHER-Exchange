@@ -22,13 +22,31 @@ vi.mock("@/services/assistant/inventory-manage", () => ({
   handleInventoryManageTurn: vi.fn(),
 }));
 vi.mock("@/services/assistant/planner", () => ({
-  planAgentTurn: vi.fn(async () => ({
-    plan: { actionIntent: "read_state", tools: [] },
-    plannerUsed: true,
-    model: "mock",
-    durationMs: 1,
-  })),
+  planAgentTurn: vi.fn(async () => {
+    throw new Error("planAgentTurn must not run after a successful Turn Plan");
+  }),
+  heuristicPlan: vi.fn(),
 }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    demand: {
+      findFirst: vi.fn(async ({ where }: { where: { id?: string; dealerId?: string } }) =>
+        where.dealerId === "dealer-1" ? { id: where.id } : null
+      ),
+      findMany: vi.fn(async () => []),
+    },
+  },
+}));
+vi.mock("@/services/assistant/target-resolution", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/services/assistant/target-resolution")
+  >();
+  return {
+    ...actual,
+    assertDemandOwned: vi.fn(async (dealerId: string) => dealerId === "dealer-1"),
+    assertVehicleOwned: vi.fn(async () => false),
+  };
+});
 vi.mock("@/services/assistant/synthesizer", () => ({
   helpOnlyResponse: () => ({ message: "help", suggestions: [] }),
   synthesizeResponse: vi.fn(),
@@ -77,12 +95,15 @@ function productionLikePlan(): AgentTurnPlan {
       suspendCurrentTask: false,
       resumeTaskReference: null,
       correctedUnderstanding: null,
+      queuedFollowUp: null,
     },
     facts: { add: [], correct: [], reject: [] },
     action: {
       kind: "PROPOSE_MUTATION",
-      capability: "inventory",
-      toolGoal: null,
+      capability: "SEARCHES",
+      operation: "CLOSE",
+      scope: "ALL_AUTHORIZED",
+      toolGoal: "get_my_searches",
       targetReference: "all my searches",
     },
     clarification: { needed: false, reason: null, suggestedQuestion: null },

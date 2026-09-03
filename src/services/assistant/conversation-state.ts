@@ -74,6 +74,13 @@ export interface ConversationState {
     activeDemandCount?: number;
     matchCount?: number;
   };
+  pendingSearchDraft?: {
+    demandId: string;
+    status: "PENDING_CONFIRMATION";
+    sourceText: string;
+    confirmed: import("@/lib/demand-display").DemandConfirmed;
+  };
+  queuedFollowUp?: string;
 }
 
 export interface AssistantCard {

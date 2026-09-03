@@ -37,6 +37,15 @@ type ActionItem = {
   listItem?: ConversationListItem;
 };
 
+function authorizedMatchCount(toolResults: Record<string, unknown>): number {
+  const raw = toolResults.getMyAuthorizedMatches;
+  if (Array.isArray(raw)) return raw.length;
+  if (raw && typeof raw === "object" && "count" in raw) {
+    return Number((raw as { count?: number }).count ?? 0);
+  }
+  return 0;
+}
+
 const METRIC_DUMP_PATTERNS = [
   /דרישות פעילות/i,
   /אימותים ממתינים/i,
@@ -136,9 +145,7 @@ function buildActionItems(
   }
 
   const matchCount =
-    (toolResults.getMyAuthorizedMatches as { count?: number } | undefined)?.count ??
-    state?.authorizedMatches ??
-    0;
+    authorizedMatchCount(toolResults) || state?.authorizedMatches || 0;
   if (matchCount > 0 && !items.some((i) => i.text.includes("התאמה"))) {
     items.push({
       text: "נמצאה התאמה שכדאי לבדוק.",
@@ -343,9 +350,7 @@ function buildDeterministicResponse(
 
   if (intent === "match_inquiry") {
     const matchCount =
-      (toolResults.getMyAuthorizedMatches as { count?: number } | undefined)?.count ??
-      state?.authorizedMatches ??
-      0;
+      authorizedMatchCount(toolResults) || state?.authorizedMatches || 0;
     if (matchCount === 0) {
       return {
         message: "כרגע אין התאמה מאומתת שעומדת בתנאים להצגה.",
@@ -354,6 +359,30 @@ function buildDeterministicResponse(
         lastList: [],
       };
     }
+    const listed = toolResults.getMyAuthorizedMatches;
+    if (Array.isArray(listed) && listed.length) {
+      const lines = listed.slice(0, 8).map((m: { demandTitle?: string; scoreBand?: string }, i: number) => {
+        const title = m.demandTitle ?? "התאמה";
+        const band = m.scoreBand ? ` · ${m.scoreBand}` : "";
+        return `${i + 1}. ${title}${band}`;
+      });
+      return {
+        message: `יש לך ${listed.length} התאמות מאושרות:\n${lines.join("\n")}`,
+        suggestions: [{ label: "התאמות", href: "/matches" }],
+        cards: [],
+        lastList: listed.slice(0, 8).map((m: { id?: string; demandTitle?: string }) => ({
+          id: String(m.id ?? ""),
+          title: m.demandTitle ?? "התאמה",
+          type: "match" as const,
+        })),
+      };
+    }
+    return {
+      message: `יש לך ${matchCount} התאמות מאושרות לבדיקה.`,
+      suggestions: [{ label: "התאמות", href: "/matches" }],
+      cards: [],
+      lastList: [],
+    };
   }
 
   const actions = buildActionItems(toolResults, { skipInventory });

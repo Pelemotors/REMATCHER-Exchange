@@ -65,8 +65,8 @@ function validateStrictSchema(node: JsonSchemaNode, path: string): string[] {
 }
 
 describe("Conversation Core 3.0 — versioning", () => {
-  it("AGENT_VERSION is 3.0 — existing Agent, not a new instance", () => {
-    expect(AGENT_VERSION).toBe("3.0");
+  it("AGENT_VERSION is 3.1 — same Agent, universal capability ownership", () => {
+    expect(AGENT_VERSION).toBe("3.1");
   });
 });
 
@@ -223,6 +223,8 @@ function stubPlan(
   overrides: Partial<{
     kind: AgentTurnPlan["action"]["kind"];
     capability: string | null;
+    operation: string | null;
+    scope: string | null;
     toolGoal: AgentTurnPlan["action"]["toolGoal"];
     facts: AgentTurnPlan["facts"];
     keepCurrentTask: boolean;
@@ -242,11 +244,14 @@ function stubPlan(
       suspendCurrentTask: true,
       resumeTaskReference: null,
       correctedUnderstanding: null,
+      queuedFollowUp: null,
     },
     facts: overrides.facts ?? { add: [], correct: [], reject: [] },
     action: {
       kind: overrides.kind ?? "PROPOSE_MUTATION",
-      capability: overrides.capability ?? "searches",
+      capability: overrides.capability ?? "SEARCHES",
+      operation: overrides.operation ?? "CLOSE",
+      scope: overrides.scope ?? "ALL_AUTHORIZED",
       toolGoal: overrides.toolGoal ?? "get_my_searches",
       targetReference: "all active searches",
     },
@@ -268,7 +273,11 @@ describe("Capability routing — inventory is not the default sink", () => {
   });
 
   it("PROPOSE_MUTATION inventory without vehicle facts does not own the turn", () => {
-    const plan = stubPlan({ capability: "inventory", toolGoal: null });
+    const plan = stubPlan({
+      capability: "INVENTORY",
+      operation: "CREATE",
+      toolGoal: null,
+    });
     expect(
       inventoryOwnsTurn({
         plan,
@@ -281,7 +290,9 @@ describe("Capability routing — inventory is not the default sink", () => {
 
   it("production transcript: 4 searches + inventory workspace → demand closure, not inventory", () => {
     const plan = stubPlan({
-      capability: "inventory",
+      capability: "SEARCHES",
+      operation: "CLOSE",
+      scope: "ALL_AUTHORIZED",
       toolGoal: null,
     });
     const conversation: ConversationState = {
@@ -304,7 +315,7 @@ describe("Capability routing — inventory is not the default sink", () => {
   });
 
   it("capability searches always proposes demand closure", () => {
-    const plan = stubPlan({ capability: "searches" });
+    const plan = stubPlan({ capability: "SEARCHES", operation: "CLOSE" });
     expect(shouldProposeDemandClosure({ plan, conversation: {} })).toBe(true);
     expect(inventoryOwnsTurn({ plan, conversation: {} })).toBe(false);
   });

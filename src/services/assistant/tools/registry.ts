@@ -18,7 +18,7 @@ export const ALL_READ_TOOLS = [
 
 export type ReadToolName = (typeof ALL_READ_TOOLS)[number];
 
-export const AGENT_VERSION = "3.0";
+export const AGENT_VERSION = "3.1";
 
 export type ActionIntent =
   | "read"
@@ -51,6 +51,12 @@ export interface AgentMeta {
   synthesisDurationMs: number;
   fallbackReason: string | null;
   responseType: string;
+  legacyPlannerUsed?: boolean;
+  capability?: string | null;
+  operation?: string | null;
+  scope?: string | null;
+  policyResult?: string;
+  executor?: string;
 }
 
 /** Tool catalog for planner prompt */

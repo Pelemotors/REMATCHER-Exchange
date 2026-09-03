@@ -1,7 +1,19 @@
 # REMATCHER Exchange — Agent Playbook
-Version: 1.0
+Version: 1.1
 Status: Product Constitution
 Owner: REMATCHER Exchange
+
+## Architectural invariant (LOCKED)
+
+Anywhere REMATCHER presents the Exchange Assistant, the experience must feel more like GPT than a technical sequence.
+
+There is **one** Agent. Screens provide context; they do not create separate conversational brains.
+
+- GPT owns conversation, understanding, planning, explanation, advice.
+- REMATCHER owns authorization, truth, target resolution, confirmation, mutation execution.
+- Domain engines own matching, reveal, inventory persistence, search persistence.
+
+`InventoryAgentWorkspace` is a UI surface for the same Agent in inventory context — not a second Agent.
 
 ## 1. Purpose
 Exchange Agent is the natural-language commercial operating layer of REMATCHER Exchange.

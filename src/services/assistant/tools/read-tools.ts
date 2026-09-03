@@ -93,20 +93,50 @@ export async function executeReadTool(
     case "getMyCommercialStatus":
       return getDealerUsageSummary(dealerId);
     case "getMyOpportunities": {
-      const count = await prisma.sellerOpportunity.count({
+      const opps = await prisma.sellerOpportunity.findMany({
         where: { vehicle: { dealerId }, status: "OPEN" },
+        include: {
+          vehicle: { select: { id: true, make: true, model: true, year: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 8,
       });
-      return { count, href: "/opportunities" };
+      return opps.map((o) => ({
+        id: o.id,
+        href: "/opportunities",
+        vehicleTitle:
+          `${o.vehicle.make ?? ""} ${o.vehicle.model ?? ""} ${o.vehicle.year ?? ""}`.trim(),
+        note: "סוחר מאומת ברשת הביע עניין",
+      }));
     }
     case "getMyAuthorizedMatches": {
-      const count = await prisma.candidateMatch.count({
+      const matches = await prisma.candidateMatch.findMany({
         where: {
           demand: { dealerId },
-          status: "VALIDATED",
-          buyerInterests: { none: { dealerId } },
+          status: { in: ["VALIDATED", "PENDING_VALIDATION"] },
+          scoreBand: { in: ["STRONG", "ALTERNATIVE"] },
         },
+        include: {
+          vehicle: true,
+          demand: { select: { id: true, confirmedJson: true } },
+        },
+        orderBy: { score: "desc" },
+        take: 8,
       });
-      return { count, href: "/matches" };
+      const { toBuyerMatchView } = await import("@/lib/privacy-views");
+      const { demandTitle, confirmedFromJson } = await import(
+        "@/lib/demand-display"
+      );
+      return matches.map((m) => ({
+        id: m.id,
+        href: `/matches?focus=${m.id}`,
+        status: m.status,
+        scoreBand: m.scoreBand,
+        explanation: m.explanationText,
+        demandTitle: demandTitle(confirmedFromJson(m.demand.confirmedJson)),
+        demandId: m.demand.id,
+        vehicle: toBuyerMatchView(m.vehicle),
+      }));
     }
     case "getMyInventoryRequiringAttention": {
       const vehicles = await prisma.vehicle.findMany({
@@ -153,12 +183,23 @@ export async function executeReadTool(
         take: 5,
         include: { outcome: true },
       });
-      return reveals.map((r) => ({
-        id: r.id,
-        href: `/reveals/${r.id}`,
-        hasOutcome: Boolean(r.outcome),
-        revealedAt: r.revealedAt.toISOString(),
-      }));
+      return reveals.map((r) => {
+        const summary = (r.matchSummaryJson ?? {}) as Record<string, unknown>;
+        const other =
+          r.buyerDealerId === dealerId
+            ? (r.sellerContactJson as Record<string, unknown> | null)
+            : (r.buyerContactJson as Record<string, unknown> | null);
+        return {
+          id: r.id,
+          href: `/reveals/${r.id}`,
+          hasOutcome: Boolean(r.outcome),
+          revealedAt: r.revealedAt.toISOString(),
+          counterpart: other?.businessName ?? "סוחר מאומת",
+          vehicle: [summary.make, summary.model, summary.year]
+            .filter(Boolean)
+            .join(" "),
+        };
+      });
     }
     case "getMyPendingOutcomes": {
       const reveals = await prisma.reveal.findMany({

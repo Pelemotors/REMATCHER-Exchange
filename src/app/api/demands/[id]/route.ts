@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireVerifiedDealer } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
-import { toPrismaJson } from "@/lib/prisma-json";
-import { runMatchingForDemand } from "@/services/domain/matching-flow";
-import { logAppEvent } from "@/services/notifications";
 import { getEnrichedDemandsForDealer } from "@/services/demand/demand-queries";
 
 export async function GET(
@@ -54,32 +51,16 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (!["ACTIVE", "EXPIRED", "PENDING_CONFIRMATION"].includes(demand.status)) {
+  const { updateDemandForDealer } = await import(
+    "@/services/demand/demand-mutations"
+  );
+  const result = await updateDemandForDealer({
+    dealerId,
+    demandId: id,
+    confirmed,
+  });
+  if (!result.ok) {
     return NextResponse.json({ error: "Cannot edit" }, { status: 400 });
   }
-
-  const updated = await prisma.demand.update({
-    where: { id },
-    data: {
-      confirmedJson: toPrismaJson(confirmed),
-      updatedAt: new Date(),
-      status: demand.status === "EXPIRED" ? "ACTIVE" : demand.status,
-    },
-  });
-
-  await prisma.demandConstraint.deleteMany({ where: { demandId: id } });
-
-  await logAppEvent({
-    eventType: "demand_updated",
-    entityType: "Demand",
-    entityId: id,
-    dealerId,
-    metadata: { fields: Object.keys(confirmed ?? {}) },
-  });
-
-  if (updated.status === "ACTIVE" || updated.status === "PENDING_CONFIRMATION") {
-    await runMatchingForDemand(id);
-  }
-
-  return NextResponse.json(updated);
+  return NextResponse.json(result.demand);
 }

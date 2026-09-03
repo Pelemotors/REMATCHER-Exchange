@@ -34,6 +34,11 @@ export type ToolGoal =
   | "get_my_state"
   | "get_my_validations"
   | "get_my_opportunities"
+  | "get_my_reveals"
+  | "get_my_outcomes"
+  | "get_my_activity"
+  | "get_my_commercial"
+  | "get_my_inventory_attention"
   | "none"
   | null;
 
@@ -50,22 +55,25 @@ export type AgentTurnPlan = {
     answerGoal: string | null;
   };
   conversation: {
-    keepCurrentTask: boolean;
-    suspendCurrentTask: boolean;
-    resumeTaskReference: string | null;
-    correctedUnderstanding: string | null;
-  };
+        keepCurrentTask: boolean;
+        suspendCurrentTask: boolean;
+        resumeTaskReference: string | null;
+        correctedUnderstanding: string | null;
+        queuedFollowUp: string | null;
+      };
   facts: {
     add: FactChange[];
     correct: FactChange[];
     reject: RejectedFact[];
   };
-  action: {
-    kind: TurnActionKind;
-    capability: string | null;
-    toolGoal: ToolGoal;
-    targetReference: string | null;
-  };
+    action: {
+      kind: TurnActionKind;
+      capability: string | null;
+      operation: string | null;
+      scope: string | null;
+      toolGoal: ToolGoal;
+      targetReference: string | null;
+    };
   clarification: {
     needed: boolean;
     reason: string | null;
