@@ -17,7 +17,22 @@ must be documented here.
 
 ---
 
-## 2026-09-01 — Agent Documentation v1
+## 2026-09-03 — Inventory Intelligence 2.6 + mobile contrast
+
+### Changed
+- Existing Agent inventory capability upgraded to **2.6** (no new Agent).
+- Added Inventory Commercial Playbook (`docs/agent/INVENTORY_COMMERCIAL_PLAYBOOK.md` + `inventory-commercial-playbook.ts`).
+- Replaced fixed mileage→B2B questionnaire with commercial-completeness clarification.
+- Expanded conversational updates (mileage, prices, ownership, trim, color).
+- Sold vs unavailable disambiguation (ARCHIVED vs SOLD).
+- Multi-vehicle draft queue support.
+- Inventory Agent Workspace contrast fixed for Brand/UI 2.0 dark (`--rm2-*` tokens).
+
+### Operations logged
+- `inventory_understanding` / `inventory_normalize` (legacy path)
+- `inventory_clarification`
+
+---
 
 ### Added
 Created canonical Agent documentation:

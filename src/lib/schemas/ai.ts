@@ -52,6 +52,7 @@ export const normalizedVehicleSchema = z.object({
   mileage: fieldValueSchema.optional(),
   color: fieldValueSchema.optional(),
   ownershipHand: fieldValueSchema.optional(),
+  ownershipType: fieldValueSchema.optional(),
   retailPrice: fieldValueSchema.optional(),
   b2bPrice: fieldValueSchema.optional(),
   region: fieldValueSchema.optional(),

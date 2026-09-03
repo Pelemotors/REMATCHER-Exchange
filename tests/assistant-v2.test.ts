@@ -13,8 +13,8 @@ import {
 } from "@/services/assistant/commercial-judgment";
 
 describe("Agent V2 architecture", () => {
-  it("exports agent version 2.5", () => {
-    expect(AGENT_VERSION).toBe("2.5");
+  it("exports agent version 2.6", () => {
+    expect(AGENT_VERSION).toBe("2.6");
   });
 
   it("defines all read tools without unconditional base set", () => {
