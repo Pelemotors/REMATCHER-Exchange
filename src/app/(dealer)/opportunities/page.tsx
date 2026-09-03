@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
+  BadgeV2,
   EmptyStateV2,
   MatchCardSkeletonV2,
   PageHeaderV2,
+  Surface,
 } from "@/components/ui/brand-v2";
 import { OpportunityCard } from "@/components/cards/match-card";
 import { COPY } from "@/config/brand";
@@ -53,8 +55,8 @@ export default function OpportunitiesPage() {
     return (
       <div>
         <PageHeaderV2
-          title={COPY.opportunity}
-          subtitle="סוחר מאומת הביע עניין — ללא חשיפת זהות"
+          title="יש עניין ברכבים שלך"
+          subtitle="הזדמנויות מהרשת — ללא חשיפת זהות עד עניין הדדי"
         />
         <div className="space-y-4">
           <MatchCardSkeletonV2 />
@@ -67,9 +69,17 @@ export default function OpportunitiesPage() {
   return (
     <div>
       <PageHeaderV2
-        title={COPY.opportunity}
-        subtitle="סוחר מאומת הביע עניין — ללא חשיפת זהות"
+        title="יש עניין ברכבים שלך"
+        subtitle="הזדמנויות מהרשת — ללא חשיפת זהות עד עניין הדדי"
       />
+
+      <Surface depth="secondary" className="mb-4 px-4 py-3">
+        <BadgeV2 variant="signal">הזדמנות מהרשת</BadgeV2>
+        <p className="mt-2 text-sm text-v2-text-secondary">
+          סוחר מאומת הביע עניין ברכב שלך. זה אותו עולם הזדמנויות כמו התאמות —
+          רק מצד המוכר.
+        </p>
+      </Surface>
 
       {opps.length === 0 ? (
         <EmptyStateV2
@@ -81,8 +91,10 @@ export default function OpportunitiesPage() {
           {opps.map((o) => (
             <OpportunityCard
               key={o.id}
-              headline={COPY.matchStrong}
-              summary={o.explanation?.summary ?? ""}
+              headline="יש עניין ברכב שלך"
+              summary={
+                o.explanation?.summary ?? "הביקוש מתאים לרכב שלך"
+              }
               demandSummary={o.demandSummary}
               vehicleSummary={o.vehicle}
               gaps={o.explanation?.gaps ?? []}

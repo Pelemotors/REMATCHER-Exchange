@@ -78,7 +78,7 @@ export function demandStatusLabel(uxStatus: DemandUxStatus): string {
     case "ACTIVE":
       return "פעיל";
     case "EXPIRING":
-      return "עומד להסתיים";
+      return "מסתיים בקרוב";
     case "EXPIRED":
       return "הסתיים";
     case "CLOSED":

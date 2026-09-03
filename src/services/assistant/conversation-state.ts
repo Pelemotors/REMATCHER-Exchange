@@ -47,6 +47,11 @@ export interface ConversationState {
   goal?: string;
   /** Short-lived turn context — not persisted to dealer profile */
   sessionContext?: SessionContext;
+  /** Explicit object focus from UI — prefer over text inference */
+  focusedObject?: {
+    type: "vehicle" | "demand" | "match";
+    id: string;
+  };
 }
 
 export interface AssistantCard {

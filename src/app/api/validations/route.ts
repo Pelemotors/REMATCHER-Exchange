@@ -32,10 +32,31 @@ export async function GET() {
       status: "PENDING",
     },
     include: {
-      vehicle: true,
-      candidateMatch: { include: { demand: true } },
+      vehicle: {
+        select: { make: true, model: true, year: true },
+      },
+      candidateMatch: {
+        include: {
+          demand: {
+            select: { confirmedJson: true },
+          },
+        },
+      },
     },
   });
 
-  return NextResponse.json(pending);
+  return NextResponse.json(
+    pending.map((v) => ({
+      id: v.id,
+      type: v.type,
+      vehicle: v.vehicle,
+      candidateMatch: v.candidateMatch
+        ? {
+            demand: {
+              confirmedJson: v.candidateMatch.demand?.confirmedJson ?? null,
+            },
+          }
+        : null,
+    }))
+  );
 }

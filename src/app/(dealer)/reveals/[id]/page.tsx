@@ -46,6 +46,7 @@ export default function RevealPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showOutcome, setShowOutcome] = useState(false);
 
   useEffect(() => {
     fetch(`/api/reveals/${params.id}`)
@@ -105,6 +106,7 @@ export default function RevealPage() {
   }
 
   const phone = data.counterparty.phone?.replace(/\D/g, "");
+  const waPhone = phone ? `972${phone.replace(/^0/, "")}` : null;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -113,19 +115,27 @@ export default function RevealPage() {
         className="reveal-hero border border-v2-signal/30 p-6 text-center"
       >
         <ConnectionMotif className="mb-4" />
-        <h2 className="text-h1 font-bold text-v2-warm">{COPY.revealHeadline}</h2>
+        <h2 className="text-h1 font-bold text-v2-warm">נוצר חיבור</h2>
         <p className="mt-2 text-body text-v2-text-secondary">{COPY.revealSub}</p>
+        <p className="mt-3 text-sm text-v2-text-muted">
+          דברו ביניכם. נחזור אליך לעדכון בהמשך.
+        </p>
       </Surface>
 
       {data.matchSummary && (
         <Surface depth="raised" className="p-4">
-          <p className="text-label text-v2-text-muted">סיכום התאמה</p>
+          <p className="text-label text-v2-text-muted">למה נוצר החיבור</p>
           <p className="mt-1 text-h3 font-semibold text-v2-warm">
             {[data.matchSummary.make, data.matchSummary.model]
               .filter(Boolean)
               .join(" ")}{" "}
             {data.matchSummary.year}
           </p>
+          {data.matchSummary.explanation && (
+            <p className="mt-2 text-sm text-v2-text-secondary">
+              {data.matchSummary.explanation}
+            </p>
+          )}
         </Surface>
       )}
 
@@ -148,59 +158,82 @@ export default function RevealPage() {
           </p>
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-col gap-2 pt-2">
+          {waPhone && (
+            <a
+              href={`https://wa.me/${waPhone}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="v2-btn-signal flex w-full items-center justify-center gap-2"
+            >
+              <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
+              פתח WhatsApp
+            </a>
+          )}
           {phone && (
-            <>
+            <div className="flex gap-2">
               <a
                 href={`tel:${phone}`}
-                className="v2-btn-signal flex flex-1 items-center justify-center gap-2"
+                className="v2-btn-secondary flex flex-1 items-center justify-center gap-2"
               >
                 <Phone className="h-4 w-4" strokeWidth={1.75} />
                 התקשר
               </a>
-              <a
-                href={`https://wa.me/972${phone.replace(/^0/, "")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="v2-btn-secondary flex items-center gap-2 px-4"
-                aria-label="WhatsApp"
-              >
-                <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
-              </a>
               <button
                 type="button"
-                className="v2-btn-secondary flex items-center gap-2 px-4"
+                className="v2-btn-secondary flex flex-1 items-center justify-center gap-2"
                 onClick={copyPhone}
-                aria-label="העתק מספר"
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-success" strokeWidth={1.75} />
                 ) : (
                   <Copy className="h-4 w-4" strokeWidth={1.75} />
                 )}
+                העתק מספר
               </button>
-            </>
+            </div>
           )}
         </div>
       </Surface>
 
       {!data.outcome ? (
-        <Surface depth="raised" className="space-y-4 p-4">
-          <h3 className="text-h3 font-semibold text-v2-warm">{COPY.outcome}</h3>
-          <p className="text-small text-v2-text-secondary">{COPY.outcomeBillingNote}</p>
-          <div className="grid gap-2">
-            {OUTCOME_OPTIONS.map((opt) => (
+        <Surface depth="secondary" className="space-y-3 p-4">
+          {!showOutcome ? (
+            <>
+              <p className="text-sm text-v2-text-secondary">
+                אחרי שתדברו — אפשר לעדכן מה קרה. אין לחץ לעשות את זה עכשיו.
+              </p>
               <ButtonV2
-                key={opt.value}
-                variant="secondary"
-                className="w-full justify-start text-right"
-                disabled={submitting}
-                onClick={() => submitOutcome(opt.value)}
+                variant="ghost"
+                className="w-full text-sm"
+                onClick={() => setShowOutcome(true)}
               >
-                {opt.label}
+                עדכון תוצאה (אופציונלי)
               </ButtonV2>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-sm font-semibold text-v2-text-primary">
+                {COPY.outcome}
+              </h3>
+              <p className="text-small text-v2-text-secondary">
+                {COPY.outcomeBillingNote}
+              </p>
+              <div className="grid gap-2">
+                {OUTCOME_OPTIONS.map((opt) => (
+                  <ButtonV2
+                    key={opt.value}
+                    variant="secondary"
+                    className="w-full justify-start text-right"
+                    disabled={submitting}
+                    onClick={() => submitOutcome(opt.value)}
+                  >
+                    {opt.label}
+                  </ButtonV2>
+                ))}
+              </div>
+            </>
+          )}
         </Surface>
       ) : (
         <Surface depth="raised" className="p-4 text-center text-small text-v2-text-secondary">
