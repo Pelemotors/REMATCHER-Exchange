@@ -21,6 +21,7 @@ export interface AssistantContext {
   route: string;
   entityType?: string;
   entityId?: string;
+  mode?: "inventory_management";
 }
 
 export interface AssistantResponse {

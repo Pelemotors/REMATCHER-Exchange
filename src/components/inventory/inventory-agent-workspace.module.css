@@ -1,0 +1,132 @@
+.workspace {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--v2-warm, #1c1917);
+}
+
+.sub {
+  margin-top: 0.15rem;
+  font-size: 0.8125rem;
+  color: var(--v2-text-secondary, #57534e);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.tab {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  background: var(--v2-surface-secondary, #f5f5f4);
+  color: var(--v2-text-primary, #1c1917);
+}
+
+.tabActive {
+  background: var(--v2-signal, #0f766e);
+  color: #fff;
+}
+
+.messages {
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.25rem 0;
+}
+
+.bubbleAssistant {
+  align-self: flex-start;
+  max-width: 95%;
+  white-space: pre-wrap;
+  border-radius: 0.75rem;
+  background: var(--v2-surface-secondary, #f5f5f4);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--v2-text-primary, #1c1917);
+}
+
+.bubbleUser {
+  align-self: flex-end;
+  max-width: 90%;
+  white-space: pre-wrap;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--v2-signal, #0f766e) 12%, transparent);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--v2-text-primary, #1c1917);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.chip {
+  border-radius: 0.5rem;
+  background: var(--v2-surface-secondary, #f5f5f4);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8125rem;
+}
+
+.status {
+  font-size: 0.8125rem;
+  color: var(--v2-text-muted, #78716c);
+}
+
+.confirmRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.25rem;
+  background: inherit;
+}
+
+.input {
+  width: 100%;
+  min-height: 5.5rem;
+  resize: vertical;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--v2-text-muted, #78716c) 35%, transparent);
+  background: var(--v2-surface, #fff);
+  padding: 0.75rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--v2-text-primary, #1c1917);
+}
+
+.importPane {
+  min-width: 0;
+}

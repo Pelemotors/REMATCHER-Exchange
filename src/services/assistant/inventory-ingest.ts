@@ -24,6 +24,10 @@ import { isConfirmation, isRejection } from "@/services/assistant/conversation-s
 type InventoryTurnResponse = AssistantResponse & {
   conversation?: ConversationState;
   meta?: AgentMeta;
+  inventoryMutationResult?: {
+    type: "created" | "updated" | "sold";
+    vehicleId: string;
+  };
 };
 
 function confirmPayload(draft: PendingInventoryDraft) {
@@ -48,11 +52,13 @@ function confirmResponse(
   meta.responseType = "confirmation_inventory";
   return {
     intent: "UPDATE_INVENTORY",
-    message: message ?? `סיכום לשמירה:\n${summary}\n\nלשמור במלאי?`,
+    message: message ?? `הבנתי:\n${summary}\n\nלשמור במלאי?`,
     requiresConfirmation: prep,
+    suggestions: [{ label: "שמור במלאי" }, { label: "ערוך" }],
     conversation: {
       pendingInventoryDraft: confirmed,
       pendingConfirmation: prep,
+      sessionContext: { forcedIntent: "create_inventory", operatingMode: "inventory_management" },
     },
     meta,
   };
@@ -119,17 +125,42 @@ export async function handleInventoryIngestTurn(params: {
           { label: "למלאי", href: "/inventory" },
         ],
         conversation: {
-          sessionContext: { forcedIntent: "create_inventory" },
+          sessionContext: {
+            forcedIntent: "create_inventory",
+            operatingMode: "inventory_management",
+          },
+        },
+        inventoryMutationResult: {
+          type: "created" as const,
+          vehicleId: result.vehicle.id,
         },
         meta,
       };
     }
 
-    if (isRejection(params.message)) {
+    if (isRejection(params.message) || /^ערוך$/i.test(params.message.trim())) {
+      if (/^ערוך$/i.test(params.message.trim())) {
+        return {
+          intent: "UPDATE_INVENTORY",
+          message:
+            "מה לתקן? לדוגמה: ק״מ 62000 או B2B 134000",
+          conversation: {
+            pendingInventoryDraft: existing,
+            pendingConfirmation: confirmPayload(existing),
+            sessionContext: {
+              forcedIntent: "create_inventory",
+              operatingMode: "inventory_management",
+            },
+          },
+          meta,
+        };
+      }
       return {
         intent: "UPDATE_INVENTORY",
         message: "בוטל. הרכב לא נשמר. אפשר לשלוח שוב פרטי רכב מתי שתרצה.",
-        conversation: {},
+        conversation: {
+          sessionContext: { operatingMode: "inventory_management" },
+        },
         meta,
       };
     }

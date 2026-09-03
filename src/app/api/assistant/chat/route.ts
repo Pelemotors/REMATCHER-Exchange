@@ -15,7 +15,12 @@ export async function POST(req: Request) {
 
   const { message, context, conversation } = (await req.json()) as {
     message?: string;
-    context?: { route: string };
+    context?: {
+      route: string;
+      entityType?: string;
+      entityId?: string;
+      mode?: "inventory_management";
+    };
     conversation?: ConversationState;
   };
 

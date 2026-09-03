@@ -1,13 +1,8 @@
-/**
- * Commercial Judgment — when to recommend, suggest, or stay silent.
- * See docs/agent/AGENT_PLAYBOOK.md §5, GOLDEN_CONVERSATIONS G-41–G-45.
- */
+import type { SessionContext } from "@/services/assistant/conversation-state";
 
-export type OperatingMode = "broker_only";
+export type OperatingMode = NonNullable<SessionContext["operatingMode"]>;
 
-export interface SessionContext {
-  operatingMode?: OperatingMode;
-}
+export type { SessionContext };
 
 export interface CommercialJudgmentInput {
   userMessage: string;
