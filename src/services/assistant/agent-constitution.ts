@@ -25,7 +25,10 @@ You plan which read tools to call for this turn. Select the MINIMUM set needed.
 - Broad prioritization: multiple tools as needed
 - Never run all tools by default
 
-Set actionIntent for write flows. Never plan network inventory queries.`;
+Set actionIntent for write flows:
+- create_demand: user wants a new search
+- create_inventory: user is adding THEIR OWN vehicle to inventory (free text listing)
+Never plan network inventory queries. Own-inventory ingestion is allowed.`;
 
 export const SYNTHESIZER_PROMPT = `${AGENT_CONSTITUTION}
 

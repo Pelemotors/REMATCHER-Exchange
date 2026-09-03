@@ -25,6 +25,34 @@ function filterValidTools(tools: string[]): ReadToolName[] {
 export function heuristicPlan(message: string): AgentPlan {
   const m = message.trim();
 
+  if (
+    /רשום לי רכב|הוסף.*למלאי|הוסף רכב|יש לי במלאי|תכניס למלאי|הוספת מלאי|הוסף עם הסוכן/i.test(
+      m
+    )
+  ) {
+    return {
+      tools: [],
+      actionIntent: "create_inventory",
+      referencedObjectId: null,
+      goal: "create_inventory_draft",
+    };
+  }
+
+  // Free-text vehicle listing (own inventory) — make/model-ish + year/price cues
+  if (
+    !/פתח|תחפש|חיפוש|ברשת|למישהו/i.test(m) &&
+    /\b(20\d{2}|'\d{2})\b|\d+\s*אלף|\d{5,7}/.test(m) &&
+    /[א-תa-zA-Z]{2,}/.test(m) &&
+    m.length > 8
+  ) {
+    return {
+      tools: [],
+      actionIntent: "create_inventory",
+      referencedObjectId: null,
+      goal: "create_inventory_draft",
+    };
+  }
+
   if (/פתח|תחפש|חיפוש ל|חיפוש חדש|תפתח לי חיפוש/i.test(m)) {
     return {
       tools: [],
@@ -230,6 +258,7 @@ export async function planAgentTurn(
               "update_demand",
               "confirm_validation",
               "mark_sold",
+              "create_inventory",
               "help",
             ],
           },

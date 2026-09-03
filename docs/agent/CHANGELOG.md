@@ -238,6 +238,26 @@ Removed from deterministic bypass set. Heuristic planner still assigns `general_
 
 ---
 
+## 2026-09-03 — Agent 2.4 Own-inventory coaching
+
+### Added
+- Structured `pendingInventoryDraft` (DRAFT | WAITING_CONFIRMATION)
+- Soft clarifying questions: mileage then B2B (once each; skip OK)
+- Identity hard gate (make/model/year)
+- Structured summary before confirm
+- Shared `createVehicleForDealer` domain path for API + Agent
+- Inventory CTA opens Assistant in forced `create_inventory` mode
+- Golden G-46
+
+### Invariants
+- I-07: never invent missing fields
+- No second write path for vehicle create
+
+### Tests
+- `tests/inventory-agent-draft.test.ts`
+
+---
+
 ## Documentation Rule
 Any future Agent behavior change must:
 1. Update relevant documentation.

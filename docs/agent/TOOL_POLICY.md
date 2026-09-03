@@ -215,6 +215,23 @@ Requires explicit confirmation.
 
 ---
 
+### createInventoryDraft / pendingInventoryDraft
+Own-inventory ingestion from free text is allowed.
+- Structured state only: `fields`, `sourceText`, `askedGaps[]`, `status: DRAFT | WAITING_CONFIRMATION`
+- Hard gate: make + model + year required before confirmation
+- Soft asks (once each): mileage, then B2B price — skip allowed
+- Structured summary required before create
+- Amendments during confirmation return to DRAFT — never create-then-edit
+
+---
+
+### executeConfirmInventoryCreate
+Requires explicit confirmation.
+**Must** call the same domain `createVehicleForDealer` service as the manual inventory API.
+Do not duplicate `prisma.vehicle.create` in the Agent write path.
+
+---
+
 ## 5. Interest Actions
 Any Buyer/Seller Interested action:
 - must use deterministic Exchange service

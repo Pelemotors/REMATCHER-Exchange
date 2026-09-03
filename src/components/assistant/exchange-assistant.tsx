@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { MessageSquare, Send } from "lucide-react";
@@ -35,6 +35,13 @@ interface PendingConfirmation {
   payload: Record<string, unknown>;
 }
 
+export const OPEN_ASSISTANT_EVENT = "rematcher:open-assistant";
+
+export type OpenAssistantDetail = {
+  mode?: "create_inventory";
+  seedMessage?: string;
+};
+
 export function ExchangeAssistant() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -45,6 +52,68 @@ export function ExchangeAssistant() {
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
   const conversationRef = useRef<ConversationState>({});
+
+  const send = useCallback(
+    async (text: string, conversationOverride?: ConversationState) => {
+      if (!text.trim() || loading) return;
+
+      setMessages((m) => [...m, { role: "user", text }]);
+      setInput("");
+      setLoading(true);
+
+      const conv = conversationOverride ?? conversationRef.current;
+
+      const res = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          context: { route: pathname },
+          conversation: conv,
+        }),
+      });
+      const data = await res.json();
+      setLoading(false);
+
+      if (data.conversation) {
+        setConversation(data.conversation);
+        conversationRef.current = data.conversation;
+      }
+
+      if (data.requiresConfirmation) {
+        setPendingConfirmation(data.requiresConfirmation);
+      } else {
+        setPendingConfirmation(null);
+      }
+
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text: data.message ?? "לא הצלחתי לעבד את הבקשה.",
+          suggestions: data.suggestions,
+          cards: data.cards,
+        },
+      ]);
+    },
+    [loading, pathname]
+  );
+
+  const openInCreateInventoryMode = useCallback(() => {
+    const seeded: ConversationState = {
+      sessionContext: { forcedIntent: "create_inventory" },
+    };
+    setConversation(seeded);
+    conversationRef.current = seeded;
+    setPendingConfirmation(null);
+    setMessages([
+      {
+        role: "assistant",
+        text: "שלח את פרטי הרכב בטקסט חופשי (לדוגמה: טויוטה קורולה 2022 62 אלף 139000).",
+      },
+    ]);
+    setOpen(true);
+  }, []);
 
   async function openAssistant() {
     setOpen(true);
@@ -69,46 +138,18 @@ export function ExchangeAssistant() {
     }
   }
 
-  async function send(text: string) {
-    if (!text.trim() || loading) return;
-
-    setMessages((m) => [...m, { role: "user", text }]);
-    setInput("");
-    setLoading(true);
-
-    const res = await fetch("/api/assistant/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: text,
-        context: { route: pathname },
-        conversation: conversationRef.current,
-      }),
-    });
-    const data = await res.json();
-    setLoading(false);
-
-    if (data.conversation) {
-      setConversation(data.conversation);
-      conversationRef.current = data.conversation;
+  useEffect(() => {
+    function onOpen(e: Event) {
+      const detail = (e as CustomEvent<OpenAssistantDetail>).detail;
+      if (detail?.mode === "create_inventory") {
+        openInCreateInventoryMode();
+        return;
+      }
+      void openAssistant();
     }
-
-    if (data.requiresConfirmation) {
-      setPendingConfirmation(data.requiresConfirmation);
-    } else {
-      setPendingConfirmation(null);
-    }
-
-    setMessages((m) => [
-      ...m,
-      {
-        role: "assistant",
-        text: data.message ?? "לא הצלחתי לעבד את הבקשה.",
-        suggestions: data.suggestions,
-        cards: data.cards,
-      },
-    ]);
-  }
+    window.addEventListener(OPEN_ASSISTANT_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, onOpen);
+  }, [openInCreateInventoryMode]);
 
   return (
     <>

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { toPrismaJson } from "@/lib/prisma-json";
-import { normalizeVehicle, normalizedToVehicleFields } from "@/services/ai";
+import { createVehicleForDealer } from "@/services/inventory/create-vehicle";
 
 export async function GET() {
   const session = await auth();
@@ -27,38 +26,33 @@ export async function POST(req: Request) {
   const body = await req.json();
   const { rawInput, ...manualFields } = body;
 
-  let fields = {
-    make: manualFields.make ?? null,
-    model: manualFields.model ?? null,
-    trim: manualFields.trim ?? null,
-    year: manualFields.year ?? null,
-    mileage: manualFields.mileage ?? null,
-    color: manualFields.color ?? null,
-    ownershipHand: manualFields.ownershipHand ?? null,
-    retailPrice: manualFields.retailPrice ?? null,
-    b2bPrice: manualFields.b2bPrice ?? null,
-    region: manualFields.region ?? null,
-    fieldProvenance: null as unknown,
-  };
-
-  if (rawInput) {
-    const normalized = await normalizeVehicle(rawInput, session.user.id);
-    fields = normalizedToVehicleFields(normalized);
-    fields.fieldProvenance = normalized;
-  }
-
-  const vehicle = await prisma.vehicle.create({
-    data: {
-      dealerId: session.user.dealerId,
-      rawInput: rawInput ?? null,
-      ...fields,
-      fieldProvenance: fields.fieldProvenance
-        ? toPrismaJson(fields.fieldProvenance)
-        : undefined,
-      freshnessState: "FRESH",
-      lastInventoryUpdate: new Date(),
-    },
+  const result = await createVehicleForDealer({
+    dealerId: session.user.dealerId,
+    userId: session.user.id,
+    rawInput: rawInput ?? null,
+    normalizeFromRaw: Boolean(rawInput),
+    fields: rawInput
+      ? undefined
+      : {
+          make: manualFields.make ?? null,
+          model: manualFields.model ?? null,
+          trim: manualFields.trim ?? null,
+          year: manualFields.year ?? null,
+          mileage: manualFields.mileage ?? null,
+          color: manualFields.color ?? null,
+          ownershipHand: manualFields.ownershipHand ?? null,
+          retailPrice: manualFields.retailPrice ?? null,
+          b2bPrice: manualFields.b2bPrice ?? null,
+          region: manualFields.region ?? null,
+        },
   });
 
-  return NextResponse.json(vehicle);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.message, code: result.error },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json(result.vehicle);
 }
