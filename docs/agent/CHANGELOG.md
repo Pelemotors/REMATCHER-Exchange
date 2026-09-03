@@ -17,6 +17,22 @@ must be documented here.
 
 ---
 
+## 2026-09-03 — Agent Conversation Freedom 2.7
+
+### Changed
+- Existing Agent bumped to **2.7** (no new Agent).
+- Added shared **Turn Interpreter** (`turn-interpreter.ts`) — runs before pending inventory locks.
+- Pending draft/mutation treated as **context**, not next-action prison.
+- Corrections, wording fixes, out-of-order facts, topic switch suspend/resume.
+- Repeated-question prevention + observability events.
+- Identity summary shows model; year wording `איזו שנה?`.
+
+### Operations / events
+- AiOperationLog: `turn_interpret`
+- AppEvent: `agent_correction_detected`, `agent_topic_switch`, `agent_repeated_question_prevented`, `agent_state_resumed`
+
+---
+
 ## 2026-09-03 — Inventory Intelligence 2.6 + mobile contrast
 
 ### Changed

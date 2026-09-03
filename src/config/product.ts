@@ -87,6 +87,7 @@ export const AI_PROMPT_VERSIONS = {
   inventoryNormalizer: "inventory-normalizer-v2",
   inventoryClarification: "inventory-clarification-v1",
   inventoryUnderstanding: "inventory-understanding-v1",
+  turnInterpreter: "turn-interpreter-v1",
   matchExplainer: "match-explainer-v1",
 } as const;
 
@@ -98,5 +99,7 @@ export const AI_MODELS = {
     process.env.OPENAI_INVENTORY_CLARIFICATION_MODEL ?? "gpt-4o-mini",
   inventoryUnderstanding:
     process.env.OPENAI_INVENTORY_UNDERSTANDING_MODEL ?? "gpt-4o-mini",
+  turnInterpreter:
+    process.env.OPENAI_TURN_INTERPRETER_MODEL ?? "gpt-4o-mini",
   matchExplainer: process.env.OPENAI_MATCH_EXPLAINER_MODEL ?? "gpt-4o-mini",
 } as const;

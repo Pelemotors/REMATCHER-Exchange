@@ -6,25 +6,28 @@ import type {
 import type { AgentMeta } from "@/services/assistant/tools/registry";
 import type { AssistantResponse } from "@/services/assistant/orchestrator";
 import {
-  advanceDraftAfterGap,
   applyFields,
   buildStructuredSummary,
   hasInventoryIdentity,
   identityPartialMessage,
   nextGapToAsk,
   parseAmendment,
-  parseGapAnswer,
   readyForConfirmation,
-  type InventoryGapId,
 } from "@/services/assistant/inventory-draft";
 import { decideInventoryClarification } from "@/services/assistant/inventory-clarify";
 import {
   createInventoryDraftFromText,
   executeConfirmInventoryCreate,
 } from "@/services/assistant/tools/action-tools";
-import { isConfirmation, isRejection } from "@/services/assistant/conversation-state";
-import { normalizeVehicle } from "@/services/ai/inventory-normalizer";
-import { fieldsFromNormalized } from "@/services/inventory/create-vehicle";
+import type { StructuredTurnEvent } from "@/services/assistant/turn-event";
+import {
+  applyTurnToConversationState,
+  draftFromTurnFacts,
+  mergeFactsIntoDraft,
+  shouldPreventRepeatedQuestion,
+} from "@/services/assistant/turn-reconcile";
+import { logAppEvent } from "@/services/notifications";
+import { AGENT_VERSION } from "@/services/assistant/tools/registry";
 
 type InventoryTurnResponse = AssistantResponse & {
   conversation?: ConversationState;
@@ -43,9 +46,22 @@ function confirmPayload(draft: PendingInventoryDraft) {
   };
 }
 
+function withTurnMemory(
+  conversation: ConversationState,
+  turn: StructuredTurnEvent | undefined,
+  question?: { kind: string; text: string }
+): ConversationState {
+  if (!turn) return conversation;
+  return applyTurnToConversationState(conversation, turn, {
+    agentQuestion: question,
+  });
+}
+
 function confirmResponse(
   draft: PendingInventoryDraft,
   meta: AgentMeta,
+  baseConversation: ConversationState,
+  turn: StructuredTurnEvent | undefined,
   message?: string
 ): InventoryTurnResponse {
   const summary = buildStructuredSummary(draft);
@@ -59,6 +75,21 @@ function confirmResponse(
     !draft.fields.color && !draft.fields.trim
       ? "\nאם תרצה, אפשר להשלים אחר כך גם רמת גימור וצבע."
       : "";
+  const conversation = withTurnMemory(
+    {
+      ...baseConversation,
+      pendingInventoryDraft: confirmed,
+      pendingConfirmation: prep,
+      sessionContext: {
+        ...baseConversation.sessionContext,
+        forcedIntent: "create_inventory",
+        operatingMode: "inventory_management",
+      },
+      repeatedQuestionCount: 0,
+    },
+    turn,
+    { kind: "confirm_create", text: "לשמור במלאי?" }
+  );
   return {
     intent: "UPDATE_INVENTORY",
     message:
@@ -66,37 +97,97 @@ function confirmResponse(
       `מעולה.\n${summary}${optionalHint}\n\nלשמור במלאי?`,
     requiresConfirmation: prep,
     suggestions: [{ label: "שמור במלאי" }, { label: "ערוך" }],
-    conversation: {
-      pendingInventoryDraft: confirmed,
-      pendingConfirmation: prep,
-      sessionContext: {
-        forcedIntent: "create_inventory",
-        operatingMode: "inventory_management",
-      },
-    },
+    conversation,
     meta,
   };
 }
 
-async function askGapResponse(
+async function askNextClarification(
   draft: PendingInventoryDraft,
   meta: AgentMeta,
   userId: string,
+  baseConversation: ConversationState,
+  turn: StructuredTurnEvent | undefined,
   prefix?: string
 ): Promise<InventoryTurnResponse> {
-  const decision = await decideInventoryClarification({ draft, userId });
-  if (!decision.gap) return confirmResponse(draft, meta);
-  meta.responseType = "inventory_ask_gap";
-  if (decision.source === "ai") {
-    meta.tools = [...meta.tools, "inventory_clarification"];
+  const gap = nextGapToAsk(draft);
+
+  if (!gap) return confirmResponse(draft, meta, baseConversation, turn);
+
+  const gapKind = `gap_${gap}`;
+  if (turn && shouldPreventRepeatedQuestion(baseConversation, gapKind, turn)) {
+    meta.responseType = "inventory_flexible_fallback";
+    await logAppEvent({
+      eventType: "agent_repeated_question_prevented",
+      dealerId: undefined,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        gap,
+        relation: turn.relation,
+        failure: "REPEATED_QUESTION",
+      },
+    });
+    const conversation = withTurnMemory(
+      {
+        ...baseConversation,
+        pendingInventoryDraft: draft,
+        sessionContext: {
+          ...baseConversation.sessionContext,
+          forcedIntent: "create_inventory",
+          operatingMode: "inventory_management",
+        },
+        repeatedQuestionCount: 0,
+      },
+      turn
+    );
+    return {
+      intent: "UPDATE_INVENTORY",
+      message:
+        "לא הצלחתי להבין את התיקון. כתוב לי איך נכון להבין את הרכב, ואני אעדכן.",
+      conversation,
+      suggestions: [{ label: "דלג" }, { label: "ערוך" }],
+      meta,
+    };
   }
+
+  let question: string;
+  if (gap === "year") {
+    question = identityPartialMessage(draft.fields);
+    const preferred = baseConversation.preferredClarificationWording?.year;
+    if (preferred) {
+      question = question.replace(/איזו שנה\?/, preferred);
+    }
+    if (prefix) question = `${prefix}\n${question}`;
+  } else {
+    const decision = await decideInventoryClarification({ draft, userId });
+    if (!decision.gap) {
+      return confirmResponse(draft, meta, baseConversation, turn);
+    }
+    question = `${prefix ? prefix + "\n" : ""}${decision.question}`;
+    if (decision.source === "ai") {
+      meta.tools = [...meta.tools, "inventory_clarification"];
+    }
+  }
+
+  meta.responseType = "inventory_ask_gap";
+  const conversation = withTurnMemory(
+    {
+      ...baseConversation,
+      pendingInventoryDraft: { ...draft, lastAskedGap: gap },
+      sessionContext: {
+        ...baseConversation.sessionContext,
+        forcedIntent: "create_inventory",
+        operatingMode: "inventory_management",
+      },
+    },
+    turn,
+    { kind: gapKind, text: question }
+  );
+
   return {
     intent: "UPDATE_INVENTORY",
-    message: `${prefix ? prefix + "\n" : ""}${decision.question}`,
-    conversation: {
-      pendingInventoryDraft: { ...draft, lastAskedGap: decision.gap },
-      sessionContext: { forcedIntent: "create_inventory" },
-    },
+    message: question,
+    conversation,
     suggestions: [{ label: "לא יודע" }, { label: "דלג" }],
     meta,
   };
@@ -111,22 +202,83 @@ function promoteQueued(
   return { ...next, queuedDrafts: rest };
 }
 
-/** Continue or start inventory draft turn */
+/**
+ * Inventory create accompaniment — facts-first, turn-event driven.
+ * parseGapAnswer is NOT the turn owner.
+ */
 export async function handleInventoryIngestTurn(params: {
   dealerId: string;
   userId: string;
   message: string;
   conversation?: ConversationState;
   meta: AgentMeta;
-  /** Fresh start even if message looks like demand */
   forceStart?: boolean;
+  turn?: StructuredTurnEvent;
 }): Promise<InventoryTurnResponse | null> {
   const { meta } = params;
-  const existing = params.conversation?.pendingInventoryDraft;
+  const turn = params.turn;
+  let baseConversation: ConversationState = {
+    ...params.conversation,
+  };
+  const existing = baseConversation.pendingInventoryDraft;
+
+  // --- WORDING CORRECTION (no field mutation) ---
+  if (turn?.relation === "WORDING_CORRECTION" && existing) {
+    await logAppEvent({
+      eventType: "agent_correction_detected",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        relation: "WORDING_CORRECTION",
+        pending: true,
+      },
+    });
+    const wording = turn.preferredWording ?? "איזו שנה?";
+    baseConversation = {
+      ...baseConversation,
+      preferredClarificationWording: {
+        ...baseConversation.preferredClarificationWording,
+        year: wording.includes("?") ? wording : `${wording}?`,
+      },
+    };
+    return askNextClarification(
+      existing,
+      meta,
+      params.userId,
+      baseConversation,
+      turn,
+      "צודק."
+    );
+  }
+
+  // --- Mode / search rejection while drafting ---
+  if (
+    turn?.relation === "CORRECTION" &&
+    turn.rejectedInterpretations?.includes("search_demand") &&
+    existing
+  ) {
+    await logAppEvent({
+      eventType: "agent_correction_detected",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        relation: "CORRECTION",
+        rejected: "search_demand",
+      },
+    });
+    return askNextClarification(
+      existing,
+      meta,
+      params.userId,
+      baseConversation,
+      turn,
+      "ברור — ממשיכים עם המלאי."
+    );
+  }
 
   // --- WAITING_CONFIRMATION ---
   if (existing?.status === "WAITING_CONFIRMATION") {
-    if (isConfirmation(params.message)) {
+    if (turn?.confirms || turn?.relation === "CONFIRMATION") {
       const result = await executeConfirmInventoryCreate(
         params.dealerId,
         existing
@@ -136,7 +288,10 @@ export async function handleInventoryIngestTurn(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message: result.message ?? "לא הצלחתי לשמור את הרכב.",
-          conversation: { pendingInventoryDraft: existing },
+          conversation: withTurnMemory(
+            { ...baseConversation, pendingInventoryDraft: existing },
+            turn
+          ),
           meta,
         };
       }
@@ -144,17 +299,24 @@ export async function handleInventoryIngestTurn(params: {
         `${result.vehicle.make ?? ""} ${result.vehicle.model ?? ""} ${result.vehicle.year ?? ""}`.trim();
       const nextQueued = promoteQueued(existing);
       if (nextQueued) {
-        if (readyForConfirmation(nextQueued) && hasInventoryIdentity(nextQueued.fields)) {
+        if (
+          readyForConfirmation(nextQueued) &&
+          hasInventoryIdentity(nextQueued.fields)
+        ) {
           return confirmResponse(
             nextQueued,
             meta,
+            baseConversation,
+            turn,
             `נשמר${title ? `: ${title}` : ""}.\nהבא:\n${buildStructuredSummary(nextQueued)}\n\nלשמור גם אותו?`
           );
         }
-        return askGapResponse(
+        return askNextClarification(
           nextQueued,
           meta,
           params.userId,
+          baseConversation,
+          turn,
           `נשמר${title ? `: ${title}` : ""}. ממשיכים לרכב הבא.`
         );
       }
@@ -165,12 +327,15 @@ export async function handleInventoryIngestTurn(params: {
           { label: "הוסף עוד רכב" },
           { label: "למלאי", href: "/inventory" },
         ],
-        conversation: {
-          sessionContext: {
-            forcedIntent: "create_inventory",
-            operatingMode: "inventory_management",
+        conversation: withTurnMemory(
+          {
+            sessionContext: {
+              forcedIntent: "create_inventory",
+              operatingMode: "inventory_management",
+            },
           },
-        },
+          turn
+        ),
         inventoryMutationResult: {
           type: "created" as const,
           vehicleId: result.vehicle.id,
@@ -179,31 +344,61 @@ export async function handleInventoryIngestTurn(params: {
       };
     }
 
-    if (isRejection(params.message) || /^ערוך$/i.test(params.message.trim())) {
+    if (turn?.cancels || turn?.relation === "CANCEL") {
       if (/^ערוך$/i.test(params.message.trim())) {
         return {
           intent: "UPDATE_INVENTORY",
           message:
             "מה לתקן? לדוגמה: ק״מ 62000, מחיר לסוחר 134000, יד 1, צבע לבן",
-          conversation: {
-            pendingInventoryDraft: existing,
-            pendingConfirmation: confirmPayload(existing),
-            sessionContext: {
-              forcedIntent: "create_inventory",
-              operatingMode: "inventory_management",
+          conversation: withTurnMemory(
+            {
+              ...baseConversation,
+              pendingInventoryDraft: existing,
+              pendingConfirmation: confirmPayload(existing),
             },
-          },
+            turn
+          ),
           meta,
         };
       }
       return {
         intent: "UPDATE_INVENTORY",
         message: "בוטל. הרכב לא נשמר. אפשר לשלוח שוב מתי שתרצה.",
-        conversation: {
-          sessionContext: { operatingMode: "inventory_management" },
-        },
+        conversation: withTurnMemory(
+          {
+            sessionContext: { operatingMode: "inventory_management" },
+          },
+          turn
+        ),
         meta,
       };
+    }
+
+    // Merge facts / amendments while confirming
+    if (
+      turn?.extractedFacts ||
+      turn?.correctedFacts ||
+      turn?.relation === "CORRECTION" ||
+      turn?.relation === "ADDITIONAL_INFO"
+    ) {
+      const updated = mergeFactsIntoDraft(existing, turn);
+      if (readyForConfirmation(updated)) {
+        return confirmResponse(
+          updated,
+          meta,
+          baseConversation,
+          turn,
+          `עדכנתי.\n${buildStructuredSummary(updated)}\n\nלשמור במלאי?`
+        );
+      }
+      return askNextClarification(
+        updated,
+        meta,
+        params.userId,
+        baseConversation,
+        turn,
+        "עדכנתי."
+      );
     }
 
     const amendment = parseAmendment(params.message);
@@ -213,54 +408,106 @@ export async function handleInventoryIngestTurn(params: {
         return confirmResponse(
           updated,
           meta,
+          baseConversation,
+          turn,
           `עדכנתי.\n${buildStructuredSummary(updated)}\n\nלשמור במלאי?`
         );
       }
-      return askGapResponse(updated, meta, params.userId, "עדכנתי.");
+      return askNextClarification(
+        updated,
+        meta,
+        params.userId,
+        baseConversation,
+        turn,
+        "עדכנתי."
+      );
     }
 
-    return confirmResponse(existing, meta);
+    return confirmResponse(existing, meta, baseConversation, turn);
   }
 
-  // --- DRAFT ---
+  // --- DRAFT: merge turn facts (any order) ---
   if (existing?.status === "DRAFT") {
-    if (!hasInventoryIdentity(existing.fields)) {
-      return mergeIdentityAnswer(params, existing);
+    let draft = existing;
+
+    if (
+      turn &&
+      (turn.extractedFacts ||
+        turn.correctedFacts ||
+        turn.skipRequested ||
+        turn.relation === "CORRECTION" ||
+        turn.relation === "ADDITIONAL_INFO" ||
+        turn.relation === "ANSWER" ||
+        turn.relation === "SKIP")
+    ) {
+      draft = mergeFactsIntoDraft(existing, turn);
+      draft = {
+        ...draft,
+        sourceText: `${existing.sourceText}\n${params.message}`.trim(),
+      };
+    } else if (turn?.relation === "UNKNOWN" || !turn) {
+      // Soft merge via create path helpers without wiping known facts
+      const started = await createInventoryDraftFromText(
+        params.userId,
+        params.message
+      );
+      draft = mergeFactsIntoDraft(existing, {
+        relation: "ADDITIONAL_INFO",
+        intent: "continue_current",
+        targetCapability: "inventory",
+        extractedFacts: {
+          make: started.draft.fields.make ?? undefined,
+          model: started.draft.fields.model ?? undefined,
+          year: started.draft.fields.year ?? undefined,
+          mileage: started.draft.fields.mileage ?? undefined,
+          b2bPrice: started.draft.fields.b2bPrice ?? undefined,
+          retailPrice: started.draft.fields.retailPrice ?? undefined,
+          color: started.draft.fields.color ?? undefined,
+          ownershipHand: started.draft.fields.ownershipHand ?? undefined,
+          ownershipType: started.draft.fields.ownershipType ?? undefined,
+          trim: started.draft.fields.trim ?? undefined,
+        },
+        confirms: false,
+        cancels: false,
+        skipRequested: false,
+        resumeRequested: false,
+        source: "fallback",
+      });
     }
 
-    const gap = nextGapToAsk(existing);
-    if (gap) {
-      const parsed = parseGapAnswer(gap, params.message);
-      if (parsed === null) {
-        const decision = await decideInventoryClarification({
-          draft: existing,
-          userId: params.userId,
-        });
-        return {
-          intent: "UPDATE_INVENTORY",
-          message: `לא תפסתי. ${decision.question}`,
-          conversation: {
-            pendingInventoryDraft: existing,
-            sessionContext: { forcedIntent: "create_inventory" },
-          },
-          suggestions: [{ label: "לא יודע" }, { label: "דלג" }],
-          meta,
-        };
-      }
-      const advanced = advanceDraftAfterGap(existing, gap, parsed);
-      if (readyForConfirmation(advanced)) {
-        return confirmResponse(advanced, meta);
-      }
-      return askGapResponse(advanced, meta, params.userId, "קיבלתי.");
+    if (!hasInventoryIdentity(draft.fields)) {
+      return askNextClarification(
+        draft,
+        meta,
+        params.userId,
+        baseConversation,
+        turn
+      );
     }
-
-    return confirmResponse(existing, meta);
+    if (readyForConfirmation(draft)) {
+      return confirmResponse(draft, meta, baseConversation, turn);
+    }
+    const prefix =
+      turn?.relation === "CORRECTION"
+        ? "עדכנתי."
+        : turn?.extractedFacts || turn?.correctedFacts
+          ? "קיבלתי."
+          : undefined;
+    return askNextClarification(
+      draft,
+      meta,
+      params.userId,
+      baseConversation,
+      turn,
+      prefix
+    );
   }
 
   // --- Start new draft ---
   if (
     params.forceStart ||
-    params.conversation?.sessionContext?.forcedIntent === "create_inventory" ||
+    baseConversation.sessionContext?.forcedIntent === "create_inventory" ||
+    turn?.intent === "create_inventory" ||
     params.message === "הוסף עוד רכב"
   ) {
     if (
@@ -272,130 +519,123 @@ export async function handleInventoryIngestTurn(params: {
         intent: "UPDATE_INVENTORY",
         message:
           "כתוב לי את הרכב כמו שנוח לך — למשל: קורולה 22, 62 אלף, 134 לסוחר.",
-        conversation: {
-          sessionContext: { forcedIntent: "create_inventory" },
-        },
+        conversation: withTurnMemory(
+          {
+            sessionContext: { forcedIntent: "create_inventory" },
+          },
+          turn
+        ),
         meta,
       };
     }
-    return startFromText(params);
+
+    // Prefer turn facts when rich enough; else full normalize path
+    if (
+      turn &&
+      (turn.extractedFacts || turn.correctedFacts) &&
+      (turn.extractedFacts?.make ||
+        turn.extractedFacts?.model ||
+        turn.correctedFacts?.make ||
+        turn.correctedFacts?.model)
+    ) {
+      let draft = draftFromTurnFacts(params.message, turn);
+      // Enrich via normalizer without losing turn exclusions
+      const started = await createInventoryDraftFromText(
+        params.userId,
+        params.message
+      );
+      draft = mergeFactsIntoDraft(started.draft, turn);
+      draft = {
+        ...draft,
+        queuedDrafts: started.draft.queuedDrafts,
+        sourceText: params.message,
+      };
+
+      meta.responseType = hasInventoryIdentity(draft.fields)
+        ? readyForConfirmation(draft)
+          ? "inventory_confirm"
+          : "inventory_ask_gap"
+        : "inventory_need_identity";
+
+      if (!hasInventoryIdentity(draft.fields)) {
+        return askNextClarification(
+          draft,
+          meta,
+          params.userId,
+          baseConversation,
+          turn
+        );
+      }
+      if (readyForConfirmation(draft)) {
+        return confirmResponse(draft, meta, baseConversation, turn);
+      }
+      return askNextClarification(
+        draft,
+        meta,
+        params.userId,
+        baseConversation,
+        turn
+      );
+    }
+
+    return startFromText(params, turn, baseConversation);
   }
 
   return null;
 }
 
-async function mergeIdentityAnswer(
+async function startFromText(
   params: {
     dealerId: string;
     userId: string;
     message: string;
     meta: AgentMeta;
   },
-  existing: PendingInventoryDraft
+  turn: StructuredTurnEvent | undefined,
+  baseConversation: ConversationState
 ): Promise<InventoryTurnResponse> {
-  const gap = nextGapToAsk(existing) as InventoryGapId | null;
-  // Prefer answering the missing identity field from the short reply
-  if (gap && (gap === "make" || gap === "model" || gap === "year")) {
-    const parsed = parseGapAnswer(gap, params.message);
-    if (parsed && parsed !== "skip") {
-      const merged = applyFields(existing, parsed);
-      if (!hasInventoryIdentity(merged.fields)) {
-        return {
-          intent: "UPDATE_INVENTORY",
-          message: identityPartialMessage(merged.fields),
-          conversation: {
-            pendingInventoryDraft: merged,
-            sessionContext: { forcedIntent: "create_inventory" },
-          },
-          meta: params.meta,
-        };
-      }
-      if (readyForConfirmation(merged)) {
-        return confirmResponse(merged, params.meta);
-      }
-      return askGapResponse(merged, params.meta, params.userId, "הבנתי.");
-    }
-  }
-
-  // Merge full re-normalization onto existing known fields (no wipe)
-  const normalized = await normalizeVehicle(params.message, params.userId);
-  const mapped = fieldsFromNormalized(normalized);
-  const patch: Partial<typeof existing.fields> = {};
-  if (mapped.make && !existing.fields.make) patch.make = mapped.make;
-  if (mapped.model && !existing.fields.model) patch.model = mapped.model;
-  if (mapped.year && !existing.fields.year) patch.year = mapped.year;
-  if (mapped.mileage != null && existing.fields.mileage == null) {
-    patch.mileage = mapped.mileage;
-  }
-  if (mapped.b2bPrice != null && existing.fields.b2bPrice == null) {
-    patch.b2bPrice = mapped.b2bPrice;
-  }
-  // Bare model answer when make+year known
-  if (
-    !mapped.model &&
-    existing.fields.make &&
-    !existing.fields.model &&
-    params.message.trim().length < 40
-  ) {
-    patch.model = params.message.trim();
-  }
-
-  const merged = applyFields(existing, patch);
-  merged.sourceText = `${existing.sourceText}\n${params.message}`.trim();
-
-  if (!hasInventoryIdentity(merged.fields)) {
-    return {
-      intent: "UPDATE_INVENTORY",
-      message: identityPartialMessage(merged.fields),
-      conversation: {
-        pendingInventoryDraft: merged,
-        sessionContext: { forcedIntent: "create_inventory" },
-      },
-      meta: params.meta,
-    };
-  }
-  if (readyForConfirmation(merged)) {
-    return confirmResponse(merged, params.meta);
-  }
-  return askGapResponse(merged, params.meta, params.userId, "הבנתי.");
-}
-
-async function startFromText(params: {
-  dealerId: string;
-  userId: string;
-  message: string;
-  meta: AgentMeta;
-}): Promise<InventoryTurnResponse> {
   const started = await createInventoryDraftFromText(
     params.userId,
     params.message
   );
   params.meta.responseType = `inventory_${started.phase}`;
 
-  if (started.phase === "need_identity") {
-    return {
-      intent: "UPDATE_INVENTORY",
-      message: started.message,
-      conversation: {
-        pendingInventoryDraft: started.draft,
-        sessionContext: { forcedIntent: "create_inventory" },
-      },
-      meta: params.meta,
-    };
+  let draft = started.draft;
+  if (turn) {
+    draft = mergeFactsIntoDraft(draft, turn);
   }
 
-  if (started.phase === "ask_gap") {
-    return {
-      intent: "UPDATE_INVENTORY",
-      message: started.message,
-      conversation: {
-        pendingInventoryDraft: started.draft,
-        sessionContext: { forcedIntent: "create_inventory" },
-      },
-      suggestions: [{ label: "לא יודע" }, { label: "דלג" }],
-      meta: params.meta,
-    };
+  if (!hasInventoryIdentity(draft.fields) || started.phase === "need_identity") {
+    return askNextClarification(
+      draft,
+      params.meta,
+      params.userId,
+      baseConversation,
+      turn
+    );
   }
 
-  return confirmResponse(started.draft, params.meta, started.message);
+  if (!readyForConfirmation(draft) || started.phase === "ask_gap") {
+    return askNextClarification(
+      draft,
+      params.meta,
+      params.userId,
+      {
+        ...baseConversation,
+        // Keep multi-vehicle queue from starter
+        pendingInventoryDraft: draft,
+      },
+      turn
+    );
+  }
+
+  return confirmResponse(
+    { ...draft, status: "WAITING_CONFIRMATION" },
+    params.meta,
+    baseConversation,
+    turn,
+    started.message?.includes("איזו שנה") || started.message?.includes("מאיזו")
+      ? undefined
+      : started.message
+  );
 }

@@ -26,6 +26,9 @@ import {
   type InventoryCandidate,
 } from "@/services/inventory/lookup";
 import { prisma } from "@/lib/prisma";
+import type { StructuredTurnEvent } from "@/services/assistant/turn-event";
+import { logAppEvent } from "@/services/notifications";
+import { AGENT_VERSION } from "@/services/assistant/tools/registry";
 
 type ManageTurnResponse = AssistantResponse & {
   conversation?: ConversationState;
@@ -70,14 +73,45 @@ export async function handleInventoryManageTurn(params: {
   conversation?: ConversationState;
   meta: AgentMeta;
   focusedVehicleId?: string;
+  turn?: StructuredTurnEvent;
 }): Promise<ManageTurnResponse | null> {
   const { meta } = params;
+  const turn = params.turn;
   const pending = params.conversation?.pendingInventoryMutation;
+
+  // Sold confirmation rejected → unavailable intent
+  if (
+    pending?.status === "WAITING_CONFIRMATION" &&
+    pending.type === "MARK_SOLD" &&
+    (turn?.intent === "mark_unavailable" ||
+      turn?.relation === "REJECTION" ||
+      (/לא.*נמכר|רק\s*לא\s*זמינ|לא\s*זמינ/i.test(params.message) &&
+        !turn?.confirms))
+  ) {
+    await logAppEvent({
+      eventType: "agent_correction_detected",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        relation: "REJECTION",
+        from: "MARK_SOLD",
+        to: "MARK_UNAVAILABLE",
+      },
+    });
+    const next: PendingInventoryMutation = {
+      ...pending,
+      type: "MARK_UNAVAILABLE",
+      proposedChanges: { status: "ARCHIVED" },
+      status: "WAITING_CONFIRMATION",
+      label: `מצאתי את הרכב. לסמן כלא זמין ולהעביר לארכיון?`,
+    };
+    return confirmationResponse(next, meta);
+  }
 
   // --- Availability choice (sold vs unavailable) ---
   if (pending?.status === "WAITING_AVAILABILITY_CHOICE") {
     const m = params.message.trim();
-    if (/נמכר|sold/i.test(m)) {
+    if (/נמכר|sold/i.test(m) && !/לא.*נמכר/i.test(m)) {
       const next: PendingInventoryMutation = {
         ...pending,
         type: "MARK_SOLD",
@@ -86,7 +120,10 @@ export async function handleInventoryManageTurn(params: {
       };
       return confirmationResponse(next, meta);
     }
-    if (/לא זמינ|ארכיון|unavailable|השבת/i.test(m)) {
+    if (
+      /לא זמינ|ארכיון|unavailable|השבת/i.test(m) ||
+      turn?.intent === "mark_unavailable"
+    ) {
       const next: PendingInventoryMutation = {
         ...pending,
         type: "MARK_UNAVAILABLE",
@@ -107,7 +144,20 @@ export async function handleInventoryManageTurn(params: {
 
   // --- Continue pending mutation ---
   if (pending?.status === "WAITING_SELECTION" && pending.candidates?.length) {
-    const idx = selectionIndex(params.message, pending.candidates.length);
+    let idx = selectionIndex(params.message, pending.candidates.length);
+    if (idx == null && turn?.targetObject?.selectionIndex != null) {
+      const s = turn.targetObject.selectionIndex;
+      if (s >= 1 && s <= pending.candidates.length) idx = s - 1;
+    }
+    // Year reference: "ה-2022"
+    if (idx == null) {
+      const yearMatch = params.message.match(/20\d{2}/);
+      if (yearMatch) {
+        const y = yearMatch[0];
+        const found = pending.candidates.findIndex((c) => c.label.includes(y));
+        if (found >= 0) idx = found;
+      }
+    }
     if (idx == null) {
       return {
         intent: "UPDATE_INVENTORY",
@@ -120,9 +170,25 @@ export async function handleInventoryManageTurn(params: {
       };
     }
     const chosen = pending.candidates[idx];
+    const extraChanges = parseVehicleUpdateChanges(params.message);
+    const fromTurn = turn?.extractedFacts;
+    const proposed: ProposedVehicleChanges = {
+      ...pending.proposedChanges,
+      ...(extraChanges ?? {}),
+    };
+    if (fromTurn?.mileage != null) proposed.mileage = fromTurn.mileage;
+    if (fromTurn?.b2bPrice != null) proposed.b2bPrice = fromTurn.b2bPrice;
+    if (fromTurn?.ownershipHand != null) {
+      proposed.ownershipHand = fromTurn.ownershipHand;
+    }
+
     const next: PendingInventoryMutation = {
       ...pending,
       vehicleId: chosen.id,
+      proposedChanges:
+        pending.type === "UPDATE" || Object.keys(proposed).length
+          ? proposed
+          : pending.proposedChanges,
       status: "WAITING_CONFIRMATION",
       candidates: undefined,
       label:
@@ -130,16 +196,24 @@ export async function handleInventoryManageTurn(params: {
           ? `מצאתי ${chosen.label}. לסמן כנמכרה ולהסיר מהמלאי הפעיל?`
           : pending.type === "MARK_UNAVAILABLE"
             ? `מצאתי ${chosen.label}. לסמן כלא זמין?`
-            : `מצאתי ${chosen.label}.\nלעדכן ל: ${describeProposedChanges(pending.proposedChanges ?? {})}?`,
+            : `מצאתי ${chosen.label}.\nלעדכן ל: ${describeProposedChanges(proposed)}?`,
     };
     return confirmationResponse(next, meta);
   }
 
   if (pending?.status === "WAITING_CONFIRMATION") {
-    if (isConfirmation(params.message)) {
+    if (turn?.confirms || turn?.relation === "CONFIRMATION" || isConfirmation(params.message)) {
+      // Guard: "כן, וכמה התאמות" without clear sole confirmation
+      if (
+        /התאמ|מלאי|חיפוש/i.test(params.message) &&
+        !/^(כן|שמור|עדכן|יאללה)/i.test(params.message.trim())
+      ) {
+        // mixed message — do not mutate; let orchestrator topic-switch
+        return null;
+      }
       return executePendingMutation(params.dealerId, pending, meta);
     }
-    if (isRejection(params.message)) {
+    if (turn?.cancels || turn?.relation === "CANCEL" || isRejection(params.message)) {
       return {
         intent: "UPDATE_INVENTORY",
         message: "בוטל. שום דבר לא השתנה.",
