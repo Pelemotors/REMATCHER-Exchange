@@ -1,17 +1,25 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { logAppEvent } from "@/services/notifications";
+import type {
+  InventoryDbClient,
+  InventoryMutationSource,
+} from "@/services/inventory/create-vehicle";
 
 /**
  * Canonical mark-sold for Dealer inventory.
- * Used by API PATCH, Agent, and UI — do not raw-update status elsewhere for sold flow.
+ * Used by API PATCH, Agent, Import, and UI — do not raw-update status elsewhere for sold flow.
  */
 export async function markVehicleSoldForDealer(input: {
   dealerId: string;
   vehicleId: string;
-  source?: string;
+  source?: InventoryMutationSource | string;
+  skipEventLog?: boolean;
+  db?: InventoryDbClient;
 }) {
-  const vehicle = await prisma.vehicle.findFirst({
+  const db = input.db ?? prisma;
+
+  const vehicle = await db.vehicle.findFirst({
     where: {
       id: input.vehicleId,
       dealerId: input.dealerId,
@@ -27,18 +35,20 @@ export async function markVehicleSoldForDealer(input: {
     return { ok: true as const, vehicle, alreadySold: true as const };
   }
 
-  const updated = await prisma.vehicle.update({
+  const updated = await db.vehicle.update({
     where: { id: vehicle.id },
     data: { status: "SOLD", archivedAt: new Date() },
   });
 
-  await logAppEvent({
-    eventType: "vehicle_marked_sold",
-    entityType: "Vehicle",
-    entityId: updated.id,
-    dealerId: input.dealerId,
-    metadata: { source: input.source ?? "domain" },
-  });
+  if (!input.skipEventLog) {
+    await logAppEvent({
+      eventType: "vehicle_marked_sold",
+      entityType: "Vehicle",
+      entityId: updated.id,
+      dealerId: input.dealerId,
+      metadata: { source: input.source ?? "domain" },
+    });
+  }
 
   return { ok: true as const, vehicle: updated, alreadySold: false as const };
 }

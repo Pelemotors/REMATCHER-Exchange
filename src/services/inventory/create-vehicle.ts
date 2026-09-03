@@ -7,6 +7,16 @@ import {
 } from "@/services/ai/inventory-normalizer";
 import type { NormalizedVehicle } from "@/lib/schemas/ai";
 
+/** Shared Prisma client (default) or interactive-transaction client */
+export type InventoryDbClient = typeof prisma;
+
+export type InventoryMutationSource =
+  | "agent"
+  | "manual"
+  | "import"
+  | "inventory_api"
+  | "domain";
+
 export type VehicleCreateFields = {
   make: string | null;
   model: string | null;
@@ -30,7 +40,7 @@ export function hasVehicleIdentity(fields: {
 }
 
 /**
- * Canonical vehicle create for Dealer — used by manual inventory API and Agent.
+ * Canonical vehicle create for Dealer — used by manual inventory API, Agent, and Import.
  * Do not duplicate prisma.vehicle.create elsewhere for dealer ingestion.
  */
 export async function createVehicleForDealer(input: {
@@ -40,7 +50,19 @@ export async function createVehicleForDealer(input: {
   fields?: Partial<VehicleCreateFields>;
   /** When provided, normalizes and maps to fields (manual free-text path) */
   normalizeFromRaw?: boolean;
+  source?: InventoryMutationSource;
+  /**
+   * Default true (Agent/Manual). Import may set false to preserve
+   * historical rowHasMinimum (make OR model OR year) batch behavior.
+   */
+  requireIdentity?: boolean;
+  /** Import sets availability confirmation on ingest */
+  lastAvailabilityConfirmedAt?: Date | null;
+  db?: InventoryDbClient;
 }) {
+  const db = input.db ?? prisma;
+  const requireIdentity = input.requireIdentity !== false;
+
   let fields: VehicleCreateFields = {
     make: input.fields?.make ?? null,
     model: input.fields?.model ?? null,
@@ -73,7 +95,7 @@ export async function createVehicleForDealer(input: {
     };
   }
 
-  if (!hasVehicleIdentity(fields)) {
+  if (requireIdentity && !hasVehicleIdentity(fields)) {
     return {
       ok: false as const,
       error: "identity_incomplete" as const,
@@ -81,9 +103,22 @@ export async function createVehicleForDealer(input: {
     };
   }
 
+  if (
+    !requireIdentity &&
+    !fields.make &&
+    !fields.model &&
+    !fields.year
+  ) {
+    return {
+      ok: false as const,
+      error: "identity_incomplete" as const,
+      message: "חסרים שדות מינימליים (יצרן/דגם/שנה).",
+    };
+  }
+
   const { fieldProvenance, ...scalarFields } = fields;
 
-  const vehicle = await prisma.vehicle.create({
+  const vehicle = await db.vehicle.create({
     data: {
       dealerId: input.dealerId,
       rawInput: input.rawInput ?? null,
@@ -93,10 +128,13 @@ export async function createVehicleForDealer(input: {
         : undefined,
       freshnessState: "FRESH",
       lastInventoryUpdate: new Date(),
+      ...(input.lastAvailabilityConfirmedAt !== undefined
+        ? { lastAvailabilityConfirmedAt: input.lastAvailabilityConfirmedAt }
+        : {}),
     },
   });
 
-  return { ok: true as const, vehicle };
+  return { ok: true as const, vehicle, source: input.source ?? "domain" };
 }
 
 export function fieldsFromNormalized(
