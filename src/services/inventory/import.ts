@@ -7,6 +7,9 @@ import {
   parseRow,
   type VehicleImportField,
 } from "./column-mapper";
+import { createVehicleForDealer } from "./create-vehicle";
+import { updateVehicleForDealer } from "./update-vehicle";
+import { markVehicleSoldForDealer } from "./mark-sold";
 
 export interface ImportRowPreview {
   rowIndex: number;
@@ -271,41 +274,59 @@ export async function confirmImport(params: {
   let created = 0;
   let updated = 0;
   const touchedIds = new Set<string>();
+  const now = new Date();
 
   for (const row of selected) {
     const tag = provenanceTag(row.fields);
-    const data = {
-      make: row.fields.make as string | null,
-      model: row.fields.model as string | null,
-      trim: row.fields.trim as string | null,
-      year: row.fields.year as number | null,
-      mileage: row.fields.mileage as number | null,
-      color: row.fields.color as string | null,
-      b2bPrice: row.fields.b2bPrice as number | null,
-      retailPrice: row.fields.retailPrice as number | null,
-      region: row.fields.region as string | null,
-      ownershipHand: row.fields.ownershipHand as number | null,
-      lastInventoryUpdate: new Date(),
-      freshnessState: "FRESH" as const,
-      lastAvailabilityConfirmedAt: new Date(),
-      rawInput: tag || null,
+    const fields = {
+      make: (row.fields.make as string | null) ?? null,
+      model: (row.fields.model as string | null) ?? null,
+      trim: (row.fields.trim as string | null) ?? null,
+      year: (row.fields.year as number | null) ?? null,
+      mileage: (row.fields.mileage as number | null) ?? null,
+      color: (row.fields.color as string | null) ?? null,
+      b2bPrice: (row.fields.b2bPrice as number | null) ?? null,
+      retailPrice: (row.fields.retailPrice as number | null) ?? null,
+      region: (row.fields.region as string | null) ?? null,
+      ownershipHand: (row.fields.ownershipHand as number | null) ?? null,
     };
 
     if (
       row.duplicateOfVehicleId &&
       row.duplicateConfidence !== "low"
     ) {
-      await prisma.vehicle.update({
-        where: { id: row.duplicateOfVehicleId, dealerId: params.dealerId },
-        data: { ...data, status: "ACTIVE" },
+      const result = await updateVehicleForDealer({
+        dealerId: params.dealerId,
+        vehicleId: row.duplicateOfVehicleId,
+        source: "import",
+        skipEventLog: true,
+        fields: {
+          ...fields,
+          status: "ACTIVE",
+          rawInput: tag || null,
+          lastAvailabilityConfirmedAt: now,
+        },
       });
+      if (!result.ok) {
+        // Ownership / stale id — skip row; do not mutate foreign inventory
+        continue;
+      }
       touchedIds.add(row.duplicateOfVehicleId);
       updated += 1;
     } else if (!row.skip) {
-      const v = await prisma.vehicle.create({
-        data: { dealerId: params.dealerId, status: "ACTIVE", ...data },
+      const result = await createVehicleForDealer({
+        dealerId: params.dealerId,
+        rawInput: tag || null,
+        fields,
+        source: "import",
+        // Preserve import rowHasMinimum (OR) — not Agent hard identity gate
+        requireIdentity: false,
+        lastAvailabilityConfirmedAt: now,
       });
-      touchedIds.add(v.id);
+      if (!result.ok) {
+        continue;
+      }
+      touchedIds.add(result.vehicle.id);
       created += 1;
     }
   }
@@ -316,17 +337,15 @@ export async function confirmImport(params: {
     };
     for (const missing of stored.diff?.missingFromFile ?? []) {
       if (!touchedIds.has(missing.vehicleId)) {
-        await prisma.vehicle.update({
-          where: { id: missing.vehicleId, dealerId: params.dealerId },
-          data: { status: "SOLD" },
-        });
-        await logAppEvent({
-          eventType: "vehicle_marked_sold",
-          entityType: "Vehicle",
-          entityId: missing.vehicleId,
+        const result = await markVehicleSoldForDealer({
           dealerId: params.dealerId,
-          metadata: { source: "import_diff" },
+          vehicleId: missing.vehicleId,
+          source: "import_diff",
         });
+        // Domain service owns AppEvent logging for sold
+        if (!result.ok) {
+          continue;
+        }
       }
     }
   }
