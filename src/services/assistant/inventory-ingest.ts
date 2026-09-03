@@ -375,6 +375,15 @@ function answerInventoryAdvisoryQuestion(
 
   let message: string;
   switch (questionAbout) {
+    case "INPUT_FORMAT":
+      message =
+        "כן. אפשר לשלוח כמה רכבים יחד — כל רכב בשורה נפרדת.\n" +
+        "לדוגמה:\n" +
+        "טויוטה קורולה | 2022 | 62 אלף ק״מ | יד 1 פרטית | 134 אלף לסוחר\n" +
+        "מאזדה CX-5 | 2021 | 80 אלף ק״מ | יד 2 | 118 אלף לסוחר\n" +
+        "קיה ספורטאז׳ | 2023 | 40 אלף ק״מ | יד 1 | 145 אלף לסוחר\n\n" +
+        "לא חייב למלא הכול — הכי חשוב דגם, שנה, ק״מ ומחיר לסוחר. אם חסר משהו, אשאל.";
+      break;
     case "LISTING_GUIDANCE":
     case "GENERAL_ADVISORY":
       message =

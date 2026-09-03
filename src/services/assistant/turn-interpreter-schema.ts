@@ -106,6 +106,7 @@ export const TURN_SCHEMA_FOR_TEST = {
         "CAN_PROCEED",
         "LISTING_GUIDANCE",
         "MATCHING_TIPS",
+        "INPUT_FORMAT",
         "GENERAL_ADVISORY",
         "OTHER",
         null,

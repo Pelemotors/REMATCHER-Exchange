@@ -165,6 +165,18 @@ function detectContextQuestion(m: string): QuestionAbout | null {
  * Runs when inventory workspace is active; may coexist with an open draft.
  */
 function detectAdvisoryQuestion(m: string): QuestionAbout | null {
+  // INPUT_FORMAT / workflow help: template, multi-vehicle input format
+  if (
+    /טמפלייט|תבנית|פורמט/i.test(m) ||
+    /כמה\s*רכבים\s*(?:ביחד|יחד|בהודעה|לשלוח|לכתוב|אפשר)/i.test(m) ||
+    /(?:לכתוב|לשלוח|להזין)\s*(?:לך\s*)?(?:כמה|מספר)?\s*רכבים/i.test(m) ||
+    /איך\s*(?:לכתוב|לשלוח|להזין|נוח\s*לשלוח)/i.test(m) ||
+    /פרטי\s*רכב\s*שצריך/i.test(m) ||
+    /(?:תן|תכין|יכול)\s*(?:לי\s*)?(?:טמפלייט|תבנית|פורמט|דוגמ)/i.test(m)
+  ) {
+    return "INPUT_FORMAT";
+  }
+
   // LISTING_GUIDANCE: "מה הכי חשוב בפרטי מודעה?" / "מה חשוב לרשום?"
   if (
     /מה\s*(?:ה)?כי\s*חשוב|מה\s*חשוב\s*(?:ל)?(?:רשום|במודעה|בפרטי)|איך\s*כדאי\s*ל(?:תאר|רשום)|מה\s*לרשום\s*במודעה/i.test(
@@ -671,10 +683,15 @@ ADVISORY_QUESTION examples (general knowledge, NOT about current draft):
 - "איזה פרטים הכי עוזרים להתאמה?" → ADVISORY_QUESTION, questionAbout: MATCHING_TIPS
 - "כדאי להוסיף מחיר לסוחר?" → ADVISORY_QUESTION, questionAbout: MATCHING_TIPS
 - "איך כדאי לתאר את הרכב?" → ADVISORY_QUESTION, questionAbout: LISTING_GUIDANCE
+- "תן לי טמפלייט למלאי" → ADVISORY_QUESTION, questionAbout: INPUT_FORMAT
+- "כמה רכבים אפשר לשלוח ביחד?" → ADVISORY_QUESTION, questionAbout: INPUT_FORMAT
+- "איך לכתוב לך כמה רכבים?" → ADVISORY_QUESTION, questionAbout: INPUT_FORMAT
 
 DISTINCTION:
 - "מה חסר?" / "מה רשמת?" → CONTEXT_QUESTION (about active draft)
 - "מה הכי חשוב במודעה?" → ADVISORY_QUESTION (general advice)
+- "תן לי טמפלייט" → ADVISORY_QUESTION / INPUT_FORMAT (workflow help for OWN inventory)
+- "כמה רכבים יש ברשת?" → fishing — never classify as help; privacy gate handles this
 
 IMPORTANT: "לא חסר מידע?" contains "לא" but is a QUESTION (CONTEXT_QUESTION), NOT a rejection.
 Hebrew "לא" in question form ≠ cancellation.

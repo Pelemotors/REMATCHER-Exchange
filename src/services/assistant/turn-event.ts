@@ -30,6 +30,7 @@ export type TurnRelation =
  * - CAN_PROCEED: "אפשר לשמור ככה?" / "אפשר להמשיך?"
  * - LISTING_GUIDANCE: "מה הכי חשוב בפרטי מודעה?" (ADVISORY_QUESTION)
  * - MATCHING_TIPS: "איזה פרטים עוזרים להתאמה?" (ADVISORY_QUESTION)
+ * - INPUT_FORMAT: "תן לי טמפלייט" / "כמה רכבים ביחד?" (ADVISORY_QUESTION / workflow help)
  * - GENERAL_ADVISORY: other product/commercial advice questions
  * - OTHER: any other context/advisory question
  */
@@ -43,6 +44,7 @@ export type QuestionAbout =
   | "CAN_PROCEED"
   | "LISTING_GUIDANCE"
   | "MATCHING_TIPS"
+  | "INPUT_FORMAT"
   | "GENERAL_ADVISORY"
   | "OTHER"
   | null;
