@@ -25,6 +25,7 @@ export type VehicleCreateFields = {
   mileage: number | null;
   color: string | null;
   ownershipHand: number | null;
+  ownershipType?: string | null;
   retailPrice: number | null;
   b2bPrice: number | null;
   region: string | null;
@@ -71,6 +72,7 @@ export async function createVehicleForDealer(input: {
     mileage: input.fields?.mileage ?? null,
     color: input.fields?.color ?? null,
     ownershipHand: input.fields?.ownershipHand ?? null,
+    ownershipType: input.fields?.ownershipType ?? null,
     retailPrice: input.fields?.retailPrice ?? null,
     b2bPrice: input.fields?.b2bPrice ?? null,
     region: input.fields?.region ?? null,
@@ -88,6 +90,7 @@ export async function createVehicleForDealer(input: {
       mileage: mapped.mileage,
       color: mapped.color,
       ownershipHand: mapped.ownershipHand,
+      ownershipType: mapped.ownershipType,
       retailPrice: mapped.retailPrice,
       b2bPrice: mapped.b2bPrice,
       region: mapped.region,
@@ -99,7 +102,7 @@ export async function createVehicleForDealer(input: {
     return {
       ok: false as const,
       error: "identity_incomplete" as const,
-      message: "חסרים יצרן, דגם או שנה — אי אפשר לשמור רכב בלי זיהוי בסיסי.",
+      message: "חסר לי עדיין יצרן, דגם או שנה — אפשר להשלים?",
     };
   }
 
@@ -149,6 +152,7 @@ export function fieldsFromNormalized(
     mileage: mapped.mileage,
     color: mapped.color,
     ownershipHand: mapped.ownershipHand,
+    ownershipType: mapped.ownershipType,
     retailPrice: mapped.retailPrice,
     b2bPrice: mapped.b2bPrice,
     region: mapped.region,

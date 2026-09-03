@@ -59,9 +59,10 @@ describe("inventory lookup / intents", () => {
     expect(isUpdateIntent("קורולה 22, 62 אלף, 139 אלף, B2B 134")).toBe(false);
   });
 
-  it("parses B2B update amounts", () => {
+  it("parses B2B / dealer price update amounts", () => {
     expect(parseB2bUpdate("תעדכן ל-129 B2B")).toBe(129000);
     expect(parseB2bUpdate("B2B 134000")).toBe(134000);
+    expect(parseB2bUpdate("מחיר לסוחר 134")).toBe(134000);
   });
 
   it("disambiguates multiple Corolla matches", () => {

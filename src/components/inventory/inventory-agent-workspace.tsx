@@ -309,7 +309,7 @@ export function InventoryAgentWorkspace({
             <textarea
               className={styles.input}
               rows={3}
-              placeholder='לדוגמה: קורולה 22, 62 אלף, B2B 134 — או "הקורולה נמכרה"'
+              placeholder='לדוגמה: קורולה 22, 62 אלף, 134 לסוחר — או "הקורולה נמכרה"'
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}

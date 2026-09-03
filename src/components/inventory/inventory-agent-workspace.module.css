@@ -1,3 +1,5 @@
+/* Brand/UI 2.0 dark tokens — use --rm2-* (globals.css). Never light-theme fallbacks. */
+
 .workspace {
   margin-bottom: 1.25rem;
   padding: 1rem;
@@ -5,6 +7,7 @@
   flex-direction: column;
   gap: 0.75rem;
   min-width: 0;
+  color: var(--rm2-text-primary, #f3f1ec);
 }
 
 .header {
@@ -17,13 +20,13 @@
 .title {
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--v2-warm, #1c1917);
+  color: var(--rm2-warm-white, #f3f1ec);
 }
 
 .sub {
   margin-top: 0.15rem;
   font-size: 0.8125rem;
-  color: var(--v2-text-secondary, #57534e);
+  color: var(--rm2-text-secondary, rgba(243, 241, 236, 0.72));
 }
 
 .tabs {
@@ -38,13 +41,16 @@
   border-radius: 0.5rem;
   padding: 0.55rem 0.75rem;
   font-size: 0.875rem;
-  background: var(--v2-surface-secondary, #f5f5f4);
-  color: var(--v2-text-primary, #1c1917);
+  font-weight: 500;
+  background: var(--rm2-surface-secondary, #1a2535);
+  color: var(--rm2-text-primary, #f3f1ec);
+  border: 1px solid var(--rm2-border, rgba(201, 206, 211, 0.12));
 }
 
 .tabActive {
-  background: var(--v2-signal, #0f766e);
-  color: #fff;
+  background: var(--rm2-signal-blue, #2d78a8);
+  color: var(--rm2-warm-white, #f3f1ec);
+  border-color: transparent;
 }
 
 .messages {
@@ -61,11 +67,12 @@
   max-width: 95%;
   white-space: pre-wrap;
   border-radius: 0.75rem;
-  background: var(--v2-surface-secondary, #f5f5f4);
+  background: var(--rm2-surface-secondary, #1a2535);
+  border: 1px solid var(--rm2-border, rgba(201, 206, 211, 0.12));
   padding: 0.75rem 0.9rem;
   font-size: 0.9375rem;
   line-height: 1.45;
-  color: var(--v2-text-primary, #1c1917);
+  color: var(--rm2-text-primary, #f3f1ec);
 }
 
 .bubbleUser {
@@ -73,11 +80,12 @@
   max-width: 90%;
   white-space: pre-wrap;
   border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--v2-signal, #0f766e) 12%, transparent);
+  background: var(--rm2-signal-blue-soft, rgba(45, 120, 168, 0.22));
+  border: 1px solid rgba(45, 120, 168, 0.35);
   padding: 0.75rem 0.9rem;
   font-size: 0.9375rem;
   line-height: 1.45;
-  color: var(--v2-text-primary, #1c1917);
+  color: var(--rm2-text-primary, #f3f1ec);
 }
 
 .chips {
@@ -89,14 +97,16 @@
 
 .chip {
   border-radius: 0.5rem;
-  background: var(--v2-surface-secondary, #f5f5f4);
+  background: var(--rm2-surface-raised, #162030);
+  border: 1px solid var(--rm2-border-strong, rgba(201, 206, 211, 0.22));
+  color: var(--rm2-text-primary, #f3f1ec);
   padding: 0.4rem 0.7rem;
   font-size: 0.8125rem;
 }
 
 .status {
   font-size: 0.8125rem;
-  color: var(--v2-text-muted, #78716c);
+  color: var(--rm2-text-secondary, rgba(243, 241, 236, 0.72));
 }
 
 .confirmRow {
@@ -111,7 +121,9 @@
   position: sticky;
   bottom: 0;
   padding-top: 0.25rem;
-  background: inherit;
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
+  background: var(--rm2-surface-raised, #162030);
+  z-index: 1;
 }
 
 .input {
@@ -119,14 +131,26 @@
   min-height: 5.5rem;
   resize: vertical;
   border-radius: 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--v2-text-muted, #78716c) 35%, transparent);
-  background: var(--v2-surface, #fff);
+  border: 1px solid var(--rm2-border-strong, rgba(201, 206, 211, 0.22));
+  background: var(--rm2-surface, #111a26);
   padding: 0.75rem;
   font-size: 1rem;
   line-height: 1.4;
-  color: var(--v2-text-primary, #1c1917);
+  color: var(--rm2-text-primary, #f3f1ec);
+  caret-color: var(--rm2-signal-blue, #2d78a8);
+}
+
+.input::placeholder {
+  color: var(--rm2-text-muted, rgba(243, 241, 236, 0.55));
+  opacity: 1;
+}
+
+.input:disabled {
+  color: var(--rm2-text-secondary, rgba(243, 241, 236, 0.72));
+  opacity: 0.85;
 }
 
 .importPane {
   min-width: 0;
+  color: var(--rm2-text-primary, #f3f1ec);
 }

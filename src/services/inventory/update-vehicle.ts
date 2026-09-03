@@ -14,10 +14,11 @@ export type VehicleUpdateFields = {
   mileage?: number | null;
   color?: string | null;
   ownershipHand?: number | null;
+  ownershipType?: string | null;
   retailPrice?: number | null;
   b2bPrice?: number | null;
   region?: string | null;
-  status?: "ACTIVE" | "SOLD";
+  status?: "ACTIVE" | "SOLD" | "ARCHIVED";
   rawInput?: string | null;
   lastAvailabilityConfirmedAt?: Date | null;
 };
@@ -58,6 +59,7 @@ export async function updateVehicleForDealer(input: {
   if ("mileage" in f) data.mileage = f.mileage;
   if ("color" in f) data.color = f.color;
   if ("ownershipHand" in f) data.ownershipHand = f.ownershipHand;
+  if ("ownershipType" in f) data.ownershipType = f.ownershipType;
   if ("retailPrice" in f) data.retailPrice = f.retailPrice;
   if ("b2bPrice" in f) data.b2bPrice = f.b2bPrice;
   if ("region" in f) data.region = f.region;
@@ -68,6 +70,9 @@ export async function updateVehicleForDealer(input: {
 
   if (f.status === "SOLD") {
     data.status = "SOLD";
+    data.archivedAt = new Date();
+  } else if (f.status === "ARCHIVED") {
+    data.status = "ARCHIVED";
     data.archivedAt = new Date();
   } else if (f.status === "ACTIVE") {
     data.status = "ACTIVE";

@@ -191,71 +191,129 @@ export async function createInventoryDraftFromText(
     nextGapToAsk,
     gapQuestion,
     buildStructuredSummary,
+    buildCompactSummary,
     readyForConfirmation,
+    identityPartialMessage,
+    splitMultiVehicleText,
   } = await import("@/services/assistant/inventory-draft");
-  type Draft = import("@/services/assistant/conversation-state").PendingInventoryDraft;
+  const { decideInventoryClarification } = await import(
+    "@/services/assistant/inventory-clarify"
+  );
+  type Draft = import("@/services/assistant/inventory-draft").PendingInventoryDraft;
 
-  const normalized = await normalizeVehicle(rawText, userId);
-  const mapped = fieldsFromNormalized(normalized);
-  const fields = {
-    ...emptyDraftFields(),
-    make: mapped.make,
-    model: mapped.model,
-    trim: mapped.trim,
-    year: mapped.year,
-    mileage: mapped.mileage,
-    color: mapped.color,
-    ownershipHand: mapped.ownershipHand,
-    retailPrice: mapped.retailPrice,
-    b2bPrice: mapped.b2bPrice,
-    region: mapped.region,
-  };
+  const chunks = splitMultiVehicleText(rawText);
 
-  const draft: Draft = {
-    status: "DRAFT",
-    sourceText: rawText,
-    fields,
-    askedGaps: [],
-    ambiguities: normalized.ambiguities,
-  };
+  async function draftFromChunk(text: string): Promise<Draft> {
+    const normalized = await normalizeVehicle(text, userId);
+    const mapped = fieldsFromNormalized(normalized);
+    return {
+      status: "DRAFT",
+      sourceText: text,
+      fields: {
+        ...emptyDraftFields(),
+        make: mapped.make,
+        model: mapped.model,
+        trim: mapped.trim,
+        year: mapped.year,
+        mileage: mapped.mileage,
+        color: mapped.color,
+        ownershipHand: mapped.ownershipHand,
+        ownershipType: mapped.ownershipType ?? null,
+        retailPrice: mapped.retailPrice,
+        b2bPrice: mapped.b2bPrice,
+        region: mapped.region,
+      },
+      askedGaps: [],
+      skippedGaps: [],
+      ambiguities: normalized.ambiguities,
+    };
+  }
 
-  if (!hasInventoryIdentity(fields)) {
+  if (chunks.length > 1) {
+    const drafts = await Promise.all(chunks.map((c) => draftFromChunk(c)));
+    const lines = drafts.map((d, i) => {
+      const ok = hasInventoryIdentity(d.fields) && readyForConfirmation(d);
+      const idOk = hasInventoryIdentity(d.fields);
+      const mark = ok ? "✓" : idOk ? "!" : "!";
+      const note = !idOk
+        ? "חסר זיהוי"
+        : !readyForConfirmation(d)
+          ? `חסר לי ${nextGapToAsk(d) === "dealer_price" ? "מחיר לסוחר" : nextGapToAsk(d) === "mileage" ? "קילומטראז׳" : "פרטים"}`
+          : "מוכן";
+      return `${mark} ${buildCompactSummary(d)} — ${note}`;
+    });
+    const firstNeeding = drafts.findIndex(
+      (d) => !readyForConfirmation(d) || !hasInventoryIdentity(d.fields)
+    );
+    const focusIdx = firstNeeding >= 0 ? firstNeeding : 0;
+    const focus = drafts[focusIdx];
+    const queued = drafts.filter((_, i) => i !== focusIdx);
+
+    if (!hasInventoryIdentity(focus.fields)) {
+      return {
+        ok: true as const,
+        draft: { ...focus, queuedDrafts: queued },
+        phase: "need_identity" as const,
+        message: `קלטתי ${drafts.length} רכבים.\n${lines.join("\n")}\n\n${identityPartialMessage(focus.fields)}`,
+      };
+    }
+
+    if (!readyForConfirmation(focus)) {
+      const decision = await decideInventoryClarification({
+        draft: focus,
+        userId,
+      });
+      return {
+        ok: true as const,
+        draft: { ...focus, queuedDrafts: queued },
+        phase: "ask_gap" as const,
+        gap: decision.gap,
+        message: `קלטתי ${drafts.length} רכבים.\n${lines.join("\n")}\n\n${decision.question}`,
+      };
+    }
+
+    return {
+      ok: true as const,
+      draft: {
+        ...focus,
+        status: "WAITING_CONFIRMATION" as const,
+        queuedDrafts: queued,
+      },
+      phase: "confirm" as const,
+      summary: buildStructuredSummary(focus),
+      message: `קלטתי ${drafts.length} רכבים.\n${lines.join("\n")}\n\n${buildStructuredSummary(focus)}\n\nלשמור את הראשון במלאי?`,
+    };
+  }
+
+  const draft = await draftFromChunk(rawText);
+
+  if (!hasInventoryIdentity(draft.fields)) {
     return {
       ok: true as const,
       draft,
       phase: "need_identity" as const,
-      message:
-        "כדי לשמור רכב במלאי צריך לפחות יצרן, דגם ושנה. שלח שוב עם הפרטים האלה (לדוגמה: טויוטה קורולה 2022).",
+      message: identityPartialMessage(draft.fields),
     };
   }
 
-  const gap = nextGapToAsk(draft);
-  if (gap) {
+  if (!readyForConfirmation(draft)) {
+    const decision = await decideInventoryClarification({ draft, userId });
     return {
       ok: true as const,
       draft,
       phase: "ask_gap" as const,
-      gap,
-      message: `רשמתי טיוטה. ${gapQuestion(gap)}`,
+      gap: decision.gap,
+      message: `הבנתי:\n${buildStructuredSummary(draft)}\n\n${decision.question}`,
     };
   }
 
-  if (readyForConfirmation(draft)) {
-    const summary = buildStructuredSummary(draft);
-    return {
-      ok: true as const,
-      draft: { ...draft, status: "WAITING_CONFIRMATION" as const },
-      phase: "confirm" as const,
-      summary,
-      message: `סיכום לשמירה:\n${summary}\n\nלשמור במלאי?`,
-    };
-  }
-
+  const summary = buildStructuredSummary(draft);
   return {
     ok: true as const,
-    draft,
-    phase: "need_identity" as const,
-    message: "חסרים פרטי זיהוי בסיסיים.",
+    draft: { ...draft, status: "WAITING_CONFIRMATION" as const },
+    phase: "confirm" as const,
+    summary,
+    message: `הבנתי:\n${summary}\n\nלשמור במלאי?`,
   };
 }
 
@@ -271,6 +329,7 @@ export async function executeConfirmInventoryCreate(
       mileage: number | null;
       color: string | null;
       ownershipHand: number | null;
+      ownershipType?: string | null;
       retailPrice: number | null;
       b2bPrice: number | null;
       region: string | null;

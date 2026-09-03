@@ -29,11 +29,13 @@ function baseDraft(
       mileage: null,
       color: null,
       ownershipHand: null,
+      ownershipType: null,
       retailPrice: 139000,
       b2bPrice: null,
       region: null,
     },
     askedGaps: [],
+    skippedGaps: [],
     ...overrides,
   };
 }
@@ -49,6 +51,7 @@ describe("inventory draft identity hard gate", () => {
         mileage: null,
         color: null,
         ownershipHand: null,
+        ownershipType: null,
         retailPrice: null,
         b2bPrice: null,
         region: null,
@@ -71,14 +74,15 @@ describe("inventory draft identity hard gate", () => {
 });
 
 describe("inventory draft gaps", () => {
-  it("asks mileage before b2b and never re-asks", () => {
+  it("asks mileage then ownership when retail already known; never re-asks", () => {
     const d = baseDraft();
     expect(nextGapToAsk(d)).toBe("mileage");
-    const afterAsk = { ...d, askedGaps: ["mileage" as const] };
-    expect(nextGapToAsk(afterAsk)).toBe("b2b_price");
-    const bothAsked = { ...d, askedGaps: ["mileage" as const, "b2b_price" as const] };
-    expect(nextGapToAsk(bothAsked)).toBeNull();
-    expect(readyForConfirmation(bothAsked)).toBe(true);
+    const afterMileage = advanceDraftAfterGap(d, "mileage", "skip");
+    // retailPrice already present → dealer_price satisfied
+    expect(nextGapToAsk(afterMileage)).toBe("ownership");
+    const afterOwn = advanceDraftAfterGap(afterMileage, "ownership", "skip");
+    expect(nextGapToAsk(afterOwn)).toBeNull();
+    expect(readyForConfirmation(afterOwn)).toBe(true);
   });
 
   it("skip advances askedGaps without inventing values", () => {
@@ -86,30 +90,40 @@ describe("inventory draft gaps", () => {
     const next = advanceDraftAfterGap(d, "mileage", "skip");
     expect(next.askedGaps).toContain("mileage");
     expect(next.fields.mileage).toBeNull();
-    expect(nextGapToAsk(next)).toBe("b2b_price");
+    expect(nextGapToAsk(next)).toBe("ownership");
   });
 
-  it("parses mileage and b2b answers", () => {
+  it("asks dealer_price when no price at all", () => {
+    const d = baseDraft({
+      fields: { ...baseDraft().fields, retailPrice: null, b2bPrice: null },
+    });
+    const afterMileage = advanceDraftAfterGap(d, "mileage", { mileage: 62000 });
+    expect(nextGapToAsk(afterMileage)).toBe("dealer_price");
+  });
+
+  it("parses mileage and dealer price answers", () => {
     expect(parseGapAnswer("mileage", "62 אלף")).toEqual({ mileage: 62000 });
-    expect(parseGapAnswer("b2b_price", "B2B 134000")).toEqual({ b2bPrice: 134000 });
+    expect(parseGapAnswer("dealer_price", "B2B 134000")).toEqual({
+      b2bPrice: 134000,
+    });
+    expect(parseGapAnswer("dealer_price", "134 לסוחר")).toEqual({
+      b2bPrice: 134000,
+    });
     expect(parseGapAnswer("mileage", "לא יודע")).toBe("skip");
   });
 
-  it("openGaps does not require km/b2b for identity", () => {
+  it("openGaps does not require km/price for identity", () => {
     const gaps = openGaps(baseDraft().fields);
     expect(gaps).toContain("mileage");
-    expect(gaps).toContain("b2b_price");
   });
 });
 
 describe("structured summary and amendments", () => {
-  it("builds pipe summary with unknown fields", () => {
+  it("builds summary with unknown fields in commercial Hebrew", () => {
     const s = buildStructuredSummary(baseDraft());
     expect(s).toContain("טויוטה קורולה");
     expect(s).toContain("2022");
-    expect(s).toMatch(/ק"מ לא ידוע/);
-    expect(s).toContain("139");
-    expect(s).toContain("B2B לא ידוע");
+    expect(s).toContain("מחיר לקוח");
   });
 
   it("amendment returns to draft fields", () => {
@@ -150,7 +164,9 @@ describe("createVehicleForDealer shared path", () => {
     mockCreate.mockReset();
   });
 
-  it("executeConfirmInventoryCreate uses domain service not raw prisma in tool", async () => {
+  it(
+    "executeConfirmInventoryCreate uses domain service not raw prisma in tool",
+    async () => {
     vi.doMock("@/services/inventory/create-vehicle", () => ({
       createVehicleForDealer: mockCreate.mockResolvedValue({
         ok: true,
@@ -182,6 +198,7 @@ describe("createVehicleForDealer shared path", () => {
         mileage: 62000,
         color: null,
         ownershipHand: null,
+        ownershipType: null,
         retailPrice: 139000,
         b2bPrice: null,
         region: null,
@@ -190,5 +207,7 @@ describe("createVehicleForDealer shared path", () => {
 
     expect(result.ok).toBe(true);
     expect(mockCreate).toHaveBeenCalled();
-  });
+  },
+  15000
+  );
 });

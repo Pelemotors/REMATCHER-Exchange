@@ -16,35 +16,28 @@ export interface SessionContext {
   forcedIntent?: "create_inventory";
 }
 
-export type InventoryGapId = "mileage" | "b2b_price";
+export type {
+  InventoryGapId,
+  InventoryDraftFields,
+  PendingInventoryDraft,
+} from "@/services/assistant/inventory-draft";
 
-export interface InventoryDraftFields {
-  make: string | null;
-  model: string | null;
-  trim: string | null;
-  year: number | null;
-  mileage: number | null;
-  color: string | null;
-  ownershipHand: number | null;
-  retailPrice: number | null;
-  b2bPrice: number | null;
-  region: string | null;
-}
-
-/** Explicit structured draft — not free-form chat memory */
-export interface PendingInventoryDraft {
-  status: "DRAFT" | "WAITING_CONFIRMATION";
-  sourceText: string;
-  fields: InventoryDraftFields;
-  askedGaps: InventoryGapId[];
-  ambiguities?: string[];
-}
+export type ProposedVehicleChanges = {
+  mileage?: number;
+  retailPrice?: number;
+  b2bPrice?: number;
+  ownershipHand?: number;
+  ownershipType?: string;
+  trim?: string | null;
+  color?: string | null;
+  status?: "ACTIVE" | "SOLD" | "ARCHIVED";
+};
 
 export type PendingInventoryMutation = {
-  type: "UPDATE" | "MARK_SOLD";
+  type: "UPDATE" | "MARK_SOLD" | "MARK_UNAVAILABLE";
   vehicleId: string;
-  proposedChanges?: { b2bPrice?: number; retailPrice?: number };
-  status: "WAITING_CONFIRMATION" | "WAITING_SELECTION";
+  proposedChanges?: ProposedVehicleChanges;
+  status: "WAITING_CONFIRMATION" | "WAITING_SELECTION" | "WAITING_AVAILABILITY_CHOICE";
   candidates?: Array<{ id: string; label: string }>;
   label: string;
 };
@@ -52,7 +45,7 @@ export type PendingInventoryMutation = {
 export interface ConversationState {
   lastList?: ConversationListItem[];
   pendingConfirmation?: PendingConfirmation;
-  pendingInventoryDraft?: PendingInventoryDraft;
+  pendingInventoryDraft?: import("@/services/assistant/inventory-draft").PendingInventoryDraft;
   pendingInventoryMutation?: PendingInventoryMutation;
   goal?: string;
   /** Short-lived turn context — not persisted to dealer profile */

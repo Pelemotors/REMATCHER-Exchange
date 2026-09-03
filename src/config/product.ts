@@ -84,7 +84,9 @@ export function resetProductConfigCache() {
 
 export const AI_PROMPT_VERSIONS = {
   demandParser: "demand-parser-v1",
-  inventoryNormalizer: "inventory-normalizer-v1",
+  inventoryNormalizer: "inventory-normalizer-v2",
+  inventoryClarification: "inventory-clarification-v1",
+  inventoryUnderstanding: "inventory-understanding-v1",
   matchExplainer: "match-explainer-v1",
 } as const;
 
@@ -92,5 +94,9 @@ export const AI_MODELS = {
   demandParser: process.env.OPENAI_DEMAND_PARSER_MODEL ?? "gpt-4o-mini",
   inventoryNormalizer:
     process.env.OPENAI_INVENTORY_NORMALIZER_MODEL ?? "gpt-4o-mini",
+  inventoryClarification:
+    process.env.OPENAI_INVENTORY_CLARIFICATION_MODEL ?? "gpt-4o-mini",
+  inventoryUnderstanding:
+    process.env.OPENAI_INVENTORY_UNDERSTANDING_MODEL ?? "gpt-4o-mini",
   matchExplainer: process.env.OPENAI_MATCH_EXPLAINER_MODEL ?? "gpt-4o-mini",
 } as const;
