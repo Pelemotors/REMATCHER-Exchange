@@ -15,7 +15,30 @@ export type TurnRelation =
   | "SKIP"
   | "WORDING_CORRECTION"
   | "RESUME"
+  | "CONTEXT_QUESTION"
   | "UNKNOWN";
+
+/**
+ * What the dealer is asking about when relation = CONTEXT_QUESTION.
+ * - COMPLETENESS: "לא חסר מידע?" / "זה מספיק?"
+ * - MISSING_FIELDS: "מה עוד חסר?" / "מה אתה צריך עוד?"
+ * - CURRENT_STATE: "מה כבר רשמת?" / "מה אמרתי לך עד עכשיו?"
+ * - SPECIFIC_FIELD: "איזה מחיר רשמת?" / "רשמתי לך קילומטר?"
+ * - REQUIREMENT: "חייב מחיר?" / "חובה להכניס קילומטר?"
+ * - WHY_NEEDED: "למה צריך מחיר לסוחר?"
+ * - CAN_PROCEED: "אפשר לשמור ככה?" / "אפשר להמשיך?"
+ * - OTHER: any other context question
+ */
+export type QuestionAbout =
+  | "COMPLETENESS"
+  | "MISSING_FIELDS"
+  | "CURRENT_STATE"
+  | "SPECIFIC_FIELD"
+  | "REQUIREMENT"
+  | "WHY_NEEDED"
+  | "CAN_PROCEED"
+  | "OTHER"
+  | null;
 
 export type TurnCapability =
   | "inventory"
@@ -61,6 +84,8 @@ export type StructuredTurnEvent = {
     | "help"
     | "unknown";
   targetCapability: TurnCapability;
+  /** What kind of context question the dealer is asking (only when relation=CONTEXT_QUESTION) */
+  questionAbout?: QuestionAbout;
   extractedFacts?: TurnInventoryFacts;
   correctedFacts?: TurnInventoryFacts;
   rejectedInterpretations?: string[];

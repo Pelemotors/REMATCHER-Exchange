@@ -12,6 +12,7 @@ import {
 } from "@/services/assistant/conversation-state";
 import { isSkipAnswer } from "@/services/assistant/inventory-draft";
 import type {
+  QuestionAbout,
   StructuredTurnEvent,
   TurnCapability,
   TurnInventoryFacts,
@@ -22,122 +23,11 @@ import {
   parseDealerPriceFromText,
   parseMileageFromText,
   parseYearFromText,
-  resolveVehicleShorthand,
 } from "@/services/assistant/vehicle-shorthand";
 import { parseOwnershipAnswer } from "@/services/assistant/inventory-draft";
 
-const TURN_SCHEMA = {
-  type: "object",
-  properties: {
-    relation: {
-      type: "string",
-      enum: [
-        "NEW_REQUEST",
-        "ANSWER",
-        "CORRECTION",
-        "REJECTION",
-        "ADDITIONAL_INFO",
-        "TOPIC_SWITCH",
-        "CONFIRMATION",
-        "CANCEL",
-        "SKIP",
-        "WORDING_CORRECTION",
-        "RESUME",
-        "UNKNOWN",
-      ],
-    },
-    intent: {
-      type: "string",
-      enum: [
-        "continue_current",
-        "create_inventory",
-        "update_inventory",
-        "mark_sold",
-        "mark_unavailable",
-        "create_demand",
-        "read_matches",
-        "read_state",
-        "help",
-        "unknown",
-      ],
-    },
-    targetCapability: {
-      type: "string",
-      enum: [
-        "inventory",
-        "matches",
-        "searches",
-        "opportunities",
-        "activity",
-        "validations",
-        "broker",
-        "unknown",
-      ],
-    },
-    extractedFacts: {
-      type: "object",
-      properties: {
-        make: { type: ["string", "null"] },
-        model: { type: ["string", "null"] },
-        year: { type: ["number", "null"] },
-        mileage: { type: ["number", "null"] },
-        b2bPrice: { type: ["number", "null"] },
-        retailPrice: { type: ["number", "null"] },
-        color: { type: ["string", "null"] },
-        trim: { type: ["string", "null"] },
-        ownershipType: { type: ["string", "null"] },
-        notes: { type: ["string", "null"] },
-        exclusions: { type: "array", items: { type: "string" } },
-      },
-      additionalProperties: false,
-    },
-    correctedFacts: {
-      type: "object",
-      properties: {
-        make: { type: ["string", "null"] },
-        model: { type: ["string", "null"] },
-        year: { type: ["number", "null"] },
-        mileage: { type: ["number", "null"] },
-        b2bPrice: { type: ["number", "null"] },
-        retailPrice: { type: ["number", "null"] },
-        color: { type: ["string", "null"] },
-        trim: { type: ["string", "null"] },
-        ownershipType: { type: ["string", "null"] },
-        notes: { type: ["string", "null"] },
-        exclusions: { type: "array", items: { type: "string" } },
-      },
-      additionalProperties: false,
-    },
-    rejectedInterpretations: {
-      type: "array",
-      items: { type: "string" },
-    },
-    confirms: { type: "boolean" },
-    cancels: { type: "boolean" },
-    skipRequested: { type: "boolean" },
-    resumeRequested: { type: "boolean" },
-    preferredWording: { type: ["string", "null"] },
-    needsClarification: { type: "boolean" },
-    clarificationReason: { type: ["string", "null"] },
-    confidenceOverall: {
-      type: "string",
-      enum: ["high", "medium", "low"],
-    },
-    selectionIndex: { type: ["number", "null"] },
-    referenceText: { type: ["string", "null"] },
-  },
-  required: [
-    "relation",
-    "intent",
-    "targetCapability",
-    "confirms",
-    "cancels",
-    "skipRequested",
-    "resumeRequested",
-    "confidenceOverall",
-  ],
-  additionalProperties: false,
-} as const;
+// Schema imported from shared file to allow testing without server-only deps
+import { TURN_SCHEMA_FOR_TEST as TURN_SCHEMA } from "@/services/assistant/turn-interpreter-schema";
 
 function extractFactsDeterministic(message: string): TurnInventoryFacts {
   const applied = applyShorthandToFields(message, {
@@ -205,6 +95,64 @@ function hasAnyFact(f?: TurnInventoryFacts): boolean {
     if (k === "exclusions" || k === "notes") return false;
     return v != null && v !== "";
   });
+}
+
+/**
+ * Detect if a message is a context question about the active work.
+ * Returns the QuestionAbout category or null if not a context question.
+ *
+ * IMPORTANT: "לא חסר?" is a QUESTION (Hebrew rhetorical form), NOT rejection.
+ * Patterns are conservative — when in doubt, return null and let AI classify.
+ */
+function detectContextQuestion(m: string): QuestionAbout | null {
+  // CAN_PROCEED: "אפשר לשמור ככה?" / "אפשר להמשיך?" / "נוכל לשמור?"
+  if (/אפשר\s*(לשמור|להמשיך|לסגור|לאשר)|נוכל\s*לשמור/i.test(m)) {
+    return "CAN_PROCEED";
+  }
+
+  // COMPLETENESS: "לא חסר מידע?" / "זה מספיק?" / "יש מספיק?" / "מספיק מה שנתתי?"
+  if (
+    /(?:לא\s*)?חסר\s*מידע\??|זה\s*מספיק\??|יש\s*מספיק\??|מספיק\s*מה\s*ש|האם\s*מספיק|מספיק\s*(?:ככה|כך)\??/i.test(
+      m
+    )
+  ) {
+    return "COMPLETENESS";
+  }
+
+  // MISSING_FIELDS: "מה עוד חסר?" / "מה אתה צריך עוד?" / "מה עוד צריך?"
+  if (/מה\s*עוד\s*(חסר|צריך)|מה\s*אתה\s*צריך\s*עוד|עוד\s*מה\s*חסר|מה\s*חסר\s*עוד/i.test(m)) {
+    return "MISSING_FIELDS";
+  }
+
+  // CURRENT_STATE: "מה כבר רשמת?" / "מה אמרתי לך עד עכשיו?" / "מה יש לך עד עכשיו?"
+  if (
+    /מה\s*כבר\s*רשמת|מה\s*(?:אמרתי|נתתי)\s*לך|מה\s*יש\s*לך\s*עד\s*עכשיו|מה\s*יודע\s*על\s*הרכב/i.test(
+      m
+    )
+  ) {
+    return "CURRENT_STATE";
+  }
+
+  // SPECIFIC_FIELD: "איזה מחיר רשמת?" / "רשמתי לך קילומטר?" / "מה המחיר שנתתי?"
+  if (
+    /(?:איזה|מה|כמה)\s+(?:מחיר|קילומטר|ק.?מ|שנה|צבע|גימור|בעלות)\s*(?:רשמת|כתבת|יש לך|אמרתי|נתתי)\??|רשמתי\s*לך\s*(?:קילומטר|מחיר|שנה|צבע)/i.test(
+      m
+    )
+  ) {
+    return "SPECIFIC_FIELD";
+  }
+
+  // REQUIREMENT: "חייב מחיר?" / "חובה קילומטר?" / "האם חייב לכתוב?"
+  if (/חייב\s+(?:מחיר|קילומטר|ק.?מ|שנה|צבע|גימור)\??|חובה\s+(?:לכתוב|להכניס|לרשום|מחיר|קילומטר)\??/i.test(m)) {
+    return "REQUIREMENT";
+  }
+
+  // WHY_NEEDED: "למה צריך מחיר לסוחר?" / "למה אתה צריך את זה?"
+  if (/למה\s*(?:צריך|אתה\s*צריך|נצרך|חשוב)\s*(?:את\s*זה|מחיר|קילומטר|הגימור|הצבע|הבעלות)/i.test(m)) {
+    return "WHY_NEEDED";
+  }
+
+  return null;
 }
 
 /** Deterministic / fallback interpretation — never invents. */
@@ -383,6 +331,27 @@ export function interpretTurnFallback(params: {
       confidence: { overall: "high" },
       source: "deterministic",
     };
+  }
+
+  // Context question detection — dealer asks about active work
+  // Must run BEFORE fact detection to avoid misclassifying question words as facts
+  // IMPORTANT: "לא חסר?" is a question, NOT rejection. Check question patterns first.
+  if (pendingDraft || pendingMutation) {
+    const ctxQ = detectContextQuestion(m);
+    if (ctxQ) {
+      return {
+        relation: "CONTEXT_QUESTION",
+        intent: "continue_current",
+        targetCapability: "inventory",
+        questionAbout: ctxQ,
+        confirms: false,
+        cancels: false,
+        skipRequested: false,
+        resumeRequested: false,
+        confidence: { overall: "medium" },
+        source: "deterministic",
+      };
+    }
   }
 
   const facts = extractFactsDeterministic(m);
@@ -572,31 +541,62 @@ export async function interpretAgentTurn(params: {
       relation: TurnRelation;
       intent: StructuredTurnEvent["intent"];
       targetCapability: TurnCapability;
-      extractedFacts?: unknown;
-      correctedFacts?: unknown;
-      rejectedInterpretations?: string[];
+      questionAbout: QuestionAbout;
+      extractedFacts: unknown;
+      correctedFacts: unknown;
+      rejectedInterpretations: string[];
       confirms: boolean;
       cancels: boolean;
       skipRequested: boolean;
       resumeRequested: boolean;
-      preferredWording?: string | null;
-      needsClarification?: boolean;
-      clarificationReason?: string | null;
+      preferredWording: string | null;
+      needsClarification: boolean;
+      clarificationReason: string | null;
       confidenceOverall: "high" | "medium" | "low";
-      selectionIndex?: number | null;
-      referenceText?: string | null;
+      selectionIndex: number | null;
+      referenceText: string | null;
     }>({
       operation: "turn_interpret",
       promptVersion: AI_PROMPT_VERSIONS.turnInterpreter,
       model: AI_MODELS.turnInterpreter,
       systemPrompt: `You interpret ONE dealer message for the REMATCHER Exchange Agent.
-Classify relation to the previous Agent turn (ANSWER, CORRECTION, WORDING_CORRECTION, TOPIC_SWITCH, etc.).
+
+RELATIONS:
+- ANSWER: dealer answers Agent's question (e.g. provides year/mileage/price)
+- CORRECTION: dealer corrects a field value or Agent interpretation
+- WORDING_CORRECTION: dealer corrects Agent phrasing (not a field value)
+- ADDITIONAL_INFO: dealer adds info without being asked
+- CONTEXT_QUESTION: dealer asks a question about the active work/draft
+- TOPIC_SWITCH: dealer switches to a different capability (matches, searches, etc.)
+- CONFIRMATION: explicit yes/confirm/save
+- CANCEL: explicit no/cancel
+- SKIP: dealer skips a field
+- RESUME: dealer asks to return to suspended work
+- REJECTION: dealer rejects a proposed interpretation
+- NEW_REQUEST: new independent request
+
+CONTEXT_QUESTION examples (dealer asks about active inventory draft):
+- "לא חסר מידע?" → CONTEXT_QUESTION, questionAbout: COMPLETENESS
+- "זה מספיק?" → CONTEXT_QUESTION, questionAbout: COMPLETENESS
+- "מה עוד חסר?" → CONTEXT_QUESTION, questionAbout: MISSING_FIELDS
+- "מה אתה צריך עוד?" → CONTEXT_QUESTION, questionAbout: MISSING_FIELDS
+- "מה כבר רשמת?" → CONTEXT_QUESTION, questionAbout: CURRENT_STATE
+- "מה אמרתי לך עד עכשיו?" → CONTEXT_QUESTION, questionAbout: CURRENT_STATE
+- "איזה מחיר רשמת?" → CONTEXT_QUESTION, questionAbout: SPECIFIC_FIELD
+- "רשמתי לך קילומטר?" → CONTEXT_QUESTION, questionAbout: SPECIFIC_FIELD
+- "חייב מחיר?" → CONTEXT_QUESTION, questionAbout: REQUIREMENT
+- "חובה קילומטר?" → CONTEXT_QUESTION, questionAbout: REQUIREMENT
+- "למה צריך מחיר לסוחר?" → CONTEXT_QUESTION, questionAbout: WHY_NEEDED
+- "אפשר לשמור ככה?" → CONTEXT_QUESTION, questionAbout: CAN_PROCEED
+- "אפשר להמשיך?" → CONTEXT_QUESTION, questionAbout: CAN_PROCEED
+
+IMPORTANT: "לא חסר מידע?" contains "לא" but is a QUESTION (CONTEXT_QUESTION), NOT a rejection.
+Hebrew "לא" in question form ≠ cancellation.
+
 Extract vehicle facts when present. Honor negations (לא קרוס = reject Cross, keep Corolla if stated).
 Never invent year/mileage/price/model.
 Prefer מחיר לסוחר for dealer price when context is inventory listing.
-WORDING_CORRECTION = user corrects Agent phrasing, not a field value.
-TOPIC_SWITCH = user asks about matches/searches while inventory draft may be open.
-Return JSON only.`,
+Return JSON matching schema exactly. All required fields must be present (use null for optional fields).`,
       userContent: JSON.stringify(ctx),
       schemaName: "agent_turn_event",
       schema: TURN_SCHEMA as unknown as Record<string, unknown>,
@@ -624,6 +624,7 @@ Return JSON only.`,
       relation: data.relation,
       intent: data.intent,
       targetCapability: data.targetCapability,
+      questionAbout: data.questionAbout ?? null,
       extractedFacts: extracted,
       correctedFacts: corrected,
       rejectedInterpretations: [
@@ -647,14 +648,33 @@ Return JSON only.`,
       confidence: { overall: data.confidenceOverall },
       source: "ai",
     };
-  } catch {
+  } catch (err: unknown) {
+    // Observability: capture error class to detect schema / auth / network failures
+    const errMsg =
+      err instanceof Error ? err.message : typeof err === "string" ? err : "unknown";
+    // Classify error for diagnostics
+    const errClass = errMsg.includes("400")
+      ? "schema_400"
+      : errMsg.includes("401") || errMsg.includes("403")
+        ? "auth_error"
+        : errMsg.includes("429")
+          ? "rate_limit"
+          : errMsg.includes("timeout") || errMsg.includes("ETIMEDOUT")
+            ? "timeout"
+            : "other";
+
     await logAiOperation({
       operation: "turn_interpret",
       promptVersion: AI_PROMPT_VERSIONS.turnInterpreter,
       success: false,
       userId: params.userId,
-      errorMessage: "turn_interpret_failed",
-      usageJson: { fallback: true },
+      errorMessage: errMsg.slice(0, 300),
+      usageJson: {
+        fallback: true,
+        errClass,
+        agentVersion: "2.7",
+        relation: fallback.relation,
+      },
     });
     return { ...fallback, source: "fallback" };
   }

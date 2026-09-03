@@ -10,7 +10,9 @@ import {
   buildStructuredSummary,
   hasInventoryIdentity,
   identityPartialMessage,
+  isCommerciallyComplete,
   nextGapToAsk,
+  openCommercialGaps,
   parseAmendment,
   readyForConfirmation,
 } from "@/services/assistant/inventory-draft";
@@ -19,7 +21,7 @@ import {
   createInventoryDraftFromText,
   executeConfirmInventoryCreate,
 } from "@/services/assistant/tools/action-tools";
-import type { StructuredTurnEvent } from "@/services/assistant/turn-event";
+import type { QuestionAbout, StructuredTurnEvent } from "@/services/assistant/turn-event";
 import {
   applyTurnToConversationState,
   draftFromTurnFacts,
@@ -202,6 +204,153 @@ function promoteQueued(
   return { ...next, queuedDrafts: rest };
 }
 
+const GAP_LABELS: Record<string, string> = {
+  mileage: "קילומטראז׳",
+  dealer_price: "מחיר לסוחר",
+  ownership: "מקור הרכב (פרטי/ליסינג/חברה)",
+  trim: "רמת גימור",
+  color: "צבע",
+  make: "יצרן",
+  model: "דגם",
+  year: "שנת ייצור",
+};
+
+/**
+ * Answer a dealer's context question about the active inventory draft.
+ * Uses ONLY deterministic draft truth — never hallucinates.
+ * Preserves draft without mutation.
+ */
+function answerInventoryContextQuestion(
+  draft: PendingInventoryDraft,
+  questionAbout: QuestionAbout,
+  meta: AgentMeta,
+  baseConversation: ConversationState,
+  turn: StructuredTurnEvent | undefined
+): InventoryTurnResponse {
+  const f = draft.fields;
+  const summary = buildStructuredSummary(draft);
+  const canSave = hasInventoryIdentity(draft.fields);
+  const isComplete = isCommerciallyComplete(draft);
+  const openGaps = openCommercialGaps(draft);
+  const optionalGaps = openGaps.filter((g) => g === "trim" || g === "color");
+  const commercialGaps = openGaps.filter((g) => g !== "trim" && g !== "color");
+
+  meta.responseType = "inventory_context_question";
+
+  let message: string;
+
+  switch (questionAbout) {
+    case "CAN_PROCEED":
+    case "COMPLETENESS": {
+      if (!canSave) {
+        message = `עוד לא ניתן לשמור — חסר מידע בסיסי (${commercialGaps.map((g) => GAP_LABELS[g] ?? g).join(", ")}).`;
+      } else if (isComplete) {
+        const optional = optionalGaps.length
+          ? `\nאפשר להשלים גם ${optionalGaps.map((g) => GAP_LABELS[g] ?? g).join(" ו-")} — לא חובה.`
+          : "";
+        message = `יש מספיק כדי לשמור.\n${summary}${optional}\n\nלשמור ככה?`;
+      } else {
+        const missing = commercialGaps.map((g) => GAP_LABELS[g] ?? g).join(", ");
+        message = `יש מספיק כדי לשמור, אבל כדאי להשלים ${missing}.\n${summary}\n\nלשמור ככה?`;
+      }
+      break;
+    }
+
+    case "MISSING_FIELDS": {
+      if (openGaps.length === 0) {
+        message = `לא חסר כלום — יש הכל.\n${summary}`;
+      } else {
+        const required = commercialGaps.map((g) => GAP_LABELS[g] ?? g);
+        const optional = optionalGaps.map((g) => GAP_LABELS[g] ?? g);
+        const parts: string[] = [];
+        if (required.length) parts.push(`כדאי להשלים: ${required.join(", ")}`);
+        if (optional.length) parts.push(`אופציונלי: ${optional.join(", ")}`);
+        message = parts.join("\n");
+      }
+      break;
+    }
+
+    case "CURRENT_STATE": {
+      message = `הנה מה שיש לי עד עכשיו:\n${summary}`;
+      const remaining = openGaps.length
+        ? `\nחסר עוד: ${openGaps.map((g) => GAP_LABELS[g] ?? g).join(", ")}`
+        : "\nזה הכל.";
+      message += remaining;
+      break;
+    }
+
+    case "SPECIFIC_FIELD": {
+      // Summarize all known field values
+      const known: string[] = [];
+      if (f.make) known.push(`יצרן: ${f.make}`);
+      if (f.model) known.push(`דגם: ${f.model}`);
+      if (f.year) known.push(`שנה: ${f.year}`);
+      if (f.mileage != null) known.push(`ק״מ: ${f.mileage.toLocaleString()}`);
+      if (f.b2bPrice != null) known.push(`מחיר לסוחר: ${f.b2bPrice.toLocaleString()} ₪`);
+      if (f.retailPrice != null) known.push(`מחיר לקוח: ${f.retailPrice.toLocaleString()} ₪`);
+      if (f.color) known.push(`צבע: ${f.color}`);
+      if (f.trim) known.push(`גימור: ${f.trim}`);
+      if (f.ownershipType) known.push(`מקור: ${f.ownershipType}`);
+      message = known.length
+        ? `הנה הפרטים שרשומים:\n${known.join("\n")}`
+        : "עדיין לא רשמתי פרטים.";
+      break;
+    }
+
+    case "REQUIREMENT": {
+      const required = commercialGaps.map((g) => GAP_LABELS[g] ?? g);
+      if (required.length) {
+        message = `${required.join(" ו-")} — שווה להשלים, עוזר לדייק התאמות. לא חובה לשמור, אבל ממליץ.`;
+      } else {
+        message = "לא חסר שום דבר הכרחי — הכל כבר מולא.";
+      }
+      break;
+    }
+
+    case "WHY_NEEDED": {
+      message =
+        "מחיר לסוחר ומקור הרכב עוזרים לנו לדייק את ההתאמות — Exchange מציג הרכב לקונים שמחפשים בטווח המחיר הנכון.";
+      break;
+    }
+
+    default: {
+      // OTHER or null — give current state as generic answer
+      message = `הנה מה שיש לי:\n${summary}`;
+      if (openGaps.length) {
+        message += `\n\nחסר עוד: ${openGaps.map((g) => GAP_LABELS[g] ?? g).join(", ")}`;
+      }
+    }
+  }
+
+  // Preserve the pending draft — no mutation, status unchanged
+  const conversation = withTurnMemory(
+    {
+      ...baseConversation,
+      pendingInventoryDraft: draft,
+      pendingConfirmation:
+        draft.status === "WAITING_CONFIRMATION" ? confirmPayload(draft) : baseConversation.pendingConfirmation,
+      sessionContext: {
+        ...baseConversation.sessionContext,
+        forcedIntent: "create_inventory",
+        operatingMode: "inventory_management",
+      },
+    },
+    turn,
+    { kind: "context_question", text: message }
+  );
+
+  return {
+    intent: "UPDATE_INVENTORY",
+    message,
+    conversation,
+    suggestions:
+      canSave && isComplete
+        ? [{ label: "שמור במלאי" }, { label: "ערוך" }]
+        : [{ label: "המשך" }, { label: "ערוך" }],
+    meta,
+  };
+}
+
 /**
  * Inventory create accompaniment — facts-first, turn-event driven.
  * parseGapAnswer is NOT the turn owner.
@@ -374,7 +523,27 @@ export async function handleInventoryIngestTurn(params: {
       };
     }
 
-    // Merge facts / amendments while confirming
+    // 3. CONTEXT_QUESTION — dealer asks about the active draft (never mutates)
+    if (turn?.relation === "CONTEXT_QUESTION") {
+      await logAppEvent({
+        eventType: "agent_context_question",
+        dealerId: params.dealerId,
+        metadata: {
+          agentVersion: AGENT_VERSION,
+          questionAbout: turn.questionAbout ?? "unknown",
+          draftStatus: "WAITING_CONFIRMATION",
+        },
+      });
+      return answerInventoryContextQuestion(
+        existing,
+        turn.questionAbout ?? "OTHER",
+        meta,
+        baseConversation,
+        turn
+      );
+    }
+
+    // 4. Merge facts / amendments while confirming
     if (
       turn?.extractedFacts ||
       turn?.correctedFacts ||
@@ -423,6 +592,33 @@ export async function handleInventoryIngestTurn(params: {
       );
     }
 
+    // 5. UNKNOWN + needsClarification — clarify naturally, do NOT repeat confirmation
+    if (turn?.relation === "UNKNOWN" || (turn?.needsClarification && !turn?.confirms)) {
+      meta.responseType = "inventory_clarify_intent";
+      const conversation = withTurnMemory(
+        {
+          ...baseConversation,
+          pendingInventoryDraft: existing,
+          pendingConfirmation: confirmPayload(existing),
+          sessionContext: {
+            ...baseConversation.sessionContext,
+            forcedIntent: "create_inventory",
+            operatingMode: "inventory_management",
+          },
+        },
+        turn
+      );
+      return {
+        intent: "UPDATE_INVENTORY",
+        message:
+          "לא בטוח שהבנתי. אתה רוצה לשנות משהו ברכב, לשאול עליו משהו, או לשמור אותו כמו שהוא?",
+        conversation,
+        suggestions: [{ label: "שמור במלאי" }, { label: "ערוך" }, { label: "שאל" }],
+        meta,
+      };
+    }
+
+    // 6. Fallback — re-present confirmation (only for genuinely ambiguous free text)
     return confirmResponse(existing, meta, baseConversation, turn);
   }
 
