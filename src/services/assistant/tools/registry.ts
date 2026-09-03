@@ -21,6 +21,7 @@ export type ReadToolName = (typeof ALL_READ_TOOLS)[number];
 export type ActionIntent =
   | "read"
   | "create_demand"
+  | "create_inventory"
   | "renew_demand"
   | "close_demand"
   | "update_demand"
@@ -49,7 +50,7 @@ export interface AgentMeta {
   responseType: string;
 }
 
-export const AGENT_VERSION = "2.3";
+export const AGENT_VERSION = "2.4";
 
 /** Tool catalog for planner prompt */
 export const TOOL_DESCRIPTIONS: Record<ReadToolName, string> = {

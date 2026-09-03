@@ -650,7 +650,43 @@ Follow-up prioritization must skip inventory-attention items.
 
 ---
 
-## Eval Coverage (Agent 2.3 Phase A)
+## G-46 — Own inventory free-text ingest with soft clarifies
+
+User (from inventory CTA / forced `create_inventory`):
+"טויוטה קורולה 2022 139000"
+
+Answer:
+Start `pendingInventoryDraft` (DRAFT). Identity present.
+Ask mileage once. Do not invent km.
+
+User:
+"62 אלף"
+
+Answer:
+Ask B2B once (soft).
+
+User:
+"דלג"
+
+Answer:
+Structured summary pipe format, then confirmation:
+`טויוטה קורולה | 2022 | 62,000 ק"מ | מחיר לקוח 139,000 | B2B לא ידוע`
+
+User:
+"כן"
+
+Answer:
+Persist via shared `createVehicleForDealer`.
+"נשמר במלאי. רוצה להוסיף עוד רכב?"
+
+Forbidden:
+- Interpreting CTA listing as network fishing / create_demand
+- Re-asking the same gap after `askedGaps`
+- Creating vehicle then editing on "בעצם 58 אלף" — must return to DRAFT
+
+---
+
+## Eval Coverage (Agent 2.4)
 
 | ID | Status | Coverage |
 |----|--------|----------|
@@ -667,6 +703,7 @@ Follow-up prioritization must skip inventory-attention items.
 | G-43 | **PASS** | `tests/assistant-v2.test.ts` — allowance not in prioritization |
 | G-44 | **PASS** | `tests/assistant-v2.test.ts` — no zero-category narration |
 | G-45 | **PASS** | `tests/assistant-v2.test.ts` — broker session context |
+| G-46 | **PASS** | `tests/inventory-agent-draft.test.ts` — draft gaps / summary / planner |
 
 Remaining G-04–G-40: not yet automated (see `GAP_ANALYSIS_2.2.md`).
 

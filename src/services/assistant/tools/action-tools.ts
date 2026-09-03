@@ -184,3 +184,127 @@ export async function prepareMarkSold(dealerId: string, vehicleId: string) {
     payload: { vehicleId },
   };
 }
+
+export async function createInventoryDraftFromText(
+  userId: string,
+  rawText: string
+) {
+  const { normalizeVehicle } = await import("@/services/ai/inventory-normalizer");
+  const { fieldsFromNormalized } = await import(
+    "@/services/inventory/create-vehicle"
+  );
+  const {
+    emptyDraftFields,
+    hasInventoryIdentity,
+    nextGapToAsk,
+    gapQuestion,
+    buildStructuredSummary,
+    readyForConfirmation,
+  } = await import("@/services/assistant/inventory-draft");
+  type Draft = import("@/services/assistant/conversation-state").PendingInventoryDraft;
+
+  const normalized = await normalizeVehicle(rawText, userId);
+  const mapped = fieldsFromNormalized(normalized);
+  const fields = {
+    ...emptyDraftFields(),
+    make: mapped.make,
+    model: mapped.model,
+    trim: mapped.trim,
+    year: mapped.year,
+    mileage: mapped.mileage,
+    color: mapped.color,
+    ownershipHand: mapped.ownershipHand,
+    retailPrice: mapped.retailPrice,
+    b2bPrice: mapped.b2bPrice,
+    region: mapped.region,
+  };
+
+  const draft: Draft = {
+    status: "DRAFT",
+    sourceText: rawText,
+    fields,
+    askedGaps: [],
+    ambiguities: normalized.ambiguities,
+  };
+
+  if (!hasInventoryIdentity(fields)) {
+    return {
+      ok: true as const,
+      draft,
+      phase: "need_identity" as const,
+      message:
+        "כדי לשמור רכב במלאי צריך לפחות יצרן, דגם ושנה. שלח שוב עם הפרטים האלה (לדוגמה: טויוטה קורולה 2022).",
+    };
+  }
+
+  const gap = nextGapToAsk(draft);
+  if (gap) {
+    return {
+      ok: true as const,
+      draft,
+      phase: "ask_gap" as const,
+      gap,
+      message: `רשמתי טיוטה. ${gapQuestion(gap)}`,
+    };
+  }
+
+  if (readyForConfirmation(draft)) {
+    const summary = buildStructuredSummary(draft);
+    return {
+      ok: true as const,
+      draft: { ...draft, status: "WAITING_CONFIRMATION" as const },
+      phase: "confirm" as const,
+      summary,
+      message: `סיכום לשמירה:\n${summary}\n\nלשמור במלאי?`,
+    };
+  }
+
+  return {
+    ok: true as const,
+    draft,
+    phase: "need_identity" as const,
+    message: "חסרים פרטי זיהוי בסיסיים.",
+  };
+}
+
+export async function executeConfirmInventoryCreate(
+  dealerId: string,
+  draft: {
+    sourceText: string;
+    fields: {
+      make: string | null;
+      model: string | null;
+      trim: string | null;
+      year: number | null;
+      mileage: number | null;
+      color: string | null;
+      ownershipHand: number | null;
+      retailPrice: number | null;
+      b2bPrice: number | null;
+      region: string | null;
+    };
+  }
+) {
+  const { createVehicleForDealer } = await import(
+    "@/services/inventory/create-vehicle"
+  );
+  const result = await createVehicleForDealer({
+    dealerId,
+    rawInput: draft.sourceText,
+    fields: draft.fields,
+  });
+
+  if (!result.ok) {
+    return { ok: false as const, error: result.error, message: result.message };
+  }
+
+  await logAppEvent({
+    eventType: "vehicle_created",
+    entityType: "Vehicle",
+    entityId: result.vehicle.id,
+    dealerId,
+    metadata: { source: "agent_inventory" },
+  });
+
+  return { ok: true as const, vehicle: result.vehicle };
+}

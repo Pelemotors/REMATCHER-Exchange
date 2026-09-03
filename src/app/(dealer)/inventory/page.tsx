@@ -77,7 +77,19 @@ export default function InventoryPage() {
         title="המלאי שלי"
         subtitle="רק המלאי שלך — לא גלישה ברשת"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <ButtonV2
+              variant="secondary"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent("rematcher:open-assistant", {
+                    detail: { mode: "create_inventory" },
+                  })
+                );
+              }}
+            >
+              הוסף עם הסוכן
+            </ButtonV2>
             <ButtonV2 variant="secondary" onClick={() => setShowImport(!showImport)}>
               ייבוא קובץ
             </ButtonV2>
@@ -101,9 +113,23 @@ export default function InventoryPage() {
               onChange={(e) => setRawInput(e.target.value)}
               required
             />
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <ButtonV2 type="submit" variant="signal" className="flex-1" disabled={submitting}>
                 {submitting ? "מעבד..." : "הוסף ונרמל"}
+              </ButtonV2>
+              <ButtonV2
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowAdd(false);
+                  window.dispatchEvent(
+                    new CustomEvent("rematcher:open-assistant", {
+                      detail: { mode: "create_inventory" },
+                    })
+                  );
+                }}
+              >
+                הוסף עם הסוכן
               </ButtonV2>
               <ButtonV2 variant="secondary" onClick={() => setShowAdd(false)}>
                 ביטול

@@ -31,6 +31,7 @@ import {
   prepareDemandRenewal,
   prepareMarkSold,
 } from "@/services/assistant/tools/action-tools";
+import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
 import { planAgentTurn } from "@/services/assistant/planner";
 import { mergeSessionContext } from "@/services/assistant/commercial-judgment";
 import {
@@ -90,9 +91,38 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
+  // --- Inventory draft / confirmation (explicit state machine) ---
+  if (
+    params.conversation?.pendingInventoryDraft ||
+    params.conversation?.pendingConfirmation?.action === "create_inventory" ||
+    params.conversation?.sessionContext?.forcedIntent === "create_inventory"
+  ) {
+    const inventoryTurn = await handleInventoryIngestTurn({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      conversation: params.conversation,
+      meta,
+      forceStart:
+        params.conversation?.sessionContext?.forcedIntent === "create_inventory" &&
+        !params.conversation?.pendingInventoryDraft,
+    });
+    if (inventoryTurn) return inventoryTurn;
+  }
+
   // --- Confirmation flow ---
   if (params.conversation?.pendingConfirmation) {
     const pending = params.conversation.pendingConfirmation;
+    if (pending.action === "create_inventory") {
+      const inventoryTurn = await handleInventoryIngestTurn({
+        dealerId: params.dealerId,
+        userId: params.userId,
+        message: params.message,
+        conversation: params.conversation,
+        meta,
+      });
+      if (inventoryTurn) return inventoryTurn;
+    }
     if (isConfirmation(params.message)) {
       const demandId = pending.payload.demandId as string;
       if (pending.action === "renew_demand") {
@@ -262,6 +292,18 @@ export async function runExchangeAssistantV2(params: {
   meta.model = plannerModel;
 
   // --- Create demand action ---
+  if (plan.actionIntent === "create_inventory") {
+    const inventoryTurn = await handleInventoryIngestTurn({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      conversation: params.conversation,
+      meta,
+      forceStart: true,
+    });
+    if (inventoryTurn) return inventoryTurn;
+  }
+
   if (plan.actionIntent === "create_demand") {
     const draft = await createDemandDraft(
       params.dealerId,
