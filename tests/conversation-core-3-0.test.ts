@@ -18,11 +18,17 @@ import {
   planTurnFallback,
   turnPlanToEvent,
 } from "@/services/assistant/turn-planner";
-import { validateTurnPlan, toolGoalToReadTools } from "@/services/assistant/turn-policy";
+import {
+  inventoryOwnsTurn,
+  shouldProposeDemandClosure,
+  validateTurnPlan,
+  toolGoalToReadTools,
+} from "@/services/assistant/turn-policy";
 import { checkPrivacyGate } from "@/services/assistant/privacy-gate";
 import { AGENT_VERSION } from "@/services/assistant/tools/registry";
 import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
 import type { PendingInventoryDraft } from "@/services/assistant/inventory-draft";
+import type { AgentTurnPlan } from "@/services/assistant/agent-turn-plan";
 import type { ConversationState } from "@/services/assistant/conversation-state";
 
 type JsonSchemaNode = {
@@ -210,5 +216,96 @@ describe("Confirm requires pending mutation", () => {
     plan.action.kind = "CONFIRM_PENDING_MUTATION";
     const policy = validateTurnPlan({ message: "כן", plan, conversation: {} });
     expect(policy.decision).toBe("REQUIRE_CLARIFICATION");
+  });
+});
+
+function stubPlan(
+  overrides: Partial<{
+    kind: AgentTurnPlan["action"]["kind"];
+    capability: string | null;
+    toolGoal: AgentTurnPlan["action"]["toolGoal"];
+    facts: AgentTurnPlan["facts"];
+    keepCurrentTask: boolean;
+  }>
+): AgentTurnPlan {
+  return {
+    understanding: {
+      userGoal: "cancel all active searches",
+      messageMeaning: "תבטל כרגע את כל החיפושים שלי",
+      refersToCurrentTask: false,
+      refersToActiveObject: false,
+      targetReference: "all active searches",
+    },
+    responseNeed: { shouldAnswerNow: true, answerGoal: "confirm_close" },
+    conversation: {
+      keepCurrentTask: overrides.keepCurrentTask ?? false,
+      suspendCurrentTask: true,
+      resumeTaskReference: null,
+      correctedUnderstanding: null,
+    },
+    facts: overrides.facts ?? { add: [], correct: [], reject: [] },
+    action: {
+      kind: overrides.kind ?? "PROPOSE_MUTATION",
+      capability: overrides.capability ?? "searches",
+      toolGoal: overrides.toolGoal ?? "get_my_searches",
+      targetReference: "all active searches",
+    },
+    clarification: { needed: false, reason: null, suggestedQuestion: null },
+    telemetryHint: { relation: "NEW_REQUEST", questionAbout: null },
+    confidence: 0.8,
+    source: "ai",
+  };
+}
+
+describe("Capability routing — inventory is not the default sink", () => {
+  it("inventoryMode fallback does not invent PROPOSE_MUTATION inventory", () => {
+    const plan = planTurnFallback({
+      message: "תבטל כרגע את כל החיפושים שלי",
+      inventoryMode: true,
+    });
+    expect(plan.action.capability).not.toBe("inventory");
+    expect(plan.action.kind).not.toBe("PROPOSE_MUTATION");
+  });
+
+  it("PROPOSE_MUTATION inventory without vehicle facts does not own the turn", () => {
+    const plan = stubPlan({ capability: "inventory", toolGoal: null });
+    expect(
+      inventoryOwnsTurn({
+        plan,
+        conversation: {
+          sessionContext: { operatingMode: "inventory_management" },
+        },
+      })
+    ).toBe(false);
+  });
+
+  it("production transcript: 4 searches + inventory workspace → demand closure, not inventory", () => {
+    const plan = stubPlan({
+      capability: "inventory",
+      toolGoal: null,
+    });
+    const conversation: ConversationState = {
+      sessionContext: { operatingMode: "inventory_management" },
+      lastAuthorizedSnapshot: {
+        activeDemandCount: 4,
+        activeDemandIds: ["d1", "d2", "d3", "d4"],
+        activeDemandTitles: ["Mazda CX-5", "A", "B", "C"],
+      },
+      lastList: [
+        { id: "d1", title: "Mazda CX-5", type: "demand" },
+        { id: "d2", title: "A", type: "demand" },
+        { id: "d3", title: "B", type: "demand" },
+        { id: "d4", title: "C", type: "demand" },
+      ],
+    };
+    expect(inventoryOwnsTurn({ plan, conversation })).toBe(false);
+    expect(shouldProposeDemandClosure({ plan, conversation })).toBe(true);
+    expect(turnPlanToEvent(plan).intent).not.toBe("create_inventory");
+  });
+
+  it("capability searches always proposes demand closure", () => {
+    const plan = stubPlan({ capability: "searches" });
+    expect(shouldProposeDemandClosure({ plan, conversation: {} })).toBe(true);
+    expect(inventoryOwnsTurn({ plan, conversation: {} })).toBe(false);
   });
 });

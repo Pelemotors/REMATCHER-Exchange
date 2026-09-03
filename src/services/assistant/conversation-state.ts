@@ -67,6 +67,13 @@ export interface ConversationState {
   }>;
   suspendedContext?: import("@/services/assistant/turn-event").SuspendedContext;
   preferredClarificationWording?: Record<string, string>;
+  /** Compact last authorized tool snapshot for references like "כל החיפושים" */
+  lastAuthorizedSnapshot?: {
+    activeDemandIds?: string[];
+    activeDemandTitles?: string[];
+    activeDemandCount?: number;
+    matchCount?: number;
+  };
 }
 
 export interface AssistantCard {

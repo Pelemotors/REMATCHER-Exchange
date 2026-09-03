@@ -820,10 +820,11 @@ export async function handleInventoryIngestTurn(params: {
 
   if (
     !isQuestionTurn &&
-    (params.forceStart ||
-      baseConversation.sessionContext?.forcedIntent === "create_inventory" ||
-      turn?.intent === "create_inventory" ||
-      params.message === "הוסף עוד רכב")
+    (params.message === "הוסף עוד רכב" ||
+      /^(הוסף עם הסוכן|הוספת מלאי)$/i.test(params.message.trim()) ||
+      params.forceStart ||
+      (turn?.intent === "create_inventory" &&
+        Boolean(turn.extractedFacts?.make || turn.extractedFacts?.model)))
   ) {
     if (
       params.message === "הוסף עוד רכב" ||

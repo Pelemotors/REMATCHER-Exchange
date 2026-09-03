@@ -19,9 +19,11 @@ import {
 import {
   createDemandDraft,
   executeConfirmValidation,
+  executeBulkDemandClosure,
   executeDemandClosure,
   executeDemandRenewal,
   markMyVehicleSold,
+  prepareBulkDemandClosure,
   prepareConfirmValidation,
   prepareDemandClosure,
   prepareDemandRenewal,
@@ -40,6 +42,8 @@ import {
   turnPlanToEvent,
 } from "@/services/assistant/turn-planner";
 import {
+  inventoryOwnsTurn,
+  shouldProposeDemandClosure,
   toolGoalToReadTools,
   validateTurnPlan,
 } from "@/services/assistant/turn-policy";
@@ -143,6 +147,9 @@ export async function runExchangeAssistantV2(params: {
         source: turnPlan.source,
         relation: turnPlan.telemetryHint.relation,
         confidence: turnPlan.confidence,
+        capability: turnPlan.action.capability,
+        toolGoal: turnPlan.action.toolGoal,
+        userGoal: turnPlan.understanding.userGoal?.slice(0, 120),
       },
     });
   }
@@ -250,6 +257,17 @@ export async function runExchangeAssistantV2(params: {
         suggestions: response.suggestions,
         conversation: {
           lastList: response.lastList,
+          lastAuthorizedSnapshot: {
+            ...params.conversation?.lastAuthorizedSnapshot,
+            activeDemandCount: response.lastList.filter((i) => i.type === "demand")
+              .length,
+            activeDemandIds: response.lastList
+              .filter((i) => i.type === "demand")
+              .map((i) => i.id),
+            activeDemandTitles: response.lastList
+              .filter((i) => i.type === "demand")
+              .map((i) => i.title),
+          },
           sessionContext: params.conversation?.sessionContext,
           suspendedContext: params.conversation?.suspendedContext,
           lastInterpretation: turn ?? undefined,
@@ -258,31 +276,79 @@ export async function runExchangeAssistantV2(params: {
       };
     }
   } else {
-    // ANSWER_ONLY / advisory / context — inventory ingest handles via turn event
-    // Inventory create when draft/forced or invent intent — NOT when answer-only
     const answerOnly =
       turnPlan?.action.kind === "ANSWER_ONLY" ||
       turn?.relation === "ADVISORY_QUESTION" ||
       turn?.relation === "CONTEXT_QUESTION" ||
       turn?.intent === "help";
 
-    const shouldIngest =
-      !answerOnly &&
-      (params.conversation?.pendingInventoryDraft ||
-        params.conversation?.pendingConfirmation?.action === "create_inventory" ||
-        params.conversation?.sessionContext?.forcedIntent === "create_inventory" ||
-        turn?.intent === "create_inventory" ||
-        (inInventoryWorkspace &&
-          turn?.targetCapability === "inventory" &&
-          turn.relation !== "TOPIC_SWITCH" &&
-          turnPlan?.action.kind !== "CLARIFY" &&
-          !params.conversation?.pendingInventoryMutation));
+    const searchClose =
+      Boolean(turnPlan) &&
+      shouldProposeDemandClosure({
+        plan: turnPlan!,
+        conversation: params.conversation,
+      });
 
-    // Route answer-only / clarify through ingest when inventory context (preserves draft)
+    if (searchClose) {
+      const prep = await prepareBulkDemandClosure(params.dealerId);
+      meta.responseType = "confirmation_close";
+      if (prep.empty) {
+        return {
+          intent: "CLOSE_DEMAND",
+          message: "אין לך חיפושים פעילים לסגור כרגע.",
+          conversation: {
+            lastList: params.conversation?.lastList,
+            lastAuthorizedSnapshot: {
+              ...params.conversation?.lastAuthorizedSnapshot,
+              activeDemandCount: 0,
+              activeDemandIds: [],
+              activeDemandTitles: [],
+            },
+            pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
+            sessionContext: params.conversation?.sessionContext,
+            lastInterpretation: turn ?? undefined,
+          },
+          meta,
+        };
+      }
+      return {
+        intent: "CLOSE_DEMAND",
+        message: prep.label,
+        requiresConfirmation: {
+          action: prep.action,
+          label: prep.label,
+          payload: prep.payload,
+        },
+        conversation: {
+          lastList: params.conversation?.lastList,
+          lastAuthorizedSnapshot: {
+            activeDemandCount: prep.demands.length,
+            activeDemandIds: prep.demands.map((d) => d.id),
+            activeDemandTitles: prep.demands.map((d) => d.title),
+          },
+          pendingConfirmation: {
+            action: prep.action,
+            label: prep.label,
+            payload: prep.payload,
+          },
+          pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
+          sessionContext: params.conversation?.sessionContext,
+          lastInterpretation: turn ?? undefined,
+        },
+        meta,
+      };
+    }
+
+    const shouldIngest =
+      Boolean(turnPlan) &&
+      inventoryOwnsTurn({
+        plan: turnPlan!,
+        conversation: params.conversation,
+      });
+
     if (
-      answerOnly ||
-      turnPlan?.action.kind === "CLARIFY" ||
-      shouldIngest
+      (answerOnly || turnPlan?.action.kind === "CLARIFY") &&
+      params.conversation?.pendingInventoryDraft
     ) {
       const inventoryTurn = await handleInventoryIngestTurn({
         dealerId: params.dealerId,
@@ -291,19 +357,24 @@ export async function runExchangeAssistantV2(params: {
         conversation: params.conversation,
         meta,
         turn: turn ?? undefined,
-        forceStart:
-          !answerOnly &&
-          turnPlan?.action.kind !== "CLARIFY" &&
-          !params.conversation?.pendingInventoryDraft &&
-          (params.conversation?.sessionContext?.forcedIntent ===
-            "create_inventory" ||
-            turn?.intent === "create_inventory" ||
-            (inInventoryWorkspace && turnPlan?.action.kind === "PROPOSE_MUTATION")),
+        forceStart: false,
       });
       if (inventoryTurn) return inventoryTurn;
     }
 
-    // Inventory manage (update / sold) — after interpretation
+    if (shouldIngest) {
+      const inventoryTurn = await handleInventoryIngestTurn({
+        dealerId: params.dealerId,
+        userId: params.userId,
+        message: params.message,
+        conversation: params.conversation,
+        meta,
+        turn: turn ?? undefined,
+        forceStart: false,
+      });
+      if (inventoryTurn) return inventoryTurn;
+    }
+
     if (
       params.conversation?.pendingInventoryMutation ||
       params.conversation?.pendingConfirmation?.action === "update_inventory" ||
@@ -311,10 +382,7 @@ export async function runExchangeAssistantV2(params: {
       params.conversation?.pendingConfirmation?.action === "mark_unavailable" ||
       turn?.intent === "update_inventory" ||
       turn?.intent === "mark_sold" ||
-      turn?.intent === "mark_unavailable" ||
-      (inInventoryWorkspace &&
-        (turn?.relation === "ANSWER" || turn?.relation === "ADDITIONAL_INFO") &&
-        params.conversation?.focusedObject?.type === "vehicle")
+      turn?.intent === "mark_unavailable"
     ) {
       const manageTurn = await handleInventoryManageTurn({
         dealerId: params.dealerId,
@@ -330,36 +398,6 @@ export async function runExchangeAssistantV2(params: {
               : undefined,
       });
       if (manageTurn) return manageTurn;
-    }
-
-    // Inventory workspace leftover free text → create ONLY if plan proposes mutation
-    if (
-      inInventoryWorkspace &&
-      !answerOnly &&
-      turnPlan?.action.kind === "PROPOSE_MUTATION" &&
-      !params.conversation?.pendingInventoryDraft &&
-      !params.conversation?.pendingInventoryMutation &&
-      turn?.relation !== "TOPIC_SWITCH" &&
-      turn?.intent !== "read_matches" &&
-      turn?.intent !== "read_state"
-    ) {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message: params.message,
-        conversation: {
-          ...params.conversation,
-          sessionContext: {
-            ...params.conversation?.sessionContext,
-            forcedIntent: "create_inventory",
-            operatingMode: "inventory_management",
-          },
-        },
-        meta,
-        turn: turn ?? undefined,
-        forceStart: true,
-      });
-      if (inventoryTurn) return inventoryTurn;
     }
   }
 
@@ -407,6 +445,31 @@ export async function runExchangeAssistantV2(params: {
             },
           ],
           conversation: { lastList: params.conversation.lastList },
+          meta,
+        };
+      }
+      if (pending.action === "close_demands_bulk") {
+        const demandIds = (pending.payload.demandIds as string[]) ?? [];
+        const result = await executeBulkDemandClosure(
+          params.dealerId,
+          demandIds
+        );
+        meta.responseType = "mutation_close";
+        return {
+          intent: "CLOSE_DEMAND",
+          message:
+            result.closed > 0
+              ? `סגרתי ${result.closed} חיפושים פעילים.`
+              : "לא הצלחתי לסגור את החיפושים.",
+          conversation: {
+            lastAuthorizedSnapshot: {
+              activeDemandCount: 0,
+              activeDemandIds: [],
+              activeDemandTitles: [],
+            },
+            pendingInventoryDraft: params.conversation.pendingInventoryDraft,
+            sessionContext: params.conversation.sessionContext,
+          },
           meta,
         };
       }
@@ -561,7 +624,8 @@ export async function runExchangeAssistantV2(params: {
   meta.model = plannerModel;
 
   // --- Create demand action ---
-  if (plan.actionIntent === "create_inventory") {
+  // Legacy planner must not re-own a turn Conversation Core already planned.
+  if (plan.actionIntent === "create_inventory" && !turnPlan) {
     const inventoryTurn = await handleInventoryIngestTurn({
       dealerId: params.dealerId,
       userId: params.userId,
@@ -760,6 +824,17 @@ export async function runExchangeAssistantV2(params: {
     suggestions: response.suggestions,
     conversation: {
       lastList: response.lastList,
+      lastAuthorizedSnapshot: {
+        ...params.conversation?.lastAuthorizedSnapshot,
+        activeDemandCount: response.lastList.filter((i) => i.type === "demand")
+          .length,
+        activeDemandIds: response.lastList
+          .filter((i) => i.type === "demand")
+          .map((i) => i.id),
+        activeDemandTitles: response.lastList
+          .filter((i) => i.type === "demand")
+          .map((i) => i.title),
+      },
       goal: plan.goal,
       sessionContext,
       suspendedContext: params.conversation?.suspendedContext,

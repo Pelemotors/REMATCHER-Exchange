@@ -486,9 +486,13 @@ export function interpretTurnFallback(params: {
       /\?\s*$/.test(m) ||
       /^(?:מה|איך|למה|האם|כדאי|מומלץ)/i.test(m);
     return {
-      relation: pendingDraft ? "UNKNOWN" : looksLikeQuestion ? "ADVISORY_QUESTION" : "NEW_REQUEST",
-      intent: looksLikeQuestion ? "help" : "create_inventory",
-      targetCapability: "inventory",
+      relation: pendingDraft
+        ? "UNKNOWN"
+        : looksLikeQuestion
+          ? "ADVISORY_QUESTION"
+          : "UNKNOWN",
+      intent: looksLikeQuestion ? "help" : "unknown",
+      targetCapability: pendingDraft ? "inventory" : "unknown",
       questionAbout: looksLikeQuestion ? "GENERAL_ADVISORY" : null,
       confirms: false,
       cancels: false,
@@ -498,7 +502,7 @@ export function interpretTurnFallback(params: {
       needsClarification: true,
       clarificationReason: looksLikeQuestion
         ? "unparsed_advisory_question"
-        : "unparsed_inventory_message",
+        : "unparsed_free_text",
       source: "fallback",
     };
   }

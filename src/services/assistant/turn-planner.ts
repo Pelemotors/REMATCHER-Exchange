@@ -42,16 +42,15 @@ export function turnPlanToEvent(plan: AgentTurnPlan): StructuredTurnEvent {
               plan.action.toolGoal === "get_my_state"
             ? "read_state"
             : plan.action.kind === "PROPOSE_MUTATION" &&
-                plan.action.capability === "inventory"
+                plan.action.capability === "inventory" &&
+                (plan.facts.add.length > 0 || plan.facts.correct.length > 0)
               ? plan.facts.add.some((f) => f.field === "status")
                 ? "mark_sold"
                 : "create_inventory"
               : plan.telemetryHint.relation === "ADVISORY_QUESTION" ||
                   plan.action.kind === "ANSWER_ONLY"
                 ? "help"
-                : plan.action.capability === "inventory"
-                  ? "create_inventory"
-                  : "continue_current",
+                : "continue_current",
     targetCapability:
       (plan.action.capability as StructuredTurnEvent["targetCapability"]) ??
       "unknown",
@@ -117,7 +116,11 @@ export function planTurnFallback(params: {
 
   let kind: AgentTurnPlan["action"]["kind"] = "NONE";
   let toolGoal: AgentTurnPlan["action"]["toolGoal"] = null;
-  let capability: string | null = event.targetCapability;
+  let capability: string | null =
+    event.targetCapability === "inventory" &&
+    !(add.length || correct.length || event.relation === "ADVISORY_QUESTION")
+      ? null
+      : event.targetCapability;
 
   if (event.relation === "CONFIRMATION") kind = "CONFIRM_PENDING_MUTATION";
   else if (event.relation === "CANCEL") kind = "CANCEL_PENDING_MUTATION";
@@ -138,9 +141,8 @@ export function planTurnFallback(params: {
   } else if (add.length || correct.length) {
     kind = "PROPOSE_MUTATION";
     capability = "inventory";
-  } else if (params.inventoryMode && !event.needsClarification) {
-    kind = "PROPOSE_MUTATION";
-    capability = "inventory";
+  } else if (event.needsClarification) {
+    kind = "CLARIFY";
   }
 
   return {
@@ -267,6 +269,11 @@ export async function planConversationTurn(params: {
       pendingMutation: mutation
         ? { type: mutation.type, status: mutation.status, label: mutation.label }
         : null,
+      lastList: (params.conversation?.lastList ?? []).slice(0, 8).map((item) => ({
+        type: item.type,
+        title: item.title,
+      })),
+      lastAuthorizedSnapshot: params.conversation?.lastAuthorizedSnapshot ?? null,
       suspended: params.conversation?.suspendedContext
         ? { kind: params.conversation.suspendedContext.kind }
         : null,
@@ -301,6 +308,10 @@ RULES:
 9. UNKNOWN / unclear → CLARIFY — never force next inventory gap.
 10. Matching questions: propose READ get_my_matches — never invent match counts.
 11. Never invent year/mileage/price/model.
+12. Inventory page / inventoryMode is only a HINT. It does NOT mean this message is a vehicle.
+13. Cancelling/closing searches → capability="searches", kind=PROPOSE_MUTATION, toolGoal=get_my_searches. Resolve "כולם" from lastList / lastAuthorizedSnapshot. Never start an inventory draft.
+14. Being on /inventory does not imprison capability: searches, matches, reveals, outcomes, activity, commercial, and help are first-class.
+15. Bulk/plural: set targetReference to the scope. Do not invent IDs — REMATCHER resolves authorized IDs.
 
 Return JSON matching the schema exactly. All required fields present (null for optional).`,
       userContent: JSON.stringify(ctx),

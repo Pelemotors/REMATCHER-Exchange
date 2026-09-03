@@ -119,6 +119,42 @@ export async function executeDemandClosure(dealerId: string, demandId: string) {
   return { ok: true as const };
 }
 
+/** Resolve dealer's own active searches and propose bulk close — no mutation yet. */
+export async function prepareBulkDemandClosure(dealerId: string) {
+  const { executeToolsParallel } = await import("./read-tools");
+  const { results } = await executeToolsParallel(["getMyActiveDemands"], dealerId);
+  const demands = (results.getMyActiveDemands ?? []) as Array<{
+    id: string;
+    title: string;
+  }>;
+  if (demands.length === 0) {
+    return { ok: true as const, empty: true as const, demands: [] as typeof demands };
+  }
+  const titles = demands.map((d) => d.title).slice(0, 8);
+  const more = demands.length > titles.length ? ` ועוד ${demands.length - titles.length}` : "";
+  return {
+    ok: true as const,
+    empty: false as const,
+    demands,
+    action: "close_demands_bulk",
+    label: `לסגור ${demands.length} חיפושים פעילים (${titles.join(", ")}${more})?`,
+    payload: { demandIds: demands.map((d) => d.id) },
+  };
+}
+
+export async function executeBulkDemandClosure(
+  dealerId: string,
+  demandIds: string[]
+) {
+  const unique = [...new Set(demandIds.filter(Boolean))];
+  let closed = 0;
+  for (const id of unique) {
+    const result = await executeDemandClosure(dealerId, id);
+    if (result.ok) closed += 1;
+  }
+  return { ok: true as const, closed, requested: unique.length };
+}
+
 export async function markMyVehicleSold(dealerId: string, vehicleId: string) {
   const { markVehicleSoldForDealer } = await import(
     "@/services/inventory/mark-sold"
