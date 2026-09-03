@@ -93,7 +93,7 @@ function plan(partial: Partial<AgentTurnPlan["action"]>): AgentTurnPlan {
 
 describe("Universal Agent 3.1", () => {
   it("same Agent, version 3.1", () => {
-    expect(AGENT_VERSION).toBe("3.1.1");
+    expect(AGENT_VERSION).toBe("4.0");
   });
 
   it("TURN_PLAN_SCHEMA remains recursively strict and includes operation/scope", () => {
@@ -113,7 +113,7 @@ describe("Universal Agent 3.1", () => {
       "utf8"
     );
     expect(src).not.toMatch(/planAgentTurn/);
-    expect(src).toMatch(/routeTurnPlan/);
+    expect(src).toMatch(/runAgentToolLoop/);
     expect(src).toMatch(/legacyPlannerUsed: false/);
   });
 

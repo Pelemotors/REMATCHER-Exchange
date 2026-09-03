@@ -1,19 +1,29 @@
+/**
+ * Exchange Assistant orchestrator — Agent 4.0 hybrid runtime.
+ * READ/advice: bounded OpenAI tool loop (GPT chooses tools).
+ * WRITE: Action Gateway (deterministic authorize → resolve → confirm → execute).
+ * Turn Planner is NOT the mandatory conversational brain for reads.
+ */
 import "server-only";
 import { logAppEvent } from "@/services/notifications";
 import {
   type AssistantCard,
   type ConversationState,
+  appendRecentTurns,
   isConfirmation,
   isRejection,
 } from "@/services/assistant/conversation-state";
 import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
 import { AGENT_VERSION, type AgentMeta } from "@/services/assistant/tools/registry";
-import { planConversationTurn } from "@/services/assistant/turn-planner";
-import { validateTurnPlan } from "@/services/assistant/turn-policy";
-import { routeTurnPlan } from "@/services/assistant/capability-router";
+import { runAgentToolLoop } from "@/services/assistant/agent-loop";
+import { runActionGateway } from "@/services/assistant/action-gateway";
 import { executeSearchMutation } from "@/services/assistant/search-capability";
 import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
-import { privacyBlockedMessage } from "@/services/assistant/privacy-gate";
+import {
+  checkPrivacyGate,
+  privacyBlockedMessage,
+} from "@/services/assistant/privacy-gate";
+import { productHelpAnswer } from "@/services/assistant/help-responses";
 import type {
   AssistantContext,
   AssistantResponse,
@@ -23,6 +33,14 @@ export interface AssistantV2Response extends AssistantResponse {
   cards?: AssistantCard[];
   conversation?: ConversationState;
   meta?: AgentMeta;
+}
+
+function withHistory(
+  conversation: ConversationState | undefined,
+  userMessage: string,
+  assistantMessage: string
+): ConversationState {
+  return appendRecentTurns(conversation, userMessage, assistantMessage);
 }
 
 export async function runExchangeAssistantV2(params: {
@@ -44,6 +62,9 @@ export async function runExchangeAssistantV2(params: {
     fallbackReason: null,
     responseType: "read",
     legacyPlannerUsed: false,
+    modelCallCount: 0,
+    toolRoundCount: 0,
+    finalResponseSource: "agent_loop",
   };
 
   if (params.context.mode === "inventory_management") {
@@ -61,6 +82,32 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
+  // Narrow privacy gate — network fishing only
+  const privacy = checkPrivacyGate(params.message);
+  if (privacy.blocked && privacy.reason) {
+    meta.responseType = "privacy_blocked";
+    meta.finalResponseSource = "privacy";
+    meta.policyResult = "DENY";
+    await logAppEvent({
+      eventType: "assistant_privacy_block",
+      dealerId: params.dealerId,
+      metadata: {
+        reason: privacy.reason,
+        agentVersion: AGENT_VERSION,
+        via: "privacy_gate",
+      },
+    });
+    const message = privacyBlockedMessage(privacy.reason);
+    return {
+      intent: "FISHING_BLOCKED",
+      privacyBlocked: true,
+      message,
+      suggestions: [],
+      conversation: withHistory(params.conversation, params.message, message),
+      meta,
+    };
+  }
+
   const pendingConf = params.conversation?.pendingConfirmation;
   const exactConfirm =
     pendingConf &&
@@ -75,15 +122,22 @@ export async function runExchangeAssistantV2(params: {
 
   if (exactCancel && pendingConf) {
     meta.executor = "exact_cancel";
+    meta.finalResponseSource = "exact_cta";
+    const message = "בוטל. לא בוצעה פעולה.";
     return {
       intent: "UNKNOWN",
-      message: "בוטל. לא בוצעה פעולה.",
-      conversation: {
-        lastList: params.conversation?.lastList,
-        pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
-        pendingSearchDraft: params.conversation?.pendingSearchDraft,
-        sessionContext: params.conversation?.sessionContext,
-      },
+      message,
+      conversation: withHistory(
+        {
+          lastList: params.conversation?.lastList,
+          pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
+          pendingSearchDraft: params.conversation?.pendingSearchDraft,
+          sessionContext: params.conversation?.sessionContext,
+          recentTurns: params.conversation?.recentTurns,
+        },
+        params.message,
+        message
+      ),
       meta,
     };
   }
@@ -98,7 +152,16 @@ export async function runExchangeAssistantV2(params: {
     if (searchDone) {
       meta.executor = searchDone.meta?.executor ?? "search_confirm";
       meta.legacyPlannerUsed = false;
-      return searchDone;
+      meta.finalResponseSource = "exact_cta";
+      return {
+        ...searchDone,
+        conversation: withHistory(
+          searchDone.conversation ?? params.conversation,
+          params.message,
+          searchDone.message
+        ),
+        meta,
+      };
     }
     if (pendingConf.action === "create_inventory") {
       const inventoryTurn = await handleInventoryIngestTurn({
@@ -108,108 +171,156 @@ export async function runExchangeAssistantV2(params: {
         conversation: params.conversation,
         meta,
       });
-      if (inventoryTurn) return inventoryTurn;
+      if (inventoryTurn) {
+        meta.finalResponseSource = "exact_cta";
+        return {
+          ...inventoryTurn,
+          conversation: withHistory(
+            inventoryTurn.conversation ?? params.conversation,
+            params.message,
+            inventoryTurn.message
+          ),
+          meta,
+        };
+      }
     }
   }
 
-  const planStarted = Date.now();
-  const turnPlan = await planConversationTurn({
-    message: params.message,
+  // Forced inventory CTA from UI — domain workflow executor, not conversational owner
+  if (
+    params.conversation?.sessionContext?.forcedIntent === "create_inventory" &&
+    !params.conversation.pendingConfirmation
+  ) {
+    const inventoryTurn = await handleInventoryIngestTurn({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      conversation: params.conversation,
+      meta,
+      forceStart: true,
+    });
+    if (inventoryTurn) {
+      meta.executor = "inventory_ingest_forced";
+      meta.finalResponseSource = "action_gateway";
+      return {
+        ...inventoryTurn,
+        conversation: withHistory(
+          inventoryTurn.conversation ?? params.conversation,
+          params.message,
+          inventoryTurn.message
+        ),
+        meta,
+      };
+    }
+  }
+
+  // ── Agent 4.0 primary path: tool-using GPT loop ──
+  const loop = await runAgentToolLoop({
+    dealerId: params.dealerId,
     userId: params.userId,
+    message: params.message,
     conversation: params.conversation,
+    route: params.context.route,
     inventoryMode:
       params.context.mode === "inventory_management" ||
       params.conversation?.sessionContext?.operatingMode ===
         "inventory_management",
   });
-  meta.plannerDurationMs = Date.now() - planStarted;
-  meta.plannerUsed = turnPlan.source === "ai";
-  meta.tools = [...meta.tools, `turn_plan:${turnPlan.source}`];
-  if (turnPlan.source === "fallback") {
-    meta.fallbackReason = "turn_plan_fallback";
-  }
+
+  meta.modelCallCount = loop.modelCallCount;
+  meta.toolRoundCount = loop.toolRoundCount;
+  meta.tools = [...meta.tools, ...loop.toolsUsed];
+  meta.toolDurations = { ...meta.toolDurations, ...loop.toolDurations };
+  meta.totalTokens = loop.totalTokens;
+  meta.loopLatencyMs = loop.latencyMs;
+  meta.model = loop.model;
+  meta.legacyPlannerUsed = false;
+  meta.plannerUsed = false;
 
   await logAppEvent({
-    eventType: "agent_turn_planned",
+    eventType: "agent_loop_turn",
     dealerId: params.dealerId,
     metadata: {
       agentVersion: AGENT_VERSION,
-      kind: turnPlan.action.kind,
-      source: turnPlan.source,
-      relation: turnPlan.telemetryHint.relation,
-      confidence: turnPlan.confidence,
-      capability: turnPlan.action.capability,
-      operation: turnPlan.action.operation,
-      scope: turnPlan.action.scope,
-      toolGoal: turnPlan.action.toolGoal,
-      userGoal: turnPlan.understanding.userGoal?.slice(0, 120),
+      success: loop.success,
+      modelCallCount: loop.modelCallCount,
+      toolRoundCount: loop.toolRoundCount,
+      toolsUsed: loop.toolsUsed,
+      totalTokens: loop.totalTokens,
+      latencyMs: loop.latencyMs,
+      hasProposal: Boolean(loop.proposal),
+      proposalKind: loop.proposal?.kind ?? null,
+      capability: loop.proposal?.capability ?? null,
+      operation: loop.proposal?.operation ?? null,
+      fallbackReason: loop.fallbackReason,
       legacyPlannerUsed: false,
     },
   });
 
-  const policy = validateTurnPlan({
-    message: params.message,
-    plan: turnPlan,
-    conversation: params.conversation,
-  });
-  meta.policyResult = policy.decision;
-
-  if (policy.decision === "DENY") {
-    await logAppEvent({
-      eventType: "assistant_privacy_block",
+  if (loop.proposal) {
+    const gated = await runActionGateway({
       dealerId: params.dealerId,
-      metadata: {
-        reason: policy.reason,
-        agentVersion: AGENT_VERSION,
-        via: "turn_policy",
-      },
-    });
-    meta.responseType = "privacy_blocked";
-    return {
-      intent: "FISHING_BLOCKED",
-      privacyBlocked: true,
-      message: policy.userMessage ?? privacyBlockedMessage("fishing"),
-      suggestions: [],
-      meta,
-    };
-  }
-
-  if (policy.decision === "REQUIRE_CLARIFICATION" && turnPlan.action.kind === "CLARIFY") {
-    meta.executor = "policy_clarify";
-    return {
-      intent: "UNKNOWN",
-      message: policy.question,
+      userId: params.userId,
+      message: params.message,
+      proposal: loop.proposal,
       conversation: params.conversation,
       meta,
+      entityType: params.context.entityType,
+      entityId: params.context.entityId,
+    });
+    meta.finalResponseSource = "action_gateway";
+    await logAppEvent({
+      eventType: "agent_action_gateway",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        kind: loop.proposal.kind,
+        capability: loop.proposal.capability,
+        operation: loop.proposal.operation,
+        scope: loop.proposal.scope,
+        policyResult: meta.policyResult,
+        executor: meta.executor,
+        responseType: meta.responseType,
+        legacyPlannerUsed: false,
+      },
+    });
+    return {
+      ...gated,
+      conversation: withHistory(
+        gated.conversation ?? params.conversation,
+        params.message,
+        gated.message
+      ),
+      meta,
     };
   }
 
-  const routed = await routeTurnPlan({
-    dealerId: params.dealerId,
-    userId: params.userId,
-    message: params.message,
-    plan: turnPlan,
-    conversation: params.conversation,
-    contextRoute: params.context.route,
-    entityType: params.context.entityType,
-    entityId: params.context.entityId,
+  if (!loop.success) {
+    meta.fallbackReason = loop.fallbackReason;
+    meta.finalResponseSource = "fallback";
+    meta.executor = "agent_loop_fallback";
+    // Modest fallback — no second LLM planner, no unauthorized write
+    const message =
+      loop.message ||
+      productHelpAnswer(null, params.message);
+    return {
+      intent: "UNKNOWN",
+      message,
+      conversation: withHistory(params.conversation, params.message, message),
+      meta,
+    };
+  }
+
+  meta.executor = "agent_loop";
+  meta.finalResponseSource = "agent_loop";
+  meta.responseType = "agent_answer";
+  const message = loop.message;
+  return {
+    intent: "PENDING_ACTIONS",
+    message,
+    conversation: withHistory(params.conversation, params.message, message),
     meta,
-  });
-
-  await logAppEvent({
-    eventType: "agent_turn_routed",
-    dealerId: params.dealerId,
-    metadata: {
-      agentVersion: AGENT_VERSION,
-      executor: meta.executor,
-      capability: meta.capability,
-      operation: meta.operation,
-      legacyPlannerUsed: false,
-      responseType: meta.responseType,
-    },
-  });
-
-  return routed;
+  };
 }
 
 type ExchangeStateSnapshot = {

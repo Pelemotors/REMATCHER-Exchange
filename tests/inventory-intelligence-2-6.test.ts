@@ -63,7 +63,7 @@ function baseDraft(
 
 describe("Inventory Intelligence 2.6 — versioning", () => {
   it("bumps agent and playbook — Agent may be newer than playbook minor", () => {
-    expect(["2.6", "2.7", "3.0", "3.1", "3.1.1"]).toContain(AGENT_VERSION);
+    expect(["2.6", "2.7", "3.0", "3.1", "3.1.1", "4.0"]).toContain(AGENT_VERSION);
     expect(INVENTORY_PLAYBOOK_VERSION).toBe("2.6");
   });
 
@@ -72,7 +72,7 @@ describe("Inventory Intelligence 2.6 — versioning", () => {
       join(root, "src/services/assistant/tools/registry.ts"),
       "utf8"
     );
-    expect(src).toMatch(/AGENT_VERSION = "3\.1(\.\d)?"/);
+    expect(src).toMatch(/AGENT_VERSION = "4\.0"/);
     expect(src).not.toMatch(/INVENTORY_AGENT_VERSION|separateInventoryAgent/);
   });
 });

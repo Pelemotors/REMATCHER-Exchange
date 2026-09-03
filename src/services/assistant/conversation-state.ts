@@ -81,6 +81,26 @@ export interface ConversationState {
     confirmed: import("@/lib/demand-display").DemandConfirmed;
   };
   queuedFollowUp?: string;
+  /** Compact recent chat turns for Agent 4.0 tool loop — not authority */
+  recentTurns?: Array<{ role: "user" | "assistant"; text: string }>;
+}
+
+export function appendRecentTurns(
+  state: ConversationState | undefined,
+  userText: string,
+  assistantText: string,
+  maxTurns = 12
+): ConversationState {
+  const prev = state?.recentTurns ?? [];
+  const next = [
+    ...prev,
+    { role: "user" as const, text: userText.slice(0, 500) },
+    { role: "assistant" as const, text: assistantText.slice(0, 800) },
+  ];
+  return {
+    ...state,
+    recentTurns: next.slice(-maxTurns),
+  };
 }
 
 export interface AssistantCard {

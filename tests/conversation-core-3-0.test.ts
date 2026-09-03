@@ -65,8 +65,8 @@ function validateStrictSchema(node: JsonSchemaNode, path: string): string[] {
 }
 
 describe("Conversation Core 3.0 — versioning", () => {
-  it("AGENT_VERSION is 3.1 — same Agent, universal capability ownership", () => {
-    expect(AGENT_VERSION).toBe("3.1.1");
+  it("AGENT_VERSION is 4.0 — same Agent, hybrid tool-using runtime", () => {
+    expect(AGENT_VERSION).toBe("4.0");
   });
 });
 

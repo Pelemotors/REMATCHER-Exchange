@@ -1,0 +1,405 @@
+/**
+ * Agent 4.0 — bounded OpenAI tool-calling loop for READ/advice.
+ * Tool results return to the model. Writes exit via ActionProposal to Action Gateway.
+ */
+import "server-only";
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+} from "openai/resources/chat/completions";
+import {
+  AI_MODELS,
+  AI_PROMPT_VERSIONS,
+  AGENT_LOOP_MAX_ROUNDS,
+  AGENT_LOOP_MAX_TOOLS_PER_ROUND,
+} from "@/config/product";
+import {
+  getOpenAIClient,
+  isOpenAIConfigured,
+  logAiOperation,
+} from "@/services/ai/client";
+import { AGENT_CONSTITUTION } from "@/services/assistant/agent-constitution";
+import {
+  AGENT_OPENAI_TOOLS,
+  isControlTool,
+  isReadOpenAiTool,
+  OPENAI_READ_TOOL_MAP,
+} from "@/services/assistant/agent-tools";
+import {
+  parseActionProposalFromTool,
+  type ActionProposal,
+} from "@/services/assistant/action-proposal";
+import type { ConversationState } from "@/services/assistant/conversation-state";
+import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
+import type { ReadToolName } from "@/services/assistant/tools/registry";
+import { AGENT_VERSION } from "@/services/assistant/tools/registry";
+
+export type AgentLoopResult = {
+  message: string;
+  proposal: ActionProposal | null;
+  modelCallCount: number;
+  toolRoundCount: number;
+  toolsUsed: string[];
+  toolDurations: Record<string, number>;
+  totalTokens: number;
+  latencyMs: number;
+  model: string | null;
+  success: boolean;
+  fallbackReason: string | null;
+  toolResults: Record<string, unknown>;
+};
+
+function buildSystemPrompt(params: {
+  conversation?: ConversationState;
+  route?: string;
+  inventoryMode?: boolean;
+}): string {
+  const pending = params.conversation?.pendingConfirmation;
+  const pendingBlock = pending
+    ? `\nPENDING CONFIRMATION (must respect):\naction=${pending.action}\nlabel=${pending.label}\ntargetCount=${
+        Array.isArray(pending.payload.demandIds)
+          ? (pending.payload.demandIds as string[]).length
+          : pending.payload.demandId
+            ? 1
+            : "unknown"
+      }\nscope=${pending.payload.scope ?? "n/a"}\nIf the user affirms THIS pending action → call confirm_pending_action.\nIf they reject → cancel_pending_action.\nIf they change scope → propose_mutation with the NEW scope (do not confirm the old one).\n`
+    : "\nNo pending confirmation.\n";
+
+  const draft = params.conversation?.pendingInventoryDraft
+    ? `\nPending inventory draft in progress (context only): ${JSON.stringify(
+        params.conversation.pendingInventoryDraft.fields
+      ).slice(0, 400)}\n`
+    : "";
+  const searchDraft = params.conversation?.pendingSearchDraft
+    ? `\nPending search draft (context): ${JSON.stringify(
+        params.conversation.pendingSearchDraft.confirmed
+      ).slice(0, 300)}\n`
+    : "";
+
+  return `${AGENT_CONSTITUTION}
+
+You are the REMATCHER Exchange Assistant runtime 4.0 — a tool-using conversational agent for ONE authenticated dealer.
+
+HOW YOU WORK:
+- For questions, advice, analysis, prioritization: call authorized READ tools, inspect results, call more tools if needed, then answer in Hebrew.
+- You decide which tools to call. Do not wait for TypeScript to map the question.
+- You may combine inventory, searches, matches, opportunities, validations, outcomes, commercial status.
+- Novel analytical questions are expected — investigate with tools.
+- Never invent counts, matches, inventory, identities, or permissions.
+- Never browse network inventory. Tools only return THIS dealer's authorized data.
+- Match truth is deterministic and stored — get_my_matches returns authorized stored matches only. You never decide match=true.
+- For WRITE intents (create/update/close/renew search, add/update inventory, mark sold, confirm validation): call propose_mutation. Do NOT pretend the write already happened.
+- After tool results arrive, reason over them in your next step. You may revise recommendations when new facts contradict earlier advice.
+- Keep answers concise and commercial. Answer the question first.
+
+CONTEXT:
+route=${params.route ?? "/"}
+inventoryMode=${Boolean(params.inventoryMode)}
+${pendingBlock}${draft}${searchDraft}`;
+}
+
+function historyMessages(
+  conversation?: ConversationState
+): ChatCompletionMessageParam[] {
+  const turns = conversation?.recentTurns ?? [];
+  return turns.slice(-10).map((t) => ({
+    role: t.role,
+    content: t.text,
+  }));
+}
+
+function truncateToolResult(value: unknown): string {
+  const raw = JSON.stringify(value ?? null);
+  if (raw.length <= 6000) return raw;
+  return raw.slice(0, 6000) + "…[truncated]";
+}
+
+export async function runAgentToolLoop(params: {
+  dealerId: string;
+  userId: string;
+  message: string;
+  conversation?: ConversationState;
+  route?: string;
+  inventoryMode?: boolean;
+}): Promise<AgentLoopResult> {
+  const started = Date.now();
+  const toolsUsed: string[] = [];
+  const toolDurations: Record<string, number> = {};
+  const toolResults: Record<string, unknown> = {};
+  let modelCallCount = 0;
+  let toolRoundCount = 0;
+  let totalTokens = 0;
+  let proposal: ActionProposal | null = null;
+
+  if (!isOpenAIConfigured()) {
+    return {
+      message:
+        "אני לא מצליח כרגע להתחבר למנוע השיחה. אפשר לנסות שוב, או לעבור למסכי מלאי / חיפושים / התאמות.",
+      proposal: null,
+      modelCallCount: 0,
+      toolRoundCount: 0,
+      toolsUsed: [],
+      toolDurations: {},
+      totalTokens: 0,
+      latencyMs: Date.now() - started,
+      model: null,
+      success: false,
+      fallbackReason: "openai_not_configured",
+      toolResults: {},
+    };
+  }
+
+  const openai = getOpenAIClient();
+  const model = AI_MODELS.agentLoop;
+  const messages: ChatCompletionMessageParam[] = [
+    {
+      role: "system",
+      content: buildSystemPrompt({
+        conversation: params.conversation,
+        route: params.route,
+        inventoryMode: params.inventoryMode,
+      }),
+    },
+    ...historyMessages(params.conversation),
+    { role: "user", content: params.message },
+  ];
+
+  try {
+    for (let round = 0; round < AGENT_LOOP_MAX_ROUNDS; round++) {
+      modelCallCount += 1;
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        tools: AGENT_OPENAI_TOOLS,
+        tool_choice: "auto",
+        temperature: 0.2,
+      });
+
+      const usage = completion.usage;
+      if (usage) {
+        totalTokens += usage.total_tokens ?? 0;
+      }
+
+      const choice = completion.choices[0]?.message;
+      if (!choice) throw new Error("Empty agent loop response");
+
+      const toolCalls = choice.tool_calls ?? [];
+      if (!toolCalls.length) {
+        const text = (choice.content ?? "").trim();
+        await logAiOperation({
+          operation: "agent_loop",
+          model,
+          promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+          success: true,
+          latencyMs: Date.now() - started,
+          userId: params.userId,
+          usageJson: {
+            agentVersion: AGENT_VERSION,
+            modelCallCount,
+            toolRoundCount,
+            toolsUsed,
+            totalTokens,
+            finished: "final_text",
+          },
+        });
+        return {
+          message:
+            text ||
+            "לא בטוח שהבנתי — אפשר לנסח שוב, או לשאול על מלאי, חיפושים או התאמות.",
+          proposal,
+          modelCallCount,
+          toolRoundCount,
+          toolsUsed,
+          toolDurations,
+          totalTokens,
+          latencyMs: Date.now() - started,
+          model,
+          success: true,
+          fallbackReason: null,
+          toolResults,
+        };
+      }
+
+      toolRoundCount += 1;
+      messages.push({
+        role: "assistant",
+        content: choice.content ?? null,
+        tool_calls: toolCalls,
+      });
+
+      const limited = toolCalls.slice(0, AGENT_LOOP_MAX_TOOLS_PER_ROUND);
+      const readBatch: Array<{
+        call: ChatCompletionMessageToolCall;
+        internal: ReadToolName;
+      }> = [];
+
+      for (const call of limited) {
+        const name = call.function.name;
+        toolsUsed.push(name);
+
+        if (isControlTool(name)) {
+          const parsed = parseActionProposalFromTool(
+            name,
+            call.function.arguments ?? "{}"
+          );
+          if (parsed) proposal = parsed;
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: true,
+              queued: true,
+              note: "Handed to REMATCHER Action Gateway. Do not invent execution result.",
+              proposal: parsed,
+            }),
+          });
+          continue;
+        }
+
+        if (isReadOpenAiTool(name)) {
+          readBatch.push({
+            call,
+            internal: OPENAI_READ_TOOL_MAP[name]!,
+          });
+          continue;
+        }
+
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({
+            error: "unknown_tool",
+            note: "Tool not in approved registry",
+          }),
+        });
+      }
+
+      if (readBatch.length) {
+        const names = [...new Set(readBatch.map((r) => r.internal))];
+        const { results, durations, errors } = await executeToolsParallel(
+          names,
+          params.dealerId
+        );
+        Object.assign(toolDurations, durations);
+        Object.assign(toolResults, results);
+
+        for (const item of readBatch) {
+          const result = results[item.internal];
+          const err = errors[item.internal];
+          messages.push({
+            role: "tool",
+            tool_call_id: item.call.id,
+            content: truncateToolResult(
+              err
+                ? { error: err, data: null }
+                : { data: result }
+            ),
+          });
+        }
+      }
+
+      // If a write/control proposal was made, stop the free loop and let gateway take over
+      if (proposal) {
+        await logAiOperation({
+          operation: "agent_loop",
+          model,
+          promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+          success: true,
+          latencyMs: Date.now() - started,
+          userId: params.userId,
+          usageJson: {
+            agentVersion: AGENT_VERSION,
+            modelCallCount,
+            toolRoundCount,
+            toolsUsed,
+            totalTokens,
+            finished: "action_proposal",
+            proposalKind: proposal.kind,
+            capability: proposal.capability,
+            operation: proposal.operation,
+          },
+        });
+        return {
+          message: "",
+          proposal,
+          modelCallCount,
+          toolRoundCount,
+          toolsUsed,
+          toolDurations,
+          totalTokens,
+          latencyMs: Date.now() - started,
+          model,
+          success: true,
+          fallbackReason: null,
+          toolResults,
+        };
+      }
+    }
+
+    await logAiOperation({
+      operation: "agent_loop",
+      model,
+      promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+      success: true,
+      latencyMs: Date.now() - started,
+      userId: params.userId,
+      usageJson: {
+        agentVersion: AGENT_VERSION,
+        modelCallCount,
+        toolRoundCount,
+        toolsUsed,
+        totalTokens,
+        finished: "max_rounds",
+      },
+    });
+
+    return {
+      message:
+        "אספתי מידע, אבל כדאי לנסח שוב בקצרה מה בדיוק לבדוק — מלאי, חיפושים או התאמות.",
+      proposal: null,
+      modelCallCount,
+      toolRoundCount,
+      toolsUsed,
+      toolDurations,
+      totalTokens,
+      latencyMs: Date.now() - started,
+      model,
+      success: true,
+      fallbackReason: "max_rounds",
+      toolResults,
+    };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : "unknown";
+    await logAiOperation({
+      operation: "agent_loop",
+      model,
+      promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+      success: false,
+      latencyMs: Date.now() - started,
+      userId: params.userId,
+      errorMessage: errMsg.slice(0, 300),
+      usageJson: {
+        agentVersion: AGENT_VERSION,
+        modelCallCount,
+        toolRoundCount,
+        toolsUsed,
+        totalTokens,
+      },
+    });
+    return {
+      message:
+        "לא הצלחתי להשלים את הבדיקה כרגע. אפשר לנסות שוב עוד רגע — לא בוצעה שום פעולה.",
+      proposal: null,
+      modelCallCount,
+      toolRoundCount,
+      toolsUsed,
+      toolDurations,
+      totalTokens,
+      latencyMs: Date.now() - started,
+      model,
+      success: false,
+      fallbackReason: "agent_loop_error",
+      toolResults,
+    };
+  }
+}

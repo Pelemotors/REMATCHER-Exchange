@@ -58,6 +58,39 @@ export async function executeReadTool(
             : Math.max(0, usage.monthlyAllowance - usage.monthlyUsed),
       };
     }
+    case "getMyInventory": {
+      const vehicles = await prisma.vehicle.findMany({
+        where: { dealerId, status: "ACTIVE" },
+        select: {
+          id: true,
+          make: true,
+          model: true,
+          year: true,
+          mileage: true,
+          b2bPrice: true,
+          retailPrice: true,
+          freshnessState: true,
+          ownershipHand: true,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+      });
+      return {
+        activeCount: vehicles.length,
+        vehicles: vehicles.map((v) => ({
+          id: v.id,
+          title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
+          make: v.make,
+          model: v.model,
+          year: v.year,
+          mileage: v.mileage,
+          b2bPrice: v.b2bPrice,
+          retailPrice: v.retailPrice,
+          freshnessState: v.freshnessState,
+          ownershipHand: v.ownershipHand,
+        })),
+      };
+    }
     case "getMyActiveDemands": {
       const demands = await getEnrichedDemandsForDealer(dealerId, {
         lightweight: true,

@@ -32,36 +32,29 @@ import type { StructuredTurnEvent } from "@/services/assistant/turn-event";
 
 const root = join(__dirname, "..");
 
-describe("Agent Conversation Freedom → Core 3.0", () => {
-  it("bumps AGENT_VERSION to 3.0 without a second Agent", () => {
-    expect(AGENT_VERSION).toBe("3.1.1");
+describe("Agent Conversation Freedom → Core 3.0 / 4.0", () => {
+  it("same Agent — version advances without a second Agent", () => {
+    expect(AGENT_VERSION).toBe("4.0");
     const orch = readFileSync(
       join(root, "src/services/assistant/v2-orchestrator.ts"),
       "utf8"
     );
-    expect(orch).toContain("planConversationTurn");
-    expect(orch).toContain("validateTurnPlan");
-    expect(orch).toContain("routeTurnPlan");
+    expect(orch).toContain("runAgentToolLoop");
+    expect(orch).toContain("runActionGateway");
     expect(orch).not.toMatch(/planAgentTurn/);
     expect(orch).not.toMatch(/new InventoryAgent|createInventoryAgent/);
-    const router = readFileSync(
-      join(root, "src/services/assistant/capability-router.ts"),
-      "utf8"
-    );
-    expect(router).toContain("suspendInventoryDraft");
   });
 
-  it("orchestrator calls Conversation Brain before free-text inventory ingest", () => {
+  it("orchestrator uses tool loop before domain executors for free text", () => {
     const orch = readFileSync(
       join(root, "src/services/assistant/v2-orchestrator.ts"),
       "utf8"
     );
     const body = orch.slice(orch.indexOf("export async function runExchangeAssistantV2"));
-    const planIdx = body.indexOf("await planConversationTurn");
-    const routeIdx = body.indexOf("await routeTurnPlan");
-    expect(planIdx).toBeGreaterThan(0);
-    expect(routeIdx).toBeGreaterThan(planIdx);
+    const loopIdx = body.indexOf("await runAgentToolLoop");
+    expect(loopIdx).toBeGreaterThan(0);
     expect(body).not.toMatch(/planAgentTurn/);
+    expect(body).not.toMatch(/await planConversationTurn/);
   });
 });
 

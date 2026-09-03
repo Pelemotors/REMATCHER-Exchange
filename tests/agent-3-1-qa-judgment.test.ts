@@ -81,6 +81,9 @@ vi.mock("@/services/assistant/tools/action-tools", async () => {
     executeBulkDemandClosure: (...args: unknown[]) => bulkExec(...args),
   };
 });
+vi.mock("@/services/assistant/agent-loop", () => ({
+  runAgentToolLoop: vi.fn(),
+}));
 vi.mock("@/services/assistant/turn-planner", async () => {
   const actual = await vi.importActual<
     typeof import("@/services/assistant/turn-planner")
@@ -97,13 +100,31 @@ import {
 } from "@/lib/demand-display";
 import { isJudgmentPlan, isProductHelpPlan } from "@/services/assistant/turn-policy";
 import { routeTurnPlan } from "@/services/assistant/capability-router";
-import { planConversationTurn } from "@/services/assistant/turn-planner";
+import { runAgentToolLoop } from "@/services/assistant/agent-loop";
 import { runExchangeAssistantV2 } from "@/services/assistant/v2-orchestrator";
 import { AGENT_VERSION } from "@/services/assistant/tools/registry";
 import type { AgentTurnPlan } from "@/services/assistant/agent-turn-plan";
 import type { AgentMeta } from "@/services/assistant/tools/registry";
 import { productHelpAnswer } from "@/services/assistant/help-responses";
 import { buildDeterministicResponse } from "@/services/assistant/synthesizer";
+
+function loopResult(partial: Record<string, unknown>) {
+  return {
+    message: "",
+    proposal: null,
+    modelCallCount: 1,
+    toolRoundCount: 0,
+    toolsUsed: [],
+    toolDurations: {},
+    totalTokens: 50,
+    latencyMs: 10,
+    model: "gpt-4o-mini",
+    success: true,
+    fallbackReason: null,
+    toolResults: {},
+    ...partial,
+  };
+}
 
 function meta(): AgentMeta {
   return {
@@ -293,19 +314,43 @@ describe("Natural confirmation", () => {
     bulkPrep.mockReset();
     bulkExec.mockReset();
     bulkExec.mockResolvedValue({ ok: true, closed: 4, requested: 4 });
+    vi.mocked(runAgentToolLoop).mockReset();
   });
 
-  it.each(["כן", "כן תבטל אותם", "סגור אותם", "מאשר", "יאללה"])(
-    "confirms pending close without a second proposal: %s",
+  it.each(["כן", "מאשר", "יאללה"])(
+    "exact CTA confirms pending close: %s",
     async (message) => {
-      vi.mocked(planConversationTurn).mockResolvedValue(
-        plan({
-          kind: "CONFIRM_PENDING_MUTATION",
-          capability: "SEARCHES",
-          operation: "CLOSE",
-          scope: "ALL_AUTHORIZED",
-          toolGoal: null,
-        }, "CONFIRMATION")
+      const result = await runExchangeAssistantV2({
+        dealerId: "dealer-1",
+        userId: "u1",
+        message,
+        context: { route: "/inventory", mode: "inventory_management" },
+        conversation: { pendingConfirmation: pendingFour },
+      });
+      expect(bulkPrep).not.toHaveBeenCalled();
+      expect(bulkExec).toHaveBeenCalledWith("dealer-1", ["s1", "s2", "s3", "s4"]);
+      expect(result.message).toMatch(/סגרתי 4/);
+      expect(result.meta?.legacyPlannerUsed).toBe(false);
+      expect(result.meta?.finalResponseSource).toBe("exact_cta");
+    }
+  );
+
+  it.each(["כן תבטל אותם", "סגור אותם"])(
+    "natural confirm via ActionProposal gateway: %s",
+    async (message) => {
+      vi.mocked(runAgentToolLoop).mockResolvedValue(
+        loopResult({
+          proposal: {
+            kind: "CONFIRM_PENDING",
+            capability: "SEARCHES",
+            operation: "CLOSE",
+            scope: "ALL_AUTHORIZED",
+            targetReference: null,
+            reason: "confirm",
+            facts: null,
+          },
+          toolsUsed: ["confirm_pending_action"],
+        }) as never
       );
       const result = await runExchangeAssistantV2({
         dealerId: "dealer-1",
@@ -322,14 +367,19 @@ describe("Natural confirmation", () => {
   );
 
   it("restated CLOSE ALL while pending executes instead of re-proposing", async () => {
-    vi.mocked(planConversationTurn).mockResolvedValue(
-      plan({
-        kind: "PROPOSE_MUTATION",
-        capability: "SEARCHES",
-        operation: "CLOSE",
-        scope: "ALL_AUTHORIZED",
-        toolGoal: null,
-      })
+    vi.mocked(runAgentToolLoop).mockResolvedValue(
+      loopResult({
+        proposal: {
+          kind: "PROPOSE",
+          capability: "SEARCHES",
+          operation: "CLOSE",
+          scope: "ALL_AUTHORIZED",
+          targetReference: "all",
+          reason: "close again",
+          facts: null,
+        },
+        toolsUsed: ["propose_mutation"],
+      }) as never
     );
     const result = await runExchangeAssistantV2({
       dealerId: "dealer-1",
@@ -344,13 +394,19 @@ describe("Natural confirmation", () => {
   });
 
   it("rejects without writing", async () => {
-    vi.mocked(planConversationTurn).mockResolvedValue(
-      plan({
-        kind: "CANCEL_PENDING_MUTATION",
-        capability: "SEARCHES",
-        operation: "CLOSE",
-        toolGoal: null,
-      }, "CANCEL")
+    vi.mocked(runAgentToolLoop).mockResolvedValue(
+      loopResult({
+        proposal: {
+          kind: "CANCEL_PENDING",
+          capability: "SEARCHES",
+          operation: "CLOSE",
+          scope: null,
+          targetReference: null,
+          reason: "cancel",
+          facts: null,
+        },
+        toolsUsed: ["cancel_pending_action"],
+      }) as never
     );
     const result = await runExchangeAssistantV2({
       dealerId: "dealer-1",

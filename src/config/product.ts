@@ -89,6 +89,7 @@ export const AI_PROMPT_VERSIONS = {
   inventoryUnderstanding: "inventory-understanding-v1",
   turnInterpreter: "turn-interpreter-v1",
   turnPlanner: "turn-planner-v1.1",
+  agentLoop: "agent-loop-v4",
   matchExplainer: "match-explainer-v1",
 } as const;
 
@@ -103,5 +104,10 @@ export const AI_MODELS = {
   turnInterpreter:
     process.env.OPENAI_TURN_INTERPRETER_MODEL ?? "gpt-4o-mini",
   turnPlanner: process.env.OPENAI_TURN_PLANNER_MODEL ?? "gpt-4o-mini",
+  agentLoop: process.env.OPENAI_AGENT_LOOP_MODEL ?? "gpt-4o-mini",
   matchExplainer: process.env.OPENAI_MATCH_EXPLAINER_MODEL ?? "gpt-4o-mini",
 } as const;
+
+/** Bound Agent 4.0 tool rounds (model→tools→model cycles after the first call) */
+export const AGENT_LOOP_MAX_ROUNDS = 4;
+export const AGENT_LOOP_MAX_TOOLS_PER_ROUND = 6;

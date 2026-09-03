@@ -1,12 +1,13 @@
 /**
  * Production transcript: cancel all searches while inventory workspace is open.
- * Inventory ingest must not own the turn.
+ * Inventory ingest must not own the turn. Agent 4.0: proposal via tool loop → gateway.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const ingestSpy = vi.fn();
 const bulkPrep = vi.fn();
 const bulkExec = vi.fn();
+const loopMock = vi.fn();
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/services/notifications", () => ({ logAppEvent: vi.fn() }));
@@ -23,7 +24,7 @@ vi.mock("@/services/assistant/inventory-manage", () => ({
 }));
 vi.mock("@/services/assistant/planner", () => ({
   planAgentTurn: vi.fn(async () => {
-    throw new Error("planAgentTurn must not run after a successful Turn Plan");
+    throw new Error("planAgentTurn must not run");
   }),
   heuristicPlan: vi.fn(),
 }));
@@ -65,60 +66,40 @@ vi.mock("@/services/assistant/tools/action-tools", async () => {
     executeBulkDemandClosure: (...args: unknown[]) => bulkExec(...args),
   };
 });
+vi.mock("@/services/assistant/agent-loop", () => ({
+  runAgentToolLoop: (...args: unknown[]) => loopMock(...args),
+}));
 
-vi.mock("@/services/assistant/turn-planner", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/services/assistant/turn-planner")
-  >("@/services/assistant/turn-planner");
-  return {
-    ...actual,
-    planConversationTurn: vi.fn(),
-  };
-});
-
-import { planConversationTurn } from "@/services/assistant/turn-planner";
 import { runExchangeAssistantV2 } from "@/services/assistant/v2-orchestrator";
-import type { AgentTurnPlan } from "@/services/assistant/agent-turn-plan";
-
-function productionLikePlan(): AgentTurnPlan {
-  return {
-    understanding: {
-      userGoal: "cancel all of my active searches",
-      messageMeaning: "תבטל כרגע את כל החיפושים שלי",
-      refersToCurrentTask: false,
-      refersToActiveObject: false,
-      targetReference: "all my searches",
-    },
-    responseNeed: { shouldAnswerNow: true, answerGoal: "confirm_close" },
-    conversation: {
-      keepCurrentTask: false,
-      suspendCurrentTask: false,
-      resumeTaskReference: null,
-      correctedUnderstanding: null,
-      queuedFollowUp: null,
-    },
-    facts: { add: [], correct: [], reject: [] },
-    action: {
-      kind: "PROPOSE_MUTATION",
-      capability: "SEARCHES",
-      operation: "CLOSE",
-      scope: "ALL_AUTHORIZED",
-      toolGoal: "get_my_searches",
-      targetReference: "all my searches",
-    },
-    clarification: { needed: false, reason: null, suggestedQuestion: null },
-    telemetryHint: { relation: "NEW_REQUEST", questionAbout: null },
-    confidence: 0,
-    source: "ai",
-  };
-}
 
 describe("Transcript — תבטל כרגע את כל החיפושים שלי", () => {
   beforeEach(() => {
     ingestSpy.mockReset();
     bulkPrep.mockReset();
     bulkExec.mockReset();
-    vi.mocked(planConversationTurn).mockResolvedValue(productionLikePlan());
+    loopMock.mockReset();
+    loopMock.mockResolvedValue({
+      message: "",
+      proposal: {
+        kind: "PROPOSE",
+        capability: "SEARCHES",
+        operation: "CLOSE",
+        scope: "ALL_AUTHORIZED",
+        targetReference: "all my searches",
+        reason: "cancel searches",
+        facts: null,
+      },
+      modelCallCount: 1,
+      toolRoundCount: 0,
+      toolsUsed: ["propose_mutation"],
+      toolDurations: {},
+      totalTokens: 200,
+      latencyMs: 40,
+      model: "gpt-4o-mini",
+      success: true,
+      fallbackReason: null,
+      toolResults: {},
+    });
     bulkPrep.mockResolvedValue({
       ok: true,
       empty: false,
@@ -129,8 +110,14 @@ describe("Transcript — תבטל כרגע את כל החיפושים שלי", (
         { id: "s4", title: "חיפוש 4" },
       ],
       action: "close_demands_bulk",
-      label: 'לסגור 4 חיפושים פעילים (Mazda CX-5, חיפוש 2, חיפוש 3, חיפוש 4)?',
-      payload: { demandIds: ["s1", "s2", "s3", "s4"] },
+      label: "מצאתי 4 חיפושים פעילים. לסגור את כולם?",
+      payload: {
+        demandIds: ["s1", "s2", "s3", "s4"],
+        capability: "SEARCHES",
+        operation: "CLOSE",
+        scope: "ALL_AUTHORIZED",
+        targetCount: 4,
+      },
     });
   });
 
@@ -174,7 +161,7 @@ describe("Transcript — תבטל כרגע את כל החיפושים שלי", (
       },
     });
 
-    expect(planConversationTurn).toHaveBeenCalled();
+    expect(loopMock).toHaveBeenCalled();
     expect(ingestSpy).not.toHaveBeenCalled();
     expect(bulkExec).not.toHaveBeenCalled();
     expect(bulkPrep).toHaveBeenCalledWith("dealer-1");

@@ -3,6 +3,7 @@ import "server-only";
 /** All authorized read tools — planner selects subset per turn */
 export const ALL_READ_TOOLS = [
   "getMyExchangeState",
+  "getMyInventory",
   "getMyActiveDemands",
   "getMyExpiringDemands",
   "getMyPendingActions",
@@ -18,7 +19,8 @@ export const ALL_READ_TOOLS = [
 
 export type ReadToolName = (typeof ALL_READ_TOOLS)[number];
 
-export const AGENT_VERSION = "3.1.1";
+/** Hybrid tool-using runtime — same Exchange Assistant, new conversational brain */
+export const AGENT_VERSION = "4.0";
 
 export type ActionIntent =
   | "read"
@@ -57,12 +59,20 @@ export interface AgentMeta {
   scope?: string | null;
   policyResult?: string;
   executor?: string;
+  /** Agent 4.0 loop metrics */
+  modelCallCount?: number;
+  toolRoundCount?: number;
+  totalTokens?: number;
+  loopLatencyMs?: number;
+  finalResponseSource?: "agent_loop" | "action_gateway" | "exact_cta" | "fallback" | "privacy";
 }
 
 /** Tool catalog for planner prompt */
 export const TOOL_DESCRIPTIONS: Record<ReadToolName, string> = {
   getMyExchangeState:
     "Cheap summary: active demand count, pending action count, connections remaining",
+  getMyInventory:
+    "This dealer's own active inventory vehicles (make/model/year/mileage/prices). Never network inventory.",
   getMyActiveDemands: "List of active/expiring demands with titles and days left",
   getMyExpiringDemands: "Demands expiring within 24h",
   getMyPendingActions: "Aggregated pending action counts by type",
