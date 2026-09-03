@@ -55,6 +55,18 @@ export interface ConversationState {
     type: "vehicle" | "demand" | "match";
     id: string;
   };
+  /** Last structured turn interpretation (turn memory) */
+  lastInterpretation?: import("@/services/assistant/turn-event").StructuredTurnEvent;
+  lastAgentQuestion?: import("@/services/assistant/turn-event").LastAgentQuestion;
+  repeatedQuestionCount?: number;
+  rejectedInterpretations?: string[];
+  recentCorrections?: Array<{
+    relation: string;
+    rejected: string[];
+    at: number;
+  }>;
+  suspendedContext?: import("@/services/assistant/turn-event").SuspendedContext;
+  preferredClarificationWording?: Record<string, string>;
 }
 
 export interface AssistantCard {
@@ -84,7 +96,7 @@ export function resolveListReference(
 }
 
 export function isConfirmation(message: string): boolean {
-  return /^(כן|אשר|מאשר|בצע|אישור|ok|yes|שמור|שמור במלאי|כן,?\s*נמכרה|עדכן)$/i.test(
+  return /^(כן|אשר|מאשר|בצע|אישור|ok|yes|שמור|שמור במלאי|כן,?\s*נמכרה|עדכן|יאללה)$/i.test(
     message.trim()
   );
 }

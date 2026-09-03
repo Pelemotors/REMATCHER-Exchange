@@ -39,7 +39,7 @@ export interface PendingInventoryDraft {
   status: InventoryDraftStatus;
   sourceText: string;
   fields: InventoryDraftFields;
-  /** Gaps already asked (including skipped) — never re-ask in same flow */
+  /** Gaps already asked (including skipped) — conversational hints, not locks */
   askedGaps: InventoryGapId[];
   /** Explicitly skipped by dealer */
   skippedGaps?: InventoryGapId[];
@@ -50,6 +50,7 @@ export interface PendingInventoryDraft {
   queuedDrafts?: PendingInventoryDraft[];
   lastAskedGap?: InventoryGapId | null;
   interpretationNote?: string | null;
+  rejectedInterpretations?: string[];
 }
 
 export function emptyDraftFields(): InventoryDraftFields {
@@ -168,7 +169,7 @@ export function gapQuestion(gap: InventoryGapId, fields?: InventoryDraftFields):
         : "חסר לי הדגם. איזה דגם?";
     }
     case "year":
-      return "חסר לי שנת ייצור. מאיזו שנה?";
+      return "חסר לי שנת ייצור. איזו שנה?";
     case "mileage":
       return "חסר לי קילומטראז׳. כמה יש על הרכב?";
     case "dealer_price":
@@ -479,21 +480,26 @@ export function splitMultiVehicleText(raw: string): string[] {
 
 export function identityPartialMessage(fields: InventoryDraftFields): string {
   const known: string[] = [];
-  if (fields.make) known.push(fields.make);
+  const name = [fields.make, fields.model].filter(Boolean).join(" ");
+  if (name) known.push(name);
+  else if (fields.make) known.push(fields.make);
   if (fields.year) known.push(String(fields.year));
   if (fields.mileage != null) known.push(`עם ${fmtNum(fields.mileage)} ק״מ`);
   if (fields.b2bPrice != null) {
     known.push(`מחיר לסוחר ${fmtNum(fields.b2bPrice)} ₪`);
+  } else if (fields.retailPrice != null) {
+    known.push(`מחיר ${fmtNum(fields.retailPrice)} ₪`);
   }
+  if (fields.color) known.push(`צבע ${fields.color}`);
   const prefix =
-    known.length > 0 ? `הבנתי ${known.join(" ")}. ` : "הבנתי חלק מהפרטים. ";
+    known.length > 0 ? `הבנתי ${known.join(", ")}. ` : "הבנתי חלק מהפרטים. ";
 
   const gap = missingIdentityGap(fields);
   if (gap === "model" && fields.make) {
     return `${prefix}איזה דגם של ${fields.make}?`;
   }
   if (gap === "make") return `${prefix}מאיזה יצרן?`;
-  if (gap === "year") return `${prefix}מאיזו שנה?`;
+  if (gap === "year") return `${prefix}איזו שנה?`;
   if (gap === "model") return `${prefix}איזה דגם?`;
   return `${prefix}חסר לי עוד פרט זיהוי קצר.`;
 }

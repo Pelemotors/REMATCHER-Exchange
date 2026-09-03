@@ -39,6 +39,11 @@ import {
   helpOnlyResponse,
   synthesizeResponse,
 } from "@/services/assistant/synthesizer";
+import { interpretAgentTurn } from "@/services/assistant/turn-interpreter";
+import {
+  resumeSuspendedInventory,
+  suspendInventoryDraft,
+} from "@/services/assistant/turn-reconcile";
 import type {
   AssistantContext,
   AssistantIntent,
@@ -108,77 +113,157 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
-  // --- Inventory draft / confirmation (explicit state machine) ---
-  if (
-    params.conversation?.pendingInventoryDraft ||
-    params.conversation?.pendingConfirmation?.action === "create_inventory" ||
-    params.conversation?.sessionContext?.forcedIntent === "create_inventory"
-  ) {
-    const inventoryTurn = await handleInventoryIngestTurn({
-      dealerId: params.dealerId,
-      userId: params.userId,
-      message: params.message,
-      conversation: params.conversation,
-      meta,
-      forceStart:
-        params.conversation?.sessionContext?.forcedIntent === "create_inventory" &&
-        !params.conversation?.pendingInventoryDraft,
-    });
-    if (inventoryTurn) return inventoryTurn;
-  }
-
-  // --- Inventory manage mutations (update / sold / read) ---
   const inInventoryWorkspace =
     params.context.mode === "inventory_management" ||
     params.conversation?.sessionContext?.operatingMode ===
       "inventory_management";
 
-  if (
-    params.conversation?.pendingInventoryMutation ||
-    params.conversation?.pendingConfirmation?.action === "update_inventory" ||
-    params.conversation?.pendingConfirmation?.action === "mark_sold" ||
-    inInventoryWorkspace
-  ) {
-    const manageTurn = await handleInventoryManageTurn({
-      dealerId: params.dealerId,
-      message: params.message,
-      conversation: params.conversation,
-      meta,
-      focusedVehicleId:
-        params.conversation?.focusedObject?.type === "vehicle"
-          ? params.conversation.focusedObject.id
-          : params.context.entityType === "vehicle"
-            ? params.context.entityId
-            : undefined,
-    });
-    if (manageTurn) return manageTurn;
+  // Machine-known exact CTA with concrete pending confirmation — no AI needed
+  const pendingConf = params.conversation?.pendingConfirmation;
+  const exactConfirm =
+    pendingConf &&
+    isConfirmation(params.message) &&
+    /^(כן|אשר|מאשר|בצע|אישור|ok|yes|שמור|שמור במלאי|כן,?\s*נמכרה|עדכן|יאללה)$/i.test(
+      params.message.trim()
+    );
+  const exactCancel =
+    pendingConf &&
+    isRejection(params.message) &&
+    /^(לא|בטל|ביטול|cancel|no)$/i.test(params.message.trim());
+
+  // --- Turn Interpreter BEFORE pending locks (free-text) ---
+  const turn =
+    exactConfirm || exactCancel
+      ? null
+      : await interpretAgentTurn({
+          message: params.message,
+          userId: params.userId,
+          conversation: params.conversation,
+          inventoryMode: inInventoryWorkspace,
+        });
+
+  if (turn) {
+    meta.tools = [...meta.tools, `turn_interpret:${turn.source}`];
   }
 
-  // Inventory workspace: remaining free text is inventory create (not demand)
-  if (
-    inInventoryWorkspace &&
-    !params.conversation?.pendingInventoryDraft &&
-    params.conversation?.pendingConfirmation?.action !== "create_inventory"
-  ) {
-    const inventoryTurn = await handleInventoryIngestTurn({
+  // Resume suspended inventory draft
+  if (turn?.resumeRequested || turn?.relation === "RESUME") {
+    params.conversation = resumeSuspendedInventory(params.conversation ?? {});
+    await logAppEvent({
+      eventType: "agent_state_resumed",
       dealerId: params.dealerId,
-      userId: params.userId,
-      message: params.message,
-      conversation: {
-        ...params.conversation,
-        sessionContext: {
-          ...params.conversation?.sessionContext,
-          forcedIntent: "create_inventory",
-          operatingMode: "inventory_management",
-        },
+      metadata: { agentVersion: AGENT_VERSION, kind: "inventory_draft" },
+    });
+  }
+
+  // Topic switch: suspend inventory draft, continue to planner/tools
+  if (
+    turn?.relation === "TOPIC_SWITCH" &&
+    (params.conversation?.pendingInventoryDraft ||
+      params.conversation?.pendingInventoryMutation)
+  ) {
+    if (params.conversation?.pendingInventoryDraft) {
+      params.conversation = suspendInventoryDraft(params.conversation);
+    }
+    await logAppEvent({
+      eventType: "agent_topic_switch",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        intent: turn.intent,
+        hadPending: true,
       },
-      meta,
-      forceStart: true,
     });
-    if (inventoryTurn) return inventoryTurn;
+    // Fall through to planner / read path — do not force inventory ingest
+  } else {
+    // Inventory create accompaniment when draft/forced or invent intent
+    const shouldIngest =
+      params.conversation?.pendingInventoryDraft ||
+      params.conversation?.pendingConfirmation?.action === "create_inventory" ||
+      params.conversation?.sessionContext?.forcedIntent === "create_inventory" ||
+      turn?.intent === "create_inventory" ||
+      (inInventoryWorkspace &&
+        turn?.targetCapability === "inventory" &&
+        turn.relation !== "TOPIC_SWITCH" &&
+        !params.conversation?.pendingInventoryMutation);
+
+    if (shouldIngest) {
+      const inventoryTurn = await handleInventoryIngestTurn({
+        dealerId: params.dealerId,
+        userId: params.userId,
+        message: params.message,
+        conversation: params.conversation,
+        meta,
+        turn: turn ?? undefined,
+        forceStart:
+          !params.conversation?.pendingInventoryDraft &&
+          (params.conversation?.sessionContext?.forcedIntent ===
+            "create_inventory" ||
+            turn?.intent === "create_inventory" ||
+            inInventoryWorkspace),
+      });
+      if (inventoryTurn) return inventoryTurn;
+    }
+
+    // Inventory manage (update / sold) — after interpretation
+    if (
+      params.conversation?.pendingInventoryMutation ||
+      params.conversation?.pendingConfirmation?.action === "update_inventory" ||
+      params.conversation?.pendingConfirmation?.action === "mark_sold" ||
+      params.conversation?.pendingConfirmation?.action === "mark_unavailable" ||
+      turn?.intent === "update_inventory" ||
+      turn?.intent === "mark_sold" ||
+      turn?.intent === "mark_unavailable" ||
+      (inInventoryWorkspace &&
+        (turn?.relation === "ANSWER" || turn?.relation === "ADDITIONAL_INFO") &&
+        params.conversation?.focusedObject?.type === "vehicle")
+    ) {
+      const manageTurn = await handleInventoryManageTurn({
+        dealerId: params.dealerId,
+        message: params.message,
+        conversation: params.conversation,
+        meta,
+        turn: turn ?? undefined,
+        focusedVehicleId:
+          params.conversation?.focusedObject?.type === "vehicle"
+            ? params.conversation.focusedObject.id
+            : params.context.entityType === "vehicle"
+              ? params.context.entityId
+              : undefined,
+      });
+      if (manageTurn) return manageTurn;
+    }
+
+    // Inventory workspace leftover free text → create
+    if (
+      inInventoryWorkspace &&
+      !params.conversation?.pendingInventoryDraft &&
+      !params.conversation?.pendingInventoryMutation &&
+      turn?.relation !== "TOPIC_SWITCH" &&
+      turn?.intent !== "read_matches" &&
+      turn?.intent !== "read_state"
+    ) {
+      const inventoryTurn = await handleInventoryIngestTurn({
+        dealerId: params.dealerId,
+        userId: params.userId,
+        message: params.message,
+        conversation: {
+          ...params.conversation,
+          sessionContext: {
+            ...params.conversation?.sessionContext,
+            forcedIntent: "create_inventory",
+            operatingMode: "inventory_management",
+          },
+        },
+        meta,
+        turn: turn ?? undefined,
+        forceStart: true,
+      });
+      if (inventoryTurn) return inventoryTurn;
+    }
   }
 
-  // --- Confirmation flow ---
+  // --- Confirmation flow (demand/validation + exact CTAs) ---
   if (params.conversation?.pendingConfirmation) {
     const pending = params.conversation.pendingConfirmation;
     if (pending.action === "create_inventory") {
@@ -188,10 +273,16 @@ export async function runExchangeAssistantV2(params: {
         message: params.message,
         conversation: params.conversation,
         meta,
+        turn: turn ?? undefined,
       });
       if (inventoryTurn) return inventoryTurn;
     }
-    if (isConfirmation(params.message)) {
+    if (
+      exactConfirm ||
+      (turn?.confirms &&
+        turn.relation === "CONFIRMATION" &&
+        !/התאמ|חיפוש/i.test(params.message))
+    ) {
       const demandId = pending.payload.demandId as string;
       if (pending.action === "renew_demand") {
         const result = await executeDemandRenewal(params.dealerId, demandId);
@@ -560,13 +651,21 @@ export async function runExchangeAssistantV2(params: {
 
   return {
     intent: "PENDING_ACTIONS" as AssistantIntent,
-    message: response.message,
+    message:
+      response.message +
+      (params.conversation?.suspendedContext?.kind === "inventory_draft"
+        ? "\n\nואם תרצה, אפשר להמשיך גם עם הרכב שהתחלנו להוסיף."
+        : ""),
     cards: response.cards,
     suggestions: response.suggestions,
     conversation: {
       lastList: response.lastList,
       goal: plan.goal,
       sessionContext,
+      suspendedContext: params.conversation?.suspendedContext,
+      lastInterpretation: turn ?? params.conversation?.lastInterpretation,
+      preferredClarificationWording:
+        params.conversation?.preferredClarificationWording,
     },
     meta,
   };
