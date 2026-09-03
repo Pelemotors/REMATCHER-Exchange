@@ -17,7 +17,27 @@ must be documented here.
 
 ---
 
-## 2026-09-03 — Agent Conversation Freedom 2.7
+## 2026-09-03 — Agent Conversation Core 3.0
+
+### Principle
+**GPT owns the conversation. REMATCHER owns authority. Domain systems own domain truth.**
+
+### Changed
+- Existing Agent bumped to **3.0** (no new Agent instance).
+- **Turn Planner / Conversation Brain** (`turn-planner.ts`) — proposes WHAT SHOULD HAPPEN, not only intent enums.
+- **Policy layer** (`turn-policy.ts`) — ALLOW / DENY / REQUIRE_CONFIRMATION / REQUIRE_CLARIFICATION after understanding.
+- Free text routes through `planConversationTurn` **before** pending workflow handlers.
+- CURRENT MESSAGE > PENDING WORKFLOW — state is context, not prison.
+- Privacy: understand then authorize; narrow fishing patterns only; workflow help allowlisted.
+- Tool goals map to approved registry tools only (matching authority remains separate).
+- One primary AI call (`turn_plan`) for meaningful free-text turns.
+- TurnRelation enums remain telemetry/diagnostics — not the universe of speech.
+
+### Operations / events
+- AiOperationLog: `turn_plan`
+- AppEvent: `agent_turn_planned`, `agent_task_suspended`, `agent_task_resumed`
+
+---
 
 ### Changed
 - Existing Agent bumped to **2.7** (no new Agent).

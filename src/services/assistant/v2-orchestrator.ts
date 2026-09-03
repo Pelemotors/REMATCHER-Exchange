@@ -1,10 +1,6 @@
 import "server-only";
 import { logAppEvent } from "@/services/notifications";
 import {
-  checkPrivacyGate,
-  privacyBlockedMessage,
-} from "@/services/assistant/privacy-gate";
-import {
   type AssistantCard,
   type ConversationState,
   isConfirmation,
@@ -39,7 +35,14 @@ import {
   helpOnlyResponse,
   synthesizeResponse,
 } from "@/services/assistant/synthesizer";
-import { interpretAgentTurn } from "@/services/assistant/turn-interpreter";
+import {
+  planConversationTurn,
+  turnPlanToEvent,
+} from "@/services/assistant/turn-planner";
+import {
+  toolGoalToReadTools,
+  validateTurnPlan,
+} from "@/services/assistant/turn-policy";
 import {
   resumeSuspendedInventory,
   suspendInventoryDraft,
@@ -96,22 +99,8 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
-  const privacy = checkPrivacyGate(params.message);
-  if (privacy.blocked && privacy.reason) {
-    await logAppEvent({
-      eventType: "assistant_privacy_block",
-      dealerId: params.dealerId,
-      metadata: { reason: privacy.reason, agentVersion: AGENT_VERSION },
-    });
-    meta.responseType = "privacy_blocked";
-    return {
-      intent: "FISHING_BLOCKED",
-      privacyBlocked: true,
-      message: privacyBlockedMessage(privacy.reason),
-      suggestions: [],
-      meta,
-    };
-  }
+  // Narrow high-confidence fishing only — ambiguous language goes to Conversation Brain first
+  // (policy layer re-checks after understanding)
 
   const inInventoryWorkspace =
     params.context.mode === "inventory_management" ||
@@ -131,63 +120,170 @@ export async function runExchangeAssistantV2(params: {
     isRejection(params.message) &&
     /^(לא|בטל|ביטול|cancel|no)$/i.test(params.message.trim());
 
-  // --- Turn Interpreter BEFORE pending locks (free-text) ---
-  const turn =
+  // --- Conversation Brain (Turn Planner) BEFORE pending locks ---
+  // CURRENT MESSAGE > PENDING WORKFLOW. State is context, not prison.
+  const turnPlan =
     exactConfirm || exactCancel
       ? null
-      : await interpretAgentTurn({
+      : await planConversationTurn({
           message: params.message,
           userId: params.userId,
           conversation: params.conversation,
           inventoryMode: inInventoryWorkspace,
         });
 
-  if (turn) {
-    meta.tools = [...meta.tools, `turn_interpret:${turn.source}`];
+  if (turnPlan) {
+    meta.tools = [...meta.tools, `turn_plan:${turnPlan.source}`];
+    await logAppEvent({
+      eventType: "agent_turn_planned",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        kind: turnPlan.action.kind,
+        source: turnPlan.source,
+        relation: turnPlan.telemetryHint.relation,
+        confidence: turnPlan.confidence,
+      },
+    });
   }
 
+  // Policy / Authority — understand first, authorize second
+  if (turnPlan) {
+    const policy = validateTurnPlan({
+      message: params.message,
+      plan: turnPlan,
+      conversation: params.conversation,
+    });
+    if (policy.decision === "DENY") {
+      await logAppEvent({
+        eventType: "assistant_privacy_block",
+        dealerId: params.dealerId,
+        metadata: {
+          reason: policy.reason,
+          agentVersion: AGENT_VERSION,
+          via: "turn_policy",
+        },
+      });
+      meta.responseType = "privacy_blocked";
+      return {
+        intent: "FISHING_BLOCKED",
+        privacyBlocked: true,
+        message: policy.userMessage,
+        suggestions: [],
+        meta,
+      };
+    }
+  }
+
+  // Bridge to StructuredTurnEvent for capability handlers
+  const turn = turnPlan ? turnPlanToEvent(turnPlan) : null;
+
   // Resume suspended inventory draft
-  if (turn?.resumeRequested || turn?.relation === "RESUME") {
+  if (
+    turnPlan?.action.kind === "RESUME" ||
+    turn?.resumeRequested ||
+    turn?.relation === "RESUME"
+  ) {
     params.conversation = resumeSuspendedInventory(params.conversation ?? {});
     await logAppEvent({
-      eventType: "agent_state_resumed",
+      eventType: "agent_task_resumed",
       dealerId: params.dealerId,
       metadata: { agentVersion: AGENT_VERSION, kind: "inventory_draft" },
     });
   }
 
-  // Topic switch: suspend inventory draft, continue to planner/tools
+  // Topic switch / SUSPEND_AND_READ — suspend draft, then read tools
   if (
-    turn?.relation === "TOPIC_SWITCH" &&
-    (params.conversation?.pendingInventoryDraft ||
-      params.conversation?.pendingInventoryMutation)
+    turnPlan?.action.kind === "SUSPEND_AND_READ" ||
+    (turn?.relation === "TOPIC_SWITCH" &&
+      (params.conversation?.pendingInventoryDraft ||
+        params.conversation?.pendingInventoryMutation))
   ) {
     if (params.conversation?.pendingInventoryDraft) {
       params.conversation = suspendInventoryDraft(params.conversation);
     }
     await logAppEvent({
-      eventType: "agent_topic_switch",
+      eventType: "agent_task_suspended",
       dealerId: params.dealerId,
       metadata: {
         agentVersion: AGENT_VERSION,
-        intent: turn.intent,
-        hadPending: true,
+        kind: turnPlan?.action.kind ?? "TOPIC_SWITCH",
+        toolGoal: turnPlan?.action.toolGoal ?? null,
       },
     });
-    // Fall through to planner / read path — do not force inventory ingest
-  } else {
-    // Inventory create accompaniment when draft/forced or invent intent
-    const shouldIngest =
-      params.conversation?.pendingInventoryDraft ||
-      params.conversation?.pendingConfirmation?.action === "create_inventory" ||
-      params.conversation?.sessionContext?.forcedIntent === "create_inventory" ||
-      turn?.intent === "create_inventory" ||
-      (inInventoryWorkspace &&
-        turn?.targetCapability === "inventory" &&
-        turn.relation !== "TOPIC_SWITCH" &&
-        !params.conversation?.pendingInventoryMutation);
 
-    if (shouldIngest) {
+    const tools = uniqueTools(
+      toolGoalToReadTools(turnPlan?.action.toolGoal ?? "get_my_matches")
+    );
+    if (tools.length) {
+      meta.tools = tools;
+      const { results, durations, errors } = await executeToolsParallel(
+        tools,
+        params.dealerId
+      );
+      meta.toolDurations = durations;
+      const {
+        response,
+        synthesizerUsed,
+        model: synthModel,
+        durationMs: synthesisDurationMs,
+      } = await synthesizeResponse({
+        userMessage: params.message,
+        toolResults: results,
+        toolErrors: errors,
+        userId: params.userId,
+        goal: turnPlan?.understanding.userGoal ?? "read after topic switch",
+        sessionContext: params.conversation?.sessionContext,
+      });
+      meta.synthesizerUsed = synthesizerUsed;
+      meta.synthesisDurationMs = synthesisDurationMs;
+      if (synthModel) meta.model = synthModel;
+      meta.responseType = "state_answer";
+      return {
+        intent: "PENDING_ACTIONS" as AssistantIntent,
+        message:
+          response.message +
+          (params.conversation?.suspendedContext?.kind === "inventory_draft"
+            ? "\n\nואם תרצה, אפשר לחזור לרכב שהתחלנו להוסיף."
+            : ""),
+        cards: response.cards,
+        suggestions: response.suggestions,
+        conversation: {
+          lastList: response.lastList,
+          sessionContext: params.conversation?.sessionContext,
+          suspendedContext: params.conversation?.suspendedContext,
+          lastInterpretation: turn ?? undefined,
+        },
+        meta,
+      };
+    }
+  } else {
+    // ANSWER_ONLY / advisory / context — inventory ingest handles via turn event
+    // Inventory create when draft/forced or invent intent — NOT when answer-only
+    const answerOnly =
+      turnPlan?.action.kind === "ANSWER_ONLY" ||
+      turn?.relation === "ADVISORY_QUESTION" ||
+      turn?.relation === "CONTEXT_QUESTION" ||
+      turn?.intent === "help";
+
+    const shouldIngest =
+      !answerOnly &&
+      (params.conversation?.pendingInventoryDraft ||
+        params.conversation?.pendingConfirmation?.action === "create_inventory" ||
+        params.conversation?.sessionContext?.forcedIntent === "create_inventory" ||
+        turn?.intent === "create_inventory" ||
+        (inInventoryWorkspace &&
+          turn?.targetCapability === "inventory" &&
+          turn.relation !== "TOPIC_SWITCH" &&
+          turnPlan?.action.kind !== "CLARIFY" &&
+          !params.conversation?.pendingInventoryMutation));
+
+    // Route answer-only / clarify through ingest when inventory context (preserves draft)
+    if (
+      answerOnly ||
+      turnPlan?.action.kind === "CLARIFY" ||
+      shouldIngest
+    ) {
       const inventoryTurn = await handleInventoryIngestTurn({
         dealerId: params.dealerId,
         userId: params.userId,
@@ -196,15 +292,13 @@ export async function runExchangeAssistantV2(params: {
         meta,
         turn: turn ?? undefined,
         forceStart:
+          !answerOnly &&
+          turnPlan?.action.kind !== "CLARIFY" &&
           !params.conversation?.pendingInventoryDraft &&
-          turn?.relation !== "ADVISORY_QUESTION" &&
-          turn?.relation !== "CONTEXT_QUESTION" &&
-          turn?.intent !== "help" &&
-          !(turn?.relation === "UNKNOWN" && turn?.needsClarification) &&
           (params.conversation?.sessionContext?.forcedIntent ===
             "create_inventory" ||
             turn?.intent === "create_inventory" ||
-            inInventoryWorkspace),
+            (inInventoryWorkspace && turnPlan?.action.kind === "PROPOSE_MUTATION")),
       });
       if (inventoryTurn) return inventoryTurn;
     }
@@ -238,9 +332,11 @@ export async function runExchangeAssistantV2(params: {
       if (manageTurn) return manageTurn;
     }
 
-    // Inventory workspace leftover free text → create
+    // Inventory workspace leftover free text → create ONLY if plan proposes mutation
     if (
       inInventoryWorkspace &&
+      !answerOnly &&
+      turnPlan?.action.kind === "PROPOSE_MUTATION" &&
       !params.conversation?.pendingInventoryDraft &&
       !params.conversation?.pendingInventoryMutation &&
       turn?.relation !== "TOPIC_SWITCH" &&
