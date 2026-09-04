@@ -1,6 +1,6 @@
 /**
  * Action Gateway — deterministic write boundary for Agent 4.0.
- * GPT proposes ActionProposal; Gateway authorizes, resolves, confirms, executes.
+ * GPT understands the request; REMATCHER authorizes, resolves, confirms and executes.
  */
 import "server-only";
 import type { ActionProposal } from "@/services/assistant/action-proposal";
@@ -12,23 +12,34 @@ import {
   executeSearchMutation,
   handleSearchCapability,
 } from "@/services/assistant/search-capability";
-import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
 import { handleInventoryManageTurn } from "@/services/assistant/inventory-manage";
 import { turnPlanToEvent } from "@/services/assistant/turn-planner";
+import { assertVehicleOwned } from "@/services/assistant/target-resolution";
 import {
-  assertVehicleOwned,
-} from "@/services/assistant/target-resolution";
-import {
+  executeConfirmInventoryCreate,
   executeConfirmValidation,
   markMyVehicleSold,
 } from "@/services/assistant/tools/action-tools";
+import {
+  applyInventoryDraftFacts,
+  inventoryDraftSnapshot,
+  prepareInventoryDraftConfirmation,
+} from "@/services/assistant/inventory-draft-state";
 import { pendingSearchCloseMatchesPlan } from "@/services/assistant/turn-policy";
 
 type GatewayResponse = AssistantResponse & {
   conversation?: ConversationState;
   meta?: AgentMeta;
+  inventoryMutationResult?: {
+    type: "created" | "updated" | "sold";
+    vehicleId: string;
+  };
 };
 
+/**
+ * Legacy bridge kept only for domain executors that still consume AgentTurnPlan.
+ * It is no longer used to understand conversational inventory drafts.
+ */
 function proposalToPlan(
   proposal: ActionProposal,
   message: string
@@ -79,6 +90,21 @@ function proposalToPlan(
   };
 }
 
+function cancelPendingConversation(
+  conversation: ConversationState | undefined
+): ConversationState | undefined {
+  if (!conversation) return conversation;
+  const draft = conversation.pendingInventoryDraft;
+  return {
+    ...conversation,
+    pendingConfirmation: undefined,
+    pendingInventoryDraft:
+      draft?.status === "WAITING_CONFIRMATION"
+        ? { ...draft, status: "DRAFT" }
+        : draft,
+  };
+}
+
 export async function runActionGateway(params: {
   dealerId: string;
   userId: string;
@@ -102,14 +128,7 @@ export async function runActionGateway(params: {
     return {
       intent: "UNKNOWN",
       message: "בוטל. לא בוצעה פעולה.",
-      conversation: {
-        lastList: conversation?.lastList,
-        pendingInventoryDraft: conversation?.pendingInventoryDraft,
-        pendingSearchDraft: conversation?.pendingSearchDraft,
-        sessionContext: conversation?.sessionContext,
-        suspendedContext: conversation?.suspendedContext,
-        recentTurns: conversation?.recentTurns,
-      },
+      conversation: cancelPendingConversation(conversation),
       meta,
     };
   }
@@ -120,12 +139,12 @@ export async function runActionGateway(params: {
       meta.policyResult = "REQUIRE_CLARIFICATION";
       return {
         intent: "UNKNOWN",
-        message: "אין פעולה ממתינה לאישור. מה תרצה לעשות?",
+        message: "אין פעולה ממתינה לאישור.",
         conversation,
         meta,
       };
     }
-    meta.policyResult = "REQUIRE_CONFIRMATION";
+
     const searchDone = await executeSearchMutation({
       dealerId: params.dealerId,
       pending,
@@ -136,42 +155,97 @@ export async function runActionGateway(params: {
       meta.executor = "action_gateway_confirm";
       return searchDone;
     }
+
     if (pending.action === "create_inventory") {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message,
-        conversation,
+      const draft = conversation?.pendingInventoryDraft;
+      if (!draft) {
+        meta.policyResult = "REQUIRE_CLARIFICATION";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "אין כרגע טיוטת רכב לשמירה.",
+          conversation,
+          meta,
+        };
+      }
+      const snapshot = inventoryDraftSnapshot(draft);
+      if (!snapshot.canSave) {
+        meta.policyResult = "REQUIRE_CLARIFICATION";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "עדיין חסרים פרטי הזיהוי הבסיסיים של הרכב לפני שמירה.",
+          conversation: {
+            ...conversation,
+            pendingConfirmation: undefined,
+            pendingInventoryDraft: { ...draft, status: "DRAFT" },
+          },
+          meta,
+        };
+      }
+
+      const result = await executeConfirmInventoryCreate(params.dealerId, draft);
+      if (!result.ok) {
+        meta.policyResult = "DENY";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: result.message ?? "לא הצלחתי לשמור את הרכב.",
+          conversation,
+          meta,
+        };
+      }
+
+      meta.policyResult = "ALLOW";
+      meta.responseType = "mutation_inventory_create";
+      return {
+        intent: "UPDATE_INVENTORY",
+        message: "הרכב נשמר במלאי.",
+        conversation: {
+          ...conversation,
+          pendingInventoryDraft: undefined,
+          pendingConfirmation: undefined,
+        },
+        inventoryMutationResult: {
+          type: "created",
+          vehicleId: result.vehicle.id,
+        },
         meta,
-      });
-      if (inventoryTurn) return inventoryTurn;
+      };
     }
+
     if (pending.action === "confirm_validation") {
       const validationId = pending.payload.validationId as string;
       await executeConfirmValidation(params.dealerId, validationId, true);
+      meta.policyResult = "ALLOW";
       meta.responseType = "mutation_validation";
       return {
         intent: "VALIDATION",
         message: "אישרת זמינות. Exchange ממשיך לבדוק התאמות.",
+        conversation: { ...conversation, pendingConfirmation: undefined },
         meta,
       };
     }
+
     if (pending.action === "mark_sold") {
       const vehicleId = pending.payload.vehicleId as string;
       if (!(await assertVehicleOwned(params.dealerId, vehicleId))) {
+        meta.policyResult = "DENY";
         return {
           intent: "UPDATE_INVENTORY",
           message: "אין הרשאה לרכב הזה.",
+          conversation,
           meta,
         };
       }
       await markMyVehicleSold(params.dealerId, vehicleId);
+      meta.policyResult = "ALLOW";
       return {
         intent: "UPDATE_INVENTORY",
         message: "הרכב הוסר מהמלאי הפעיל.",
+        conversation: { ...conversation, pendingConfirmation: undefined },
+        inventoryMutationResult: { type: "sold", vehicleId },
         meta,
       };
     }
+
     if (pending.action === "update_inventory") {
       const manageTurn = await handleInventoryManageTurn({
         dealerId: params.dealerId,
@@ -182,6 +256,7 @@ export async function runActionGateway(params: {
       });
       if (manageTurn) return manageTurn;
     }
+
     return {
       intent: "UNKNOWN",
       message: "לא הצלחתי לאשר את הפעולה הממתינה.",
@@ -190,7 +265,7 @@ export async function runActionGateway(params: {
     };
   }
 
-  // PROPOSE — if restating same pending close, execute instead of re-proposing
+  // Existing deterministic search safety is retained.
   if (
     conversation?.pendingConfirmation &&
     proposal.capability === "SEARCHES" &&
@@ -217,8 +292,6 @@ export async function runActionGateway(params: {
   }
 
   meta.policyResult = "REQUIRE_CONFIRMATION";
-  const plan = proposalToPlan(proposal, message);
-  const turn = turnPlanToEvent(plan);
 
   if (proposal.capability === "SEARCHES") {
     if (
@@ -227,6 +300,7 @@ export async function runActionGateway(params: {
       proposal.operation === "CLOSE" ||
       proposal.operation === "RENEW"
     ) {
+      const plan = proposalToPlan(proposal, message);
       return handleSearchCapability({
         dealerId: params.dealerId,
         userId: params.userId,
@@ -241,41 +315,89 @@ export async function runActionGateway(params: {
   }
 
   if (proposal.capability === "INVENTORY") {
-    if (proposal.operation === "UPDATE" || proposal.operation === "MARK_SOLD") {
-      const focusedId =
-        conversation?.focusedObject?.type === "vehicle"
-          ? conversation.focusedObject.id
-          : params.entityType === "vehicle"
-            ? params.entityId
-            : undefined;
-      if (focusedId && !(await assertVehicleOwned(params.dealerId, focusedId))) {
+    const focusedId =
+      conversation?.focusedObject?.type === "vehicle"
+        ? conversation.focusedObject.id
+        : params.entityType === "vehicle"
+          ? params.entityId
+          : undefined;
+
+    // Saving an unsaved conversational draft: no planner, no TurnEvent, no text parsing.
+    if (proposal.operation === "CREATE") {
+      let nextConversation = conversation ?? {};
+      if (proposal.facts && Object.keys(proposal.facts).length > 0) {
+        nextConversation = applyInventoryDraftFacts({
+          conversation: nextConversation,
+          facts: proposal.facts,
+          sourceText: message,
+        }).conversation;
+      }
+
+      const prepared = prepareInventoryDraftConfirmation(nextConversation);
+      if (!prepared) {
+        meta.policyResult = "REQUIRE_CLARIFICATION";
         return {
           intent: "UPDATE_INVENTORY",
-          message: "אין הרשאה לרכב הזה.",
+          message: "לפני שמירה צריך לזהות לפחות יצרן, דגם ושנה.",
+          conversation: nextConversation,
           meta,
         };
       }
+
+      meta.responseType = "confirmation_inventory";
+      return {
+        intent: "UPDATE_INVENTORY",
+        message: "לשמור את הרכב הזה במלאי?",
+        requiresConfirmation: prepared.pendingConfirmation,
+        suggestions: [{ label: "שמור במלאי" }, { label: "ביטול" }],
+        conversation: prepared,
+        meta,
+      };
+    }
+
+    // Defensive fallback: if GPT proposed UPDATE for an unsaved draft, merge only
+    // the structured facts. This is state handling, not language interpretation.
+    if (
+      proposal.operation === "UPDATE" &&
+      conversation?.pendingInventoryDraft &&
+      !focusedId
+    ) {
+      const updated = applyInventoryDraftFacts({
+        conversation,
+        facts: proposal.facts,
+        sourceText: message,
+      });
+      meta.policyResult = "ALLOW";
+      meta.responseType = "inventory_draft_state";
+      return {
+        intent: "UPDATE_INVENTORY",
+        message: "עדכנתי את הטיוטה. עדיין לא נשמר דבר במלאי.",
+        conversation: updated.conversation,
+        meta,
+      };
+    }
+
+    // Saved-vehicle mutations retain the existing deterministic executor for now.
+    if (proposal.operation === "UPDATE" || proposal.operation === "MARK_SOLD") {
+      if (focusedId && !(await assertVehicleOwned(params.dealerId, focusedId))) {
+        meta.policyResult = "DENY";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "אין הרשאה לרכב הזה.",
+          conversation,
+          meta,
+        };
+      }
+      const plan = proposalToPlan(proposal, message);
       const manageTurn = await handleInventoryManageTurn({
         dealerId: params.dealerId,
         message,
         conversation,
         meta,
-        turn,
+        turn: turnPlanToEvent(plan),
         focusedVehicleId: focusedId,
       });
       if (manageTurn) return manageTurn;
-    }
-    if (proposal.operation === "CREATE" || proposal.operation === "UPDATE") {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message,
-        conversation,
-        meta,
-        turn,
-        forceStart: proposal.operation === "CREATE",
-      });
-      if (inventoryTurn) return inventoryTurn;
     }
   }
 
@@ -285,7 +407,8 @@ export async function runActionGateway(params: {
   ) {
     return {
       intent: "VALIDATION",
-      message: "כדי לאשר זמינות צריך לבחור אימות מאושר. עבור למסך האימותים או ציין איזה רכב.",
+      message:
+        "כדי לאשר זמינות צריך לבחור אימות מאושר. עבור למסך האימותים או ציין איזה רכב.",
       suggestions: [{ label: "אימותים", href: "/validations" }],
       conversation,
       meta,
@@ -295,7 +418,7 @@ export async function runActionGateway(params: {
   return {
     intent: "UNKNOWN",
     message:
-      "הפעולה הזו עדיין לא מחוברת בבטחה דרך הסוכן. אפשר לבצע אותה במסך המתאים, או לנסח שוב.",
+      "הפעולה הזו עדיין לא מחוברת בבטחה דרך הסוכן. אפשר לבצע אותה במסך המתאים.",
     conversation,
     meta,
   };
