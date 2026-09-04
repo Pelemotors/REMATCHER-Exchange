@@ -15,7 +15,10 @@ import {
 } from "lucide-react";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
 import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
+import { AgentWorkspaceProvider } from "@/components/assistant/agent-workspace-provider";
+import { useAgentShellFlags } from "@/components/layout/agent-shell-chrome";
 import { BRAND } from "@/config/brand";
+import { cn } from "@/lib/utils";
 import styles from "./app-shell-v2.module.css";
 
 const ExchangeAssistant = dynamic(
@@ -55,18 +58,24 @@ const pageTitles: Record<string, string> = {
 
 function resolveTitle(pathname: string) {
   const match = Object.entries(pageTitles).find(([path]) =>
-    pathname.startsWith(path),
+    pathname.startsWith(path)
   );
   return match?.[1] ?? BRAND.productShort;
 }
 
-export function AppShellV2({ children }: { children: React.ReactNode }) {
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const title = resolveTitle(pathname);
+  const { hideMobileNav, desktopAgentOpen } = useAgentShellFlags();
 
   return (
-    <div className={styles.shell}>
+    <div
+      className={cn(
+        styles.shell,
+        desktopAgentOpen && styles.shellWithAgent
+      )}
+    >
       <aside className={styles.sidebar}>
         <Link href="/home" className={styles.brandLockup}>
           <ExchangeMark
@@ -114,7 +123,11 @@ export function AppShellV2({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" strokeWidth={1.75} />
           </button>
           <span className={styles.mobileTitle}>{title}</span>
-          <Link href="/account" className={styles.accountButton} aria-label="חשבון">
+          <Link
+            href="/account"
+            className={styles.accountButton}
+            aria-label="חשבון"
+          >
             <User className="h-5 w-5" strokeWidth={1.75} />
           </Link>
         </header>
@@ -126,7 +139,14 @@ export function AppShellV2({ children }: { children: React.ReactNode }) {
         <ExchangeAssistant />
       </div>
 
-      <nav className={styles.mobileNav} aria-label="ניווט תחתון">
+      <nav
+        className={cn(
+          styles.mobileNav,
+          hideMobileNav && styles.mobileNavHidden
+        )}
+        aria-label="ניווט תחתון"
+        hidden={hideMobileNav}
+      >
         <div className={styles.mobileNavInner}>
           {navItems.map((item) => (
             <NavItemV2
@@ -152,7 +172,11 @@ export function AppShellV2({ children }: { children: React.ReactNode }) {
             aria-label="תפריט מובייל"
             onClick={(e) => e.stopPropagation()}
           >
-            <Link href="/home" className={styles.brandLockup} onClick={() => setMenuOpen(false)}>
+            <Link
+              href="/home"
+              className={styles.brandLockup}
+              onClick={() => setMenuOpen(false)}
+            >
               <ExchangeMark
                 state="idle"
                 variant="hero"
@@ -187,5 +211,13 @@ export function AppShellV2({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
+  );
+}
+
+export function AppShellV2({ children }: { children: React.ReactNode }) {
+  return (
+    <AgentWorkspaceProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </AgentWorkspaceProvider>
   );
 }

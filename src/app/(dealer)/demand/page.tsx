@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/brand-v2";
 import { DemandCard } from "@/components/demand/demand-card";
 import { CreateDemandFlow } from "@/components/demand/create-demand-flow";
+import { useSetAgentPageContext } from "@/components/assistant/agent-workspace-provider";
 import {
   AttentionList,
   FilterPills,
@@ -38,6 +39,8 @@ function DemandPageContent() {
   const [tab, setTab] = useState<"active" | "ended">("active");
   const [active, setActive] = useState<EnrichedDemand[]>([]);
   const [ended, setEnded] = useState<EnrichedDemand[]>([]);
+
+  useSetAgentPageContext({ surface: "demand", route: "/demand" }, []);
   const [editDemand, setEditDemand] = useState<EnrichedDemand | null>(null);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);

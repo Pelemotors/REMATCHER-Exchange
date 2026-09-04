@@ -26,7 +26,13 @@ export interface AssistantContext {
   route: string;
   entityType?: string;
   entityId?: string;
+  entityLabel?: string;
+  /** Soft UI surface — informational for the Agent, not forced intent */
+  surface?: string;
   mode?: "inventory_management";
+  vehicleId?: string;
+  demandId?: string;
+  matchId?: string;
 }
 
 export interface AssistantResponse {

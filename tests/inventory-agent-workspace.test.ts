@@ -140,37 +140,40 @@ describe("shared domain mutation path guards", () => {
 });
 
 describe("embedded inventory workspace UX guards", () => {
-  it("inventory page embeds workspace and sold confirmation", () => {
+  it("inventory page uses universal agent CTA and compact manage panel", () => {
     const src = readFileSync(
       join(root, "src/app/(dealer)/inventory/page.tsx"),
       "utf8"
     );
     expect(src).toContain("InventoryAgentWorkspace");
-    expect(src).toContain("ניהול מלאי");
+    expect(src).toContain("דבר עם ה-Agent");
     expect(src).toContain("סמן כנמכר");
     expect(src).toContain("כן, נמכרה");
     expect(src).not.toContain("הוסף ונרמל");
     expect(src).not.toContain("openAgentInventory");
   });
 
-  it("workspace uses inventory_management mode and not global bottomsheet", () => {
+  it("workspace is compact entry — no inline chat; opens universal agent", () => {
     const src = readFileSync(
       join(root, "src/components/inventory/inventory-agent-workspace.tsx"),
       "utf8"
     );
-    expect(src).toContain('mode: "inventory_management"');
-    expect(src).toContain("שלח לסוכן");
+    expect(src).toContain("דבר עם ה-Agent");
     expect(src).toContain("העלאת קובץ");
     expect(src).toContain("InventoryImportPanel");
+    expect(src).toContain("inventory_management");
+    expect(src).toContain("openAgent");
+    expect(src).not.toContain("שלח לסוכן");
   });
 
-  it("hides global FAB while inventory workspace is open", () => {
+  it("universal agent provider owns conversation — not a second inventory agent", () => {
     const src = readFileSync(
-      join(root, "src/components/assistant/exchange-assistant.tsx"),
+      join(root, "src/components/assistant/agent-workspace-provider.tsx"),
       "utf8"
     );
-    expect(src).toContain("INVENTORY_WORKSPACE_EVENT");
-    expect(src).toContain("hideFab");
+    expect(src).toContain("/api/assistant/chat");
+    expect(src).toContain("inventory_management");
+    expect(src).toContain("OPEN_ASSISTANT_EVENT");
   });
 });
 

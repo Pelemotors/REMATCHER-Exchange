@@ -119,6 +119,17 @@ export async function runExchangeAssistantV2(params: {
       params.context.mode === "inventory_management" ||
       params.conversation?.sessionContext?.operatingMode ===
         "inventory_management",
+    pageContextBlock: [
+      params.context.surface ? `surface=${params.context.surface}` : null,
+      params.context.entityType && params.context.entityId
+        ? `selectedEntity=${params.context.entityType}:${params.context.entityId}`
+        : null,
+      params.context.entityLabel
+        ? `selectedEntityLabel=${String(params.context.entityLabel).slice(0, 80)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
   });
 
   const loopConversation = loop.conversation ?? params.conversation;

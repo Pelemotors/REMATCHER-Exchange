@@ -59,6 +59,8 @@ function buildSystemPrompt(params: {
   conversation?: ConversationState;
   route?: string;
   inventoryMode?: boolean;
+  /** Soft page context — informational only, never forced intent */
+  pageContextBlock?: string;
 }): string {
   const pending = params.conversation?.pendingConfirmation;
   const pendingBlock = pending
@@ -99,7 +101,7 @@ OPERATING MODEL:
 CONTEXT:
 route=${params.route ?? "/"}
 inventoryMode=${Boolean(params.inventoryMode)}
-${pendingBlock}${draftBlock}${searchDraft}`;
+${params.pageContextBlock ? `${params.pageContextBlock}\n` : ""}${pendingBlock}${draftBlock}${searchDraft}`;
 }
 
 function historyMessages(
@@ -134,6 +136,7 @@ export async function runAgentToolLoop(params: {
   conversation?: ConversationState;
   route?: string;
   inventoryMode?: boolean;
+  pageContextBlock?: string;
 }): Promise<AgentLoopResult> {
   const started = Date.now();
   const toolsUsed: string[] = [];
@@ -205,6 +208,7 @@ export async function runAgentToolLoop(params: {
         conversation: workingConversation,
         route: params.route,
         inventoryMode: params.inventoryMode,
+        pageContextBlock: params.pageContextBlock,
       }),
     },
     ...historyMessages(workingConversation),

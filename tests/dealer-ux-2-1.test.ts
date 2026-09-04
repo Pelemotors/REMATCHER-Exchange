@@ -114,8 +114,8 @@ describe("dealer UX 2.1 product-flow guards", () => {
       "utf8"
     );
     expect(src).toContain("InventoryAgentWorkspace");
-    expect(src).toContain("ניהול מלאי");
-    expect(src).toContain("הוסף עם הסוכן");
+    expect(src).toContain("דבר עם ה-Agent");
+    expect(src).toContain("העלאת קובץ");
   });
 
   it("validations explain why now commercially", () => {
@@ -141,10 +141,10 @@ describe("dealer UX 2.1 product-flow guards", () => {
 
   it("assistant bootstrap is route-aware", () => {
     const src = readFileSync(
-      join(root, "src/components/assistant/exchange-assistant.tsx"),
+      join(root, "src/components/assistant/agent-workspace-provider.tsx"),
       "utf8"
     );
-    expect(src).toContain("routeAssistantBootstrap");
+    expect(src).toContain("routeBootstrap");
     expect(src).toContain("focusedObject");
     expect(src).toContain("/inventory");
     expect(src).toContain("/matches");

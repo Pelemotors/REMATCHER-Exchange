@@ -11,6 +11,7 @@ import {
   Surface,
 } from "@/components/ui/brand-v2";
 import { MatchCardV2 } from "@/components/cards/match-card-v2";
+import { useSetAgentPageContext } from "@/components/assistant/agent-workspace-provider";
 import { FilterPills, SnapshotBar } from "@/components/ux/snapshot-attention";
 import {
   EMPTY_COPY,
@@ -47,6 +48,9 @@ function MatchesPageContent() {
   const [tab, setTab] = useState<TabId>(
     ["action", "waiting", "history"].includes(initialTab) ? initialTab : "action"
   );
+
+  useSetAgentPageContext({ surface: "matches", route: "/matches" }, []);
+
 
   async function load() {
     const res = await fetch("/api/matches");

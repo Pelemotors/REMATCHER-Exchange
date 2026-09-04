@@ -19,7 +19,12 @@ export async function POST(req: Request) {
       route: string;
       entityType?: string;
       entityId?: string;
+      entityLabel?: string;
+      surface?: string;
       mode?: "inventory_management";
+      vehicleId?: string;
+      demandId?: string;
+      matchId?: string;
     };
     conversation?: ConversationState;
   };

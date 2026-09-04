@@ -11,6 +11,7 @@ import {
   Surface,
 } from "@/components/ui/brand-v2";
 import { InventoryAgentWorkspace } from "@/components/inventory/inventory-agent-workspace";
+import { useSetAgentPageContext } from "@/components/assistant/agent-workspace-provider";
 import {
   AttentionList,
   FilterPills,
@@ -74,12 +75,15 @@ function InventoryPageContent() {
   const [query, setQuery] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [workspaceTab, setWorkspaceTab] = useState<"agent" | "import">("agent");
+  const [workspaceTab, setWorkspaceTab] = useState<"agent" | "import">("import");
   const [editVehicle, setEditVehicle] = useState<Vehicle | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [soldConfirm, setSoldConfirm] = useState<Vehicle | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  useSetAgentPageContext({ surface: "inventory", route: "/inventory" }, []);
+
 
   async function load() {
     const res = await fetch("/api/inventory");
@@ -97,7 +101,20 @@ function InventoryPageContent() {
   useEffect(() => {
     function onOpenWorkspace(e: Event) {
       const detail = (e as CustomEvent<{ tab?: "agent" | "import" }>).detail;
-      setWorkspaceTab(detail?.tab ?? "agent");
+      const tab = detail?.tab ?? "agent";
+      if (tab === "agent") {
+        window.dispatchEvent(
+          new CustomEvent("rematcher:open-assistant", {
+            detail: {
+              mode: "inventory_management",
+              preferFocusOnMobile: true,
+              presentation: "focus",
+            },
+          })
+        );
+        return;
+      }
+      setWorkspaceTab("import");
       setWorkspaceOpen(true);
     }
     window.addEventListener("rematcher:open-inventory-workspace", onOpenWorkspace);
@@ -266,23 +283,28 @@ function InventoryPageContent() {
             <ButtonV2
               variant="signal"
               onClick={() => {
-                setWorkspaceTab("agent");
+                window.dispatchEvent(
+                  new CustomEvent("rematcher:open-assistant", {
+                    detail: {
+                      mode: "inventory_management",
+                      preferFocusOnMobile: true,
+                      presentation: "focus",
+                    },
+                  })
+                );
+              }}
+            >
+              דבר עם ה-Agent
+            </ButtonV2>
+            <ButtonV2
+              variant="secondary"
+              onClick={() => {
+                setWorkspaceTab("import");
                 setWorkspaceOpen(true);
               }}
             >
-              ניהול מלאי
+              העלאת קובץ
             </ButtonV2>
-            {!workspaceOpen && (
-              <ButtonV2
-                variant="secondary"
-                onClick={() => {
-                  setWorkspaceTab("import");
-                  setWorkspaceOpen(true);
-                }}
-              >
-                ייבוא קובץ
-              </ButtonV2>
-            )}
           </div>
         }
       />
@@ -433,11 +455,18 @@ function InventoryPageContent() {
               <ButtonV2
                 variant="signal"
                 onClick={() => {
-                  setWorkspaceTab("agent");
-                  setWorkspaceOpen(true);
+                  window.dispatchEvent(
+                    new CustomEvent("rematcher:open-assistant", {
+                      detail: {
+                        mode: "inventory_management",
+                        preferFocusOnMobile: true,
+                        presentation: "focus",
+                      },
+                    })
+                  );
                 }}
               >
-                הוסף עם הסוכן
+                דבר עם ה-Agent
               </ButtonV2>
             }
           />
