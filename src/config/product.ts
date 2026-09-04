@@ -89,7 +89,7 @@ export const AI_PROMPT_VERSIONS = {
   inventoryUnderstanding: "inventory-understanding-v1",
   turnInterpreter: "turn-interpreter-v1",
   turnPlanner: "turn-planner-v1.1",
-  agentLoop: "agent-loop-v5.0.4-constitution-2.0-he",
+  agentLoop: "agent-loop-v5.0.5-constitution-2.0-he",
   matchExplainer: "match-explainer-v1",
 } as const;
 
