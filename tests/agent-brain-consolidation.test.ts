@@ -251,6 +251,14 @@ describe("Critical safety still wired on live path", () => {
     expect(gw).toContain("CONFIRM_PENDING");
   });
 
+  it("inventory read tools expose dealer-facing freshness/price labels", () => {
+    const src = read("src/services/assistant/tools/read-tools.ts");
+    expect(src).toContain("freshnessLabelHe");
+    expect(src).toContain("dealerPrice");
+    expect(src).toContain("מעודכן");
+    expect(src).toContain("דורש רענון");
+  });
+
   it("no new keyword intent router was introduced for conversation understanding", () => {
     const orch = read("src/services/assistant/v2-orchestrator.ts");
     expect(orch).toContain(

@@ -9,6 +9,47 @@ import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
 import { confirmedFromJson, demandTitle, formatSearchDisplayLabel } from "@/lib/demand-display";
 import type { ReadToolName } from "./registry";
 
+/** Dealer-facing labels for Agent — never expose FRESH/STALE/B2B enums verbatim. */
+function freshnessLabelHe(state: string | null | undefined): string {
+  switch (state) {
+    case "FRESH":
+      return "מעודכן";
+    case "STALE":
+      return "דורש רענון";
+    case "VALIDATION_REQUIRED":
+      return "דורש אימות זמינות";
+    case "UNKNOWN":
+      return "סטטוס לא ברור";
+    default:
+      return "לא צוין";
+  }
+}
+
+function agentVehicleView(v: {
+  id: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  mileage?: number | null;
+  b2bPrice?: number | null;
+  retailPrice?: number | null;
+  freshnessState?: string | null;
+  ownershipHand?: number | null;
+}) {
+  return {
+    id: v.id,
+    title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
+    make: v.make,
+    model: v.model,
+    year: v.year,
+    mileage: v.mileage ?? null,
+    retailPrice: v.retailPrice ?? null,
+    dealerPrice: v.b2bPrice ?? null,
+    freshness: freshnessLabelHe(v.freshnessState),
+    ownershipHand: v.ownershipHand ?? null,
+  };
+}
+
 export async function executeReadTool(
   tool: ReadToolName,
   dealerId: string
@@ -77,18 +118,7 @@ export async function executeReadTool(
       });
       return {
         activeCount: vehicles.length,
-        vehicles: vehicles.map((v) => ({
-          id: v.id,
-          title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
-          make: v.make,
-          model: v.model,
-          year: v.year,
-          mileage: v.mileage,
-          b2bPrice: v.b2bPrice,
-          retailPrice: v.retailPrice,
-          freshnessState: v.freshnessState,
-          ownershipHand: v.ownershipHand,
-        })),
+        vehicles: vehicles.map((v) => agentVehicleView(v)),
       };
     }
     case "getMyActiveDemands": {
@@ -194,7 +224,7 @@ export async function executeReadTool(
       return vehicles.map((v) => ({
         id: v.id,
         title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
-        freshnessState: v.freshnessState,
+        freshness: freshnessLabelHe(v.freshnessState),
       }));
     }
     case "getMyStaleInventory": {
