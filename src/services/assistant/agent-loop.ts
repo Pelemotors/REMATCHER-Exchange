@@ -336,6 +336,29 @@ export async function runAgentToolLoop(params: {
       }
     }
 
+    // The bounded exploration loop may end immediately after a useful tool result.
+    // Never throw that work away or ask the dealer to repeat the question. Force one
+    // final synthesis call with tools unavailable, using all authorized results already
+    // accumulated in the conversation.
+    modelCallCount += 1;
+    const finalCompletion = await openai.chat.completions.create({
+      model,
+      messages: [
+        ...messages,
+        {
+          role: "system",
+          content:
+            "הגעת למגבלת סבבי הכלים לתור הזה. אל תבקש כלי נוסף ואל תבקש מהמשתמש לנסח מחדש. ענה עכשיו לשאלה המקורית בעברית, בקצרה ובאופן מסחרי, ורק מתוך המידע המורשה שכבר נאסף. אם המידע חלקי, אמור מה ניתן להסיק ממנו בלי להמציא.",
+        },
+      ],
+      temperature: 0.2,
+    });
+
+    const finalUsage = finalCompletion.usage;
+    if (finalUsage) totalTokens += finalUsage.total_tokens ?? 0;
+
+    const finalText = (finalCompletion.choices[0]?.message?.content ?? "").trim();
+
     await logAiOperation({
       operation: "agent_loop",
       model,
@@ -349,13 +372,14 @@ export async function runAgentToolLoop(params: {
         toolRoundCount,
         toolsUsed,
         totalTokens,
-        finished: "max_rounds",
+        finished: "forced_final_after_max_tool_rounds",
       },
     });
 
     return {
       message:
-        "אספתי מידע, אבל כדאי לנסח שוב בקצרה מה בדיוק לבדוק — מלאי, חיפושים או התאמות.",
+        finalText ||
+        "בדקתי את המידע הזמין, אבל אין לי כרגע בסיס מספיק להמלצה מדויקת בלי להמציא.",
       proposal: null,
       modelCallCount,
       toolRoundCount,
@@ -365,7 +389,7 @@ export async function runAgentToolLoop(params: {
       latencyMs: Date.now() - started,
       model,
       success: true,
-      fallbackReason: "max_rounds",
+      fallbackReason: finalText ? null : "max_rounds_empty_final",
       toolResults,
     };
   } catch (err) {
