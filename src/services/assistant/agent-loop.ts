@@ -33,13 +33,17 @@ function buildSystemPrompt(params: { conversation?: ConversationState; route?: s
   const pendingBlock = pending
     ? `\nPENDING CONFIRMATION (must respect):\naction=${pending.action}\nlabel=${pending.label}\ntargetCount=${Array.isArray(pending.payload.demandIds) ? (pending.payload.demandIds as string[]).length : pending.payload.demandId ? 1 : "unknown"}\nscope=${pending.payload.scope ?? "n/a"}\nIf the user affirms THIS pending action → call confirm_pending_action.\nIf they reject → cancel_pending_action.\nIf they change scope → propose_mutation with the NEW scope (do not confirm the old one).\n`
     : "\nNo pending confirmation.\n";
-  const draft = params.conversation?.pendingInventoryDraft ? `\nPending inventory draft in progress (context only): ${JSON.stringify(params.conversation.pendingInventoryDraft.fields).slice(0, 400)}\n` : "";
+  const inventoryDraft = params.conversation?.pendingInventoryDraft;
+  const draft = inventoryDraft
+    ? `\nPENDING INVENTORY DRAFT — conversational context, NOT a saved vehicle:\nstatus=${inventoryDraft.status}\nknownFields=${JSON.stringify(inventoryDraft.fields).slice(0, 700)}\nlastAskedGap=${inventoryDraft.lastAskedGap ?? "none"}\naskedGaps=${JSON.stringify(inventoryDraft.askedGaps ?? [])}\nsourceText=${JSON.stringify(inventoryDraft.sourceText ?? "").slice(0, 350)}\nRULES FOR THIS DRAFT:\n- YOU own the conversation. Do not force the dealer into a form/workflow.\n- If the dealer asks what you are waiting for / what is missing / what model or field you mean, answer directly from this draft context.\n- If the dealer supplies an answer/correction/additional vehicle fact for this draft, call propose_mutation with capability=INVENTORY, operation=UPDATE, scope=ONE and put ONLY the supplied/clearly corrected facts in facts. Action Gateway will merge them into the pending draft; do not claim they were saved yet.\n- A short answer such as a model name, year, mileage or price can be an answer to lastAskedGap. Interpret it in that context when reasonable.\n- If the dealer changes topic, answer the new topic. The draft stays context; it does not own the turn.\n- If the dealer asks a general/advisory question, answer normally; do not emit an inventory mutation unless they actually supplied a change.\n`
+    : "";
   const searchDraft = params.conversation?.pendingSearchDraft ? `\nPending search draft (context): ${JSON.stringify(params.conversation.pendingSearchDraft.confirmed).slice(0, 300)}\n` : "";
   return `${AGENT_CONSTITUTION}
 
 You are the REMATCHER Exchange Assistant runtime 4.0 — a tool-using conversational agent for ONE authenticated dealer.
 
 HOW YOU WORK:
+- You are the single conversational owner across Home, Inventory, Searches and the rest of the product. Screen/workflow context may guide you, but must not trap the conversation.
 - For questions, advice, analysis, prioritization: call only the authorized READ tools actually needed, inspect results, and answer in Hebrew.
 - You decide which tools to call. Do not wait for TypeScript to map the question.
 - Novel analytical questions are expected. Combine domains when useful, but do not re-read data already established in the recent conversation unless the user says it changed or the answer requires fresh verification.
