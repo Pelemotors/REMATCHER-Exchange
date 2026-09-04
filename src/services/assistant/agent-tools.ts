@@ -67,15 +67,15 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   ),
   tool(
     "get_my_inventory",
-    "THIS dealer's own active inventory vehicles (make, model, year, mileage, dealer price when present). Never returns other dealers' inventory or network browse. Does NOT prove market demand, fair price, or that missing optional fields block matching."
+    "THIS dealer's own active inventory vehicles (make, model, year, mileage, dealer price when present). Never returns other dealers' inventory or network browse. Does NOT prove market demand, fair price, or that missing optional fields block matching. If a freshness/status code appears, translate it to dealer language — never say FRESH/STALE to the user."
   ),
   tool(
     "get_my_inventory_attention",
-    "THIS dealer's inventory items the system marks as requiring attention (e.g. stale / validation-required). Own inventory only. Does NOT invent commercial problems beyond system flags."
+    "THIS dealer's inventory items the system marks as requiring attention (e.g. stale / validation-required). Own inventory only. Does NOT invent commercial problems beyond system flags. Translate internal status codes to Hebrew dealer language."
   ),
   tool(
     "get_my_stale_inventory",
-    "THIS dealer's vehicles marked stale by the system. Own inventory only. Stale is a freshness signal — it alone does NOT prove the price is wrong or that the car will not sell."
+    "THIS dealer's vehicles marked stale by the system. Own inventory only. Stale is a freshness signal — it alone does NOT prove the price is wrong or that the car will not sell. Say 'ישן/דורש רענון' style language, not STALE/FRESH."
   ),
   tool(
     "get_my_searches",
