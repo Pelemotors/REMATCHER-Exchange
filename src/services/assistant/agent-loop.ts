@@ -1,6 +1,9 @@
 /**
- * Agent 4.0 — bounded OpenAI tool-calling loop for READ/advice.
- * Tool results return to the model. Writes exit via ActionProposal to Action Gateway.
+ * Agent 4.0 — bounded OpenAI tool-calling loop.
+ *
+ * The model owns language understanding and conversation. REMATCHER exposes
+ * authorized reads, safe conversational state tools, and a deterministic write
+ * boundary. No TypeScript intent classifier sits in front of normal turns.
  */
 import "server-only";
 import type {
@@ -13,112 +16,431 @@ import {
   AGENT_LOOP_MAX_ROUNDS,
   AGENT_LOOP_MAX_TOOLS_PER_ROUND,
 } from "@/config/product";
-import { getOpenAIClient, isOpenAIConfigured, logAiOperation } from "@/services/ai/client";
+import {
+  getOpenAIClient,
+  isOpenAIConfigured,
+  logAiOperation,
+} from "@/services/ai/client";
 import { AGENT_CONSTITUTION } from "@/services/assistant/agent-constitution";
-import { AGENT_OPENAI_TOOLS, isControlTool, isReadOpenAiTool, OPENAI_READ_TOOL_MAP } from "@/services/assistant/agent-tools";
-import { parseActionProposalFromTool, type ActionProposal } from "@/services/assistant/action-proposal";
+import {
+  AGENT_OPENAI_TOOLS,
+  isControlTool,
+  isConversationStateTool,
+  isReadOpenAiTool,
+  OPENAI_READ_TOOL_MAP,
+} from "@/services/assistant/agent-tools";
+import {
+  parseActionProposalFromTool,
+  type ActionProposal,
+} from "@/services/assistant/action-proposal";
 import type { ConversationState } from "@/services/assistant/conversation-state";
+import { applyInventoryDraftFacts } from "@/services/assistant/inventory-draft-state";
 import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
 import type { ReadToolName } from "@/services/assistant/tools/registry";
 import { AGENT_VERSION } from "@/services/assistant/tools/registry";
 
 export type AgentLoopResult = {
-  message: string; proposal: ActionProposal | null; modelCallCount: number; toolRoundCount: number;
-  toolsUsed: string[]; toolDurations: Record<string, number>; totalTokens: number; latencyMs: number;
-  model: string | null; success: boolean; fallbackReason: string | null; toolResults: Record<string, unknown>;
+  message: string;
+  proposal: ActionProposal | null;
+  conversation?: ConversationState;
+  modelCallCount: number;
+  toolRoundCount: number;
+  toolsUsed: string[];
+  toolDurations: Record<string, number>;
+  totalTokens: number;
+  latencyMs: number;
+  model: string | null;
+  success: boolean;
+  fallbackReason: string | null;
+  toolResults: Record<string, unknown>;
 };
 
-function buildSystemPrompt(params: { conversation?: ConversationState; route?: string; inventoryMode?: boolean }): string {
+function buildSystemPrompt(params: {
+  conversation?: ConversationState;
+  route?: string;
+  inventoryMode?: boolean;
+}): string {
   const pending = params.conversation?.pendingConfirmation;
   const pendingBlock = pending
-    ? `\nPENDING CONFIRMATION (must respect):\naction=${pending.action}\nlabel=${pending.label}\ntargetCount=${Array.isArray(pending.payload.demandIds) ? (pending.payload.demandIds as string[]).length : pending.payload.demandId ? 1 : "unknown"}\nscope=${pending.payload.scope ?? "n/a"}\nIf the user affirms THIS pending action → call confirm_pending_action.\nIf they reject → cancel_pending_action.\nIf they change scope → propose_mutation with the NEW scope (do not confirm the old one).\n`
+    ? `\nPENDING CONFIRMATION (deterministic boundary):\naction=${pending.action}\nlabel=${pending.label}\nIf the user clearly confirms this same action, call confirm_pending_action. If they reject it, call cancel_pending_action. If they change the requested action or scope, propose the new mutation instead.\n`
     : "\nNo pending confirmation.\n";
+
   const inventoryDraft = params.conversation?.pendingInventoryDraft;
-  const draft = inventoryDraft
-    ? `\nACTIVE PENDING INVENTORY DRAFT — THIS IS THE PRIMARY LOCAL CONTEXT FOR THE CURRENT CONVERSATION, not a saved vehicle:\nstatus=${inventoryDraft.status}\nknownFields=${JSON.stringify(inventoryDraft.fields).slice(0, 700)}\nlastAskedGap=${inventoryDraft.lastAskedGap ?? "none"}\naskedGaps=${JSON.stringify(inventoryDraft.askedGaps ?? [])}\nsourceText=${JSON.stringify(inventoryDraft.sourceText ?? "").slice(0, 350)}\nMANDATORY DRAFT BEHAVIOR:\n- YOU own the conversation. The draft is context, never a workflow that owns the turn.\n- When an active draft exists, short/deictic/meta questions such as "על מה אתה תקוע?", "מה חסר?", "מה שאלת?", "מה אתה צריך ממני?", "איזה דגם?", "מה הבנת?", "איפה עצרנו?" refer to THIS ACTIVE DRAFT by default. Answer from the draft immediately. DO NOT call global inventory/exchange tools for these questions.\n- lastAskedGap is exactly the field the draft was waiting for. If asked what you are waiting for, say that field naturally and mention the relevant known vehicle identity if useful.\n- Do not replace draft context with the dealer's saved inventory or global Exchange state unless the user EXPLICITLY changes topic to their saved inventory/business state.\n- If the dealer supplies an answer/correction/additional vehicle fact for this draft, call propose_mutation with capability=INVENTORY, operation=UPDATE, scope=ONE and put ONLY the supplied/clearly corrected facts in facts. Action Gateway will merge them into the pending draft; do not claim they were saved yet.\n- A short answer such as a model name, year, mileage or price is normally an answer to lastAskedGap. Interpret it in that context when reasonable.\n- If the dealer changes topic explicitly, answer the new topic. The draft remains suspended context; it must not trap the user.\n- If the dealer asks a general/advisory question, answer normally; do not emit an inventory mutation unless they actually supplied a change.\n`
+  const draftBlock = inventoryDraft
+    ? `\nACTIVE CONVERSATIONAL INVENTORY DRAFT:\n${JSON.stringify({
+        status: inventoryDraft.status,
+        fields: inventoryDraft.fields,
+      }).slice(0, 1000)}\nThis draft is conversation state, not a saved database vehicle. Resolve ordinary references from the active conversation naturally. Do not replace this local context with global inventory unless the dealer actually changes topic.\n`
+    : "\nNo active inventory draft.\n";
+
+  const searchDraft = params.conversation?.pendingSearchDraft
+    ? `\nPending search draft context: ${JSON.stringify(
+        params.conversation.pendingSearchDraft.confirmed
+      ).slice(0, 400)}\n`
     : "";
-  const searchDraft = params.conversation?.pendingSearchDraft ? `\nPending search draft (context): ${JSON.stringify(params.conversation.pendingSearchDraft.confirmed).slice(0, 300)}\n` : "";
+
   return `${AGENT_CONSTITUTION}
 
-You are the REMATCHER Exchange Assistant runtime 4.0 — a tool-using conversational agent for ONE authenticated dealer.
+You are the single REMATCHER Exchange Assistant for ONE authenticated dealer.
 
-HOW YOU WORK:
-- You are the single conversational owner across Home, Inventory, Searches and the rest of the product. Screen/workflow context may guide you, but must not trap the conversation.
-- For questions, advice, analysis, prioritization: call only the authorized READ tools actually needed, inspect results, and answer in Hebrew.
-- Local active conversation context (especially a pending draft) takes precedence over broad/global reads when the user's wording refers to "this", "it", "what are you waiting for", or the immediately active task.
-- You decide which tools to call. Do not wait for TypeScript to map the question.
-- Novel analytical questions are expected. Combine domains when useful, but do not re-read data already established in the recent conversation unless the user says it changed or the answer requires fresh verification.
-- Never invent counts, matches, inventory, identities, permissions, causality, or product rules. A missing field may be commercially worth completing, but never claim it harms matching unless a verified rule/result says so.
-- Never browse network inventory. Tools only return THIS dealer's authorized data.
-- Match truth is deterministic and stored. get_my_matches returns authorized stored matches only; you never decide match=true.
-- For WRITE intents call propose_mutation. Do NOT pretend the write already happened.
-- After tool results arrive, reason over them and revise when new facts contradict earlier advice.
-- Speak like a sharp dealer-side commercial partner, not an analyst report. Default to 1–3 short paragraphs. Do not routinely label sections עובדות/מסקנה/המלצה.
-- Translate internal values/statuses into natural Hebrew. Never expose internal enum names such as FRESH, STALE, B2B, tool names, route names, prompt versions or implementation terminology unless the user explicitly asks technically.
-- Give the best next move directly. Do not end every answer with אם תרצה or a menu of things you can do.
-- Answer the question first.
+OPERATING MODEL:
+- YOU understand the dealer's language, references, corrections, topic changes and intent. Do not expect TypeScript rules to classify the turn for you.
+- Use authorized tools as capabilities, not as a menu or workflow.
+- Conversation state is context. It helps you understand the current task but never traps the dealer in that task.
+- For inventory being discussed but not yet saved, use update_inventory_draft to record structured facts you understood. That tool changes conversation state only and returns the resulting draft to you. You then decide what to say next.
+- Do not use propose_mutation merely to add facts to an unsaved draft. Use propose_mutation only when a real domain/database action is requested: save a prepared draft, update or sell a saved vehicle, mutate searches, or confirm another authorized action.
+- If an inventory draft has enough identity to save (make + model + year), you may propose INVENTORY CREATE when the dealer is actually asking to save/add it. Optional commercial fields are not automatic blockers.
+- For questions, advice and analysis, call only the authorized READ tools actually needed. Reuse verified recent context when it is still applicable.
+- Never invent counts, matches, inventory, identities, permissions, causality or product rules.
+- Never browse network inventory. Tools return only authorized data for this dealer.
+- Match truth, privacy, Reveal, ownership, confirmation and database writes remain deterministic REMATCHER authority.
+- Answer in natural concise Hebrew like a dealer-side commercial partner. Answer the actual question first. Do not expose internal tool names, enums, routes, prompt versions or implementation jargon unless explicitly asked technically.
 
 CONTEXT:
 route=${params.route ?? "/"}
 inventoryMode=${Boolean(params.inventoryMode)}
-${pendingBlock}${draft}${searchDraft}`;
+${pendingBlock}${draftBlock}${searchDraft}`;
 }
 
-function historyMessages(conversation?: ConversationState): ChatCompletionMessageParam[] {
-  return (conversation?.recentTurns ?? []).slice(-10).map((t) => ({ role: t.role, content: t.text }));
+function historyMessages(
+  conversation?: ConversationState
+): ChatCompletionMessageParam[] {
+  return (conversation?.recentTurns ?? []).slice(-10).map((turn) => ({
+    role: turn.role,
+    content: turn.text,
+  }));
 }
-function truncateToolResult(value: unknown): string { const raw = JSON.stringify(value ?? null); return raw.length <= 6000 ? raw : raw.slice(0, 6000) + "…[truncated]"; }
 
-export async function runAgentToolLoop(params: { dealerId: string; userId: string; message: string; conversation?: ConversationState; route?: string; inventoryMode?: boolean }): Promise<AgentLoopResult> {
-  const started = Date.now(); const toolsUsed: string[] = []; const toolDurations: Record<string, number> = {}; const toolResults: Record<string, unknown> = {};
-  let modelCallCount = 0, toolRoundCount = 0, totalTokens = 0, promptTokens = 0, completionTokens = 0, cachedPromptTokens = 0;
+function truncateToolResult(value: unknown): string {
+  const raw = JSON.stringify(value ?? null);
+  return raw.length <= 6000 ? raw : `${raw.slice(0, 6000)}…[truncated]`;
+}
+
+function parseToolArgs(raw: string | undefined): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function runAgentToolLoop(params: {
+  dealerId: string;
+  userId: string;
+  message: string;
+  conversation?: ConversationState;
+  route?: string;
+  inventoryMode?: boolean;
+}): Promise<AgentLoopResult> {
+  const started = Date.now();
+  const toolsUsed: string[] = [];
+  const toolDurations: Record<string, number> = {};
+  const toolResults: Record<string, unknown> = {};
+  let workingConversation = params.conversation;
+  let modelCallCount = 0;
+  let toolRoundCount = 0;
+  let totalTokens = 0;
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let cachedPromptTokens = 0;
   let proposal: ActionProposal | null = null;
-  const addUsage = (usage: any) => { if (!usage) return; totalTokens += usage.total_tokens ?? 0; promptTokens += usage.prompt_tokens ?? 0; completionTokens += usage.completion_tokens ?? 0; cachedPromptTokens += usage.prompt_tokens_details?.cached_tokens ?? 0; };
-  const usageSnapshot = (finished: string, extra: Record<string, unknown> = {}) => ({ agentVersion: AGENT_VERSION, modelCallCount, toolRoundCount, toolsUsed, totalTokens, promptTokens, completionTokens, cachedPromptTokens, uncachedPromptTokens: Math.max(0, promptTokens - cachedPromptTokens), finished, ...extra });
 
-  if (!isOpenAIConfigured()) return { message: "אני לא מצליח כרגע להתחבר למנוע השיחה. אפשר לנסות שוב, או לעבור למסכי מלאי / חיפושים / התאמות.", proposal: null, modelCallCount: 0, toolRoundCount: 0, toolsUsed: [], toolDurations: {}, totalTokens: 0, latencyMs: Date.now() - started, model: null, success: false, fallbackReason: "openai_not_configured", toolResults: {} };
-  const openai = getOpenAIClient(); const model = AI_MODELS.agentLoop;
-  const messages: ChatCompletionMessageParam[] = [{ role: "system", content: buildSystemPrompt({ conversation: params.conversation, route: params.route, inventoryMode: params.inventoryMode }) }, ...historyMessages(params.conversation), { role: "user", content: params.message }];
+  const addUsage = (usage: any) => {
+    if (!usage) return;
+    totalTokens += usage.total_tokens ?? 0;
+    promptTokens += usage.prompt_tokens ?? 0;
+    completionTokens += usage.completion_tokens ?? 0;
+    cachedPromptTokens += usage.prompt_tokens_details?.cached_tokens ?? 0;
+  };
+
+  const usageSnapshot = (
+    finished: string,
+    extra: Record<string, unknown> = {}
+  ) => ({
+    agentVersion: AGENT_VERSION,
+    modelCallCount,
+    toolRoundCount,
+    toolsUsed,
+    totalTokens,
+    promptTokens,
+    completionTokens,
+    cachedPromptTokens,
+    uncachedPromptTokens: Math.max(0, promptTokens - cachedPromptTokens),
+    finished,
+    ...extra,
+  });
+
+  const baseResult = () => ({
+    conversation: workingConversation,
+    modelCallCount,
+    toolRoundCount,
+    toolsUsed,
+    toolDurations,
+    totalTokens,
+    latencyMs: Date.now() - started,
+    toolResults,
+  });
+
+  if (!isOpenAIConfigured()) {
+    return {
+      message:
+        "אני לא מצליח כרגע להתחבר למנוע השיחה. אפשר לנסות שוב עוד רגע.",
+      proposal: null,
+      model: null,
+      success: false,
+      fallbackReason: "openai_not_configured",
+      ...baseResult(),
+    };
+  }
+
+  const openai = getOpenAIClient();
+  const model = AI_MODELS.agentLoop;
+  const messages: ChatCompletionMessageParam[] = [
+    {
+      role: "system",
+      content: buildSystemPrompt({
+        conversation: workingConversation,
+        route: params.route,
+        inventoryMode: params.inventoryMode,
+      }),
+    },
+    ...historyMessages(workingConversation),
+    { role: "user", content: params.message },
+  ];
 
   try {
     for (let round = 0; round < AGENT_LOOP_MAX_ROUNDS; round++) {
       modelCallCount += 1;
-      const completion = await openai.chat.completions.create({ model, messages, tools: AGENT_OPENAI_TOOLS, tool_choice: "auto", temperature: 0.2 });
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        tools: AGENT_OPENAI_TOOLS,
+        tool_choice: "auto",
+        temperature: 0.2,
+      });
       addUsage(completion.usage);
-      const choice = completion.choices[0]?.message; if (!choice) throw new Error("Empty agent loop response");
+
+      const choice = completion.choices[0]?.message;
+      if (!choice) throw new Error("Empty agent loop response");
       const toolCalls = choice.tool_calls ?? [];
+
       if (!toolCalls.length) {
         const text = (choice.content ?? "").trim();
-        await logAiOperation({ operation: "agent_loop", model, promptVersion: AI_PROMPT_VERSIONS.agentLoop, success: true, latencyMs: Date.now() - started, userId: params.userId, usageJson: usageSnapshot("final_text") });
-        return { message: text || "לא בטוח שהבנתי — נסח לי את זה שוב בקצרה.", proposal, modelCallCount, toolRoundCount, toolsUsed, toolDurations, totalTokens, latencyMs: Date.now() - started, model, success: true, fallbackReason: null, toolResults };
+        await logAiOperation({
+          operation: "agent_loop",
+          model,
+          promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+          success: true,
+          latencyMs: Date.now() - started,
+          userId: params.userId,
+          usageJson: usageSnapshot("final_text"),
+        });
+        return {
+          message: text || "לא הצלחתי לנסח תשובה מועילה כרגע.",
+          proposal,
+          model,
+          success: true,
+          fallbackReason: null,
+          ...baseResult(),
+        };
       }
-      toolRoundCount += 1; messages.push({ role: "assistant", content: choice.content ?? null, tool_calls: toolCalls });
-      const limited = toolCalls.slice(0, AGENT_LOOP_MAX_TOOLS_PER_ROUND); const overflow = toolCalls.slice(AGENT_LOOP_MAX_TOOLS_PER_ROUND);
-      for (const call of overflow) messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ error: "tool_limit_per_round", note: "Not executed because the per-round read limit was reached. Use existing authorized results, or request later only if still necessary." }) });
-      const readBatch: Array<{ call: ChatCompletionMessageToolCall; internal: ReadToolName }> = [];
+
+      toolRoundCount += 1;
+      messages.push({
+        role: "assistant",
+        content: choice.content ?? null,
+        tool_calls: toolCalls,
+      });
+
+      const limited = toolCalls.slice(0, AGENT_LOOP_MAX_TOOLS_PER_ROUND);
+      const overflow = toolCalls.slice(AGENT_LOOP_MAX_TOOLS_PER_ROUND);
+      for (const call of overflow) {
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({
+            error: "tool_limit_per_round",
+            note: "Not executed. Use existing results or request fewer capabilities.",
+          }),
+        });
+      }
+
+      const readBatch: Array<{
+        call: ChatCompletionMessageToolCall;
+        internal: ReadToolName;
+      }> = [];
+
       for (const call of limited) {
-        const name = call.function.name; toolsUsed.push(name);
-        if (isControlTool(name)) { const parsed = parseActionProposalFromTool(name, call.function.arguments ?? "{}"); if (parsed) proposal = parsed; messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ ok: true, queued: true, note: "Handed to REMATCHER Action Gateway. Do not invent execution result.", proposal: parsed }) }); continue; }
-        if (isReadOpenAiTool(name)) { readBatch.push({ call, internal: OPENAI_READ_TOOL_MAP[name]! }); continue; }
-        messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ error: "unknown_tool", note: "Tool not in approved registry" }) });
+        const name = call.function.name;
+        toolsUsed.push(name);
+
+        if (isConversationStateTool(name)) {
+          const args = parseToolArgs(call.function.arguments);
+          const facts =
+            args.facts && typeof args.facts === "object"
+              ? (args.facts as Record<string, unknown>)
+              : {};
+          const updated = applyInventoryDraftFacts({
+            conversation: workingConversation,
+            facts,
+            sourceText: params.message,
+          });
+          workingConversation = updated.conversation;
+          const result = {
+            ok: true,
+            acceptedFields: updated.acceptedFields,
+            draft: updated.snapshot,
+            note:
+              "Conversation state updated only. Nothing was written to the database.",
+          };
+          toolResults.update_inventory_draft = result;
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify(result),
+          });
+          continue;
+        }
+
+        if (isControlTool(name)) {
+          const parsed = parseActionProposalFromTool(
+            name,
+            call.function.arguments ?? "{}"
+          );
+          if (parsed) proposal = parsed;
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: Boolean(parsed),
+              queued: Boolean(parsed),
+              note:
+                "Handed to the deterministic REMATCHER Action Gateway. Do not invent the execution result.",
+            }),
+          });
+          continue;
+        }
+
+        if (isReadOpenAiTool(name)) {
+          readBatch.push({ call, internal: OPENAI_READ_TOOL_MAP[name]! });
+          continue;
+        }
+
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: "unknown_tool" }),
+        });
       }
+
       if (readBatch.length) {
-        const names = [...new Set(readBatch.map((r) => r.internal))]; const { results, durations, errors } = await executeToolsParallel(names, params.dealerId); Object.assign(toolDurations, durations); Object.assign(toolResults, results);
-        for (const item of readBatch) messages.push({ role: "tool", tool_call_id: item.call.id, content: truncateToolResult(errors[item.internal] ? { error: errors[item.internal], data: null } : { data: results[item.internal] }) });
+        const names = [...new Set(readBatch.map((item) => item.internal))];
+        const { results, durations, errors } = await executeToolsParallel(
+          names,
+          params.dealerId
+        );
+        Object.assign(toolDurations, durations);
+        Object.assign(toolResults, results);
+        for (const item of readBatch) {
+          messages.push({
+            role: "tool",
+            tool_call_id: item.call.id,
+            content: truncateToolResult(
+              errors[item.internal]
+                ? { error: errors[item.internal], data: null }
+                : { data: results[item.internal] }
+            ),
+          });
+        }
       }
+
       if (proposal) {
-        await logAiOperation({ operation: "agent_loop", model, promptVersion: AI_PROMPT_VERSIONS.agentLoop, success: true, latencyMs: Date.now() - started, userId: params.userId, usageJson: usageSnapshot("action_proposal", { proposalKind: proposal.kind, capability: proposal.capability, operation: proposal.operation }) });
-        return { message: "", proposal, modelCallCount, toolRoundCount, toolsUsed, toolDurations, totalTokens, latencyMs: Date.now() - started, model, success: true, fallbackReason: null, toolResults };
+        await logAiOperation({
+          operation: "agent_loop",
+          model,
+          promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+          success: true,
+          latencyMs: Date.now() - started,
+          userId: params.userId,
+          usageJson: usageSnapshot("action_proposal", {
+            proposalKind: proposal.kind,
+            capability: proposal.capability,
+            operation: proposal.operation,
+          }),
+        });
+        return {
+          message: "",
+          proposal,
+          model,
+          success: true,
+          fallbackReason: null,
+          ...baseResult(),
+        };
       }
     }
+
     modelCallCount += 1;
-    const finalCompletion = await openai.chat.completions.create({ model, messages: [...messages, { role: "system", content: "הגעת למגבלת סבבי הכלים לתור הזה. אל תבקש כלי נוסף ואל תבקש מהמשתמש לנסח מחדש. ענה עכשיו לשאלה המקורית בעברית טבעית וקצרה, כמו שותף מסחרי לסוחר, ורק מתוך המידע המורשה שכבר נאסף. אל תציג דוח, שמות סטטוסים פנימיים או כותרות עובדה/מסקנה/המלצה. אם המידע חלקי, אמור בקצרה מה כן ניתן להסיק בלי להמציא." }], temperature: 0.2 });
-    addUsage(finalCompletion.usage); const finalText = (finalCompletion.choices[0]?.message?.content ?? "").trim();
-    await logAiOperation({ operation: "agent_loop", model, promptVersion: AI_PROMPT_VERSIONS.agentLoop, success: true, latencyMs: Date.now() - started, userId: params.userId, usageJson: usageSnapshot("forced_final_after_max_tool_rounds") });
-    return { message: finalText || "בדקתי את המידע הזמין, אבל אין לי כרגע בסיס מספיק להמלצה מדויקת בלי להמציא.", proposal: null, modelCallCount, toolRoundCount, toolsUsed, toolDurations, totalTokens, latencyMs: Date.now() - started, model, success: true, fallbackReason: finalText ? null : "max_rounds_empty_final", toolResults };
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : "unknown";
-    await logAiOperation({ operation: "agent_loop", model, promptVersion: AI_PROMPT_VERSIONS.agentLoop, success: false, latencyMs: Date.now() - started, userId: params.userId, errorMessage: errMsg.slice(0, 300), usageJson: usageSnapshot("error") });
-    return { message: "לא הצלחתי להשלים את הבדיקה כרגע. אפשר לנסות שוב עוד רגע — לא בוצעה שום פעולה.", proposal: null, modelCallCount, toolRoundCount, toolsUsed, toolDurations, totalTokens, latencyMs: Date.now() - started, model, success: false, fallbackReason: "agent_loop_error", toolResults };
+    const finalCompletion = await openai.chat.completions.create({
+      model,
+      messages: [
+        ...messages,
+        {
+          role: "system",
+          content:
+            "הגעת למגבלת סבבי הכלים. אל תקרא לכלי נוסף. ענה עכשיו לשאלה המקורית בעברית טבעית וקצרה, רק מתוך ההקשר ותוצאות הכלים שכבר קיימים. אל תמציא מידע ואל תבקש מהמשתמש לנסח מחדש רק בגלל מגבלת הכלים.",
+        },
+      ],
+      temperature: 0.2,
+    });
+    addUsage(finalCompletion.usage);
+    const finalText = (
+      finalCompletion.choices[0]?.message?.content ?? ""
+    ).trim();
+
+    await logAiOperation({
+      operation: "agent_loop",
+      model,
+      promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+      success: true,
+      latencyMs: Date.now() - started,
+      userId: params.userId,
+      usageJson: usageSnapshot("forced_final_after_max_tool_rounds"),
+    });
+
+    return {
+      message:
+        finalText ||
+        "בדקתי את המידע הזמין, אבל אין לי בסיס מספיק לתשובה מדויקת בלי להמציא.",
+      proposal: null,
+      model,
+      success: true,
+      fallbackReason: finalText ? null : "max_rounds_empty_final",
+      ...baseResult(),
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "unknown";
+    await logAiOperation({
+      operation: "agent_loop",
+      model,
+      promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+      success: false,
+      latencyMs: Date.now() - started,
+      userId: params.userId,
+      errorMessage: errorMessage.slice(0, 300),
+      usageJson: usageSnapshot("error"),
+    });
+    return {
+      message:
+        "לא הצלחתי להשלים את הבדיקה כרגע. אפשר לנסות שוב עוד רגע — לא בוצעה שום פעולה.",
+      proposal: null,
+      model,
+      success: false,
+      fallbackReason: "agent_loop_error",
+      ...baseResult(),
+    };
   }
 }
