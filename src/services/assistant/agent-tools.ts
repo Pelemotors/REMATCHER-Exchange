@@ -37,10 +37,19 @@ export const DEALER_MEMORY_TOOL_NAMES = [
   "correct_dealer_insight",
 ] as const;
 
+export const SEARCH_INTENT_TOOL_NAMES = [
+  "draft_search_intent",
+  "inspect_search_intent",
+  "clarify_search_intent",
+  "summarize_search_intent",
+  "report_business_event",
+] as const;
+
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
 export type ConversationStateToolName =
   (typeof CONVERSATION_STATE_TOOL_NAMES)[number];
 export type DealerMemoryToolName = (typeof DEALER_MEMORY_TOOL_NAMES)[number];
+export type SearchIntentToolName = (typeof SEARCH_INTENT_TOOL_NAMES)[number];
 
 function emptyParams() {
   return {
@@ -265,6 +274,125 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
     }
   ),
   tool(
+    "draft_search_intent",
+    "Write a DRAFT Search Intent version for an existing demand owned by THIS dealer. Translate commercial language into structured intent (target/boundary/importance/flexibility). Never ask the dealer for numeric weights or HARD/SOFT labels — YOU map language to structure. Does NOT activate the live search. Before activation, summarize in natural Hebrew.",
+    {
+      type: "object",
+      properties: {
+        demandId: { type: "string" },
+        naturalLanguageSummary: nullableString,
+        structuredIntent: { type: "object", additionalProperties: true },
+      },
+      required: ["demandId", "naturalLanguageSummary", "structuredIntent"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "inspect_search_intent",
+    "Read the current/active Search Intent (or lazily adapted legacy intent) for THIS dealer's demand.",
+    {
+      type: "object",
+      properties: {
+        demandId: { type: "string" },
+      },
+      required: ["demandId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "clarify_search_intent",
+    "Update a DRAFT Search Intent after clarification (new version, not rewriting history). Activation still requires propose_mutation + confirmation.",
+    {
+      type: "object",
+      properties: {
+        demandId: { type: "string" },
+        naturalLanguageSummary: nullableString,
+        structuredIntent: { type: "object", additionalProperties: true },
+        activate: { type: ["boolean", "null"] },
+      },
+      required: [
+        "demandId",
+        "naturalLanguageSummary",
+        "structuredIntent",
+        "activate",
+      ],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "summarize_search_intent",
+    "Return a short natural-language Hebrew summary of the demand's Search Intent for confirmation with the dealer.",
+    {
+      type: "object",
+      properties: {
+        demandId: { type: "string" },
+      },
+      required: ["demandId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "report_business_event",
+    "Report an explicit dealer-stated business event (sold vehicle, external purchase, no-deal on a known match). Do NOT guess vehicle/match if ambiguous — ask. Never infer VEHICLE_SOLD from inventory removal alone.",
+    {
+      type: "object",
+      properties: {
+        eventType: {
+          type: "string",
+          enum: [
+            "VEHICLE_SOLD",
+            "EXTERNAL_PURCHASE_REPORTED",
+            "EXTERNAL_DEAL_REPORTED",
+            "MATCH_NO_DEAL",
+            "MATCH_DEAL_CONFIRMED",
+            "MATCH_STILL_ACTIVE",
+            "INVENTORY_REMOVED",
+          ],
+        },
+        vehicleId: nullableString,
+        demandId: nullableString,
+        candidateMatchId: nullableString,
+        evidenceNote: nullableString,
+        reason: nullableString,
+        relevanceOutcome: {
+          type: ["string", "null"],
+          enum: ["RELEVANT", "IRRELEVANT", "UNKNOWN", null],
+        },
+        outcomeReasonCategory: {
+          type: ["string", "null"],
+          enum: [
+            "PRICE",
+            "VEHICLE_CONDITION",
+            "SPEC_MISMATCH",
+            "AVAILABILITY",
+            "CUSTOMER_CHANGED_MIND",
+            "FINANCING",
+            "DEALER_DECISION",
+            "TIMING",
+            "SOLD_ELSEWHERE",
+            "NO_RESPONSE",
+            "OTHER",
+            "UNKNOWN",
+            null,
+          ],
+        },
+        eventData: { type: ["object", "null"], additionalProperties: true },
+      },
+      required: [
+        "eventType",
+        "vehicleId",
+        "demandId",
+        "candidateMatchId",
+        "evidenceNote",
+        "reason",
+        "relevanceOutcome",
+        "outcomeReasonCategory",
+        "eventData",
+      ],
+      additionalProperties: false,
+    }
+  ),
+  tool(
     "propose_mutation",
     "Propose a DATABASE/DOMAIN write action. Does NOT execute. REMATCHER Action Gateway authorizes, resolves targets, and requires confirmation. Use for saving a prepared inventory draft, updating/selling an already-saved vehicle, create/update/close/renew searches, or validation confirmation. Do NOT use this merely to add facts to an unsaved inventory draft — use update_inventory_draft for that. Never invent database IDs; use human targetReference.",
     {
@@ -356,6 +484,12 @@ export function isDealerMemoryTool(
   name: string
 ): name is DealerMemoryToolName {
   return (DEALER_MEMORY_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+export function isSearchIntentTool(
+  name: string
+): name is SearchIntentToolName {
+  return (SEARCH_INTENT_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 export function isReadOpenAiTool(name: string): boolean {

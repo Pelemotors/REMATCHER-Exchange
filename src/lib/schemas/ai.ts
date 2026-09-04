@@ -63,7 +63,7 @@ export const normalizedVehicleSchema = z.object({
 export type NormalizedVehicle = z.infer<typeof normalizedVehicleSchema>;
 
 export const matchEvaluationSchema = z.object({
-  overallBand: z.enum(["STRONG", "ALTERNATIVE", "HIDDEN"]),
+  overallBand: z.enum(["STRONG", "GOOD", "ALTERNATIVE", "HIDDEN", "NO_MATCH"]),
   score: z.number(),
   hardPassed: z.boolean(),
   fieldResults: z.array(

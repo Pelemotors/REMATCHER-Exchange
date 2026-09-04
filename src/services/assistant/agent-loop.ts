@@ -28,6 +28,7 @@ import {
   isConversationStateTool,
   isDealerMemoryTool,
   isReadOpenAiTool,
+  isSearchIntentTool,
   OPENAI_READ_TOOL_MAP,
 } from "@/services/assistant/agent-tools";
 import {
@@ -35,6 +36,7 @@ import {
   retrieveRelevantMemories,
 } from "@/services/assistant/dealer-memory";
 import { executeDealerMemoryTool } from "@/services/assistant/dealer-memory/tools";
+import { executeSearchIntentTool } from "@/services/matching/search-intent-agent-tools";
 import type {
   MemoryDebugMeta,
   MemoryMutationRecord,
@@ -104,6 +106,8 @@ RUNTIME BINDING (not a second constitution):
 - Use authorized tools as capabilities. Do not treat tools as a menu or fixed checklist.
 - For unsaved inventory discussion, update_inventory_draft records structured facts you understood. It does not write to the database. When the dealer corrects a draft fact (year/model/km/hand/price/etc.), call update_inventory_draft so conversation state matches what you tell them.
 - Dealer Memory tools persist durable business context (goals/preferences). Use stable topicKey. Forget/correct require exact memoryId from get_my_dealer_memory. Memory is context, not REMATCHER truth.
+- Search Intent tools draft/inspect/summarize commercial demand understanding. Map dealer language to target/boundary/importance/flexibility yourself — never ask for weights, scores, or HARD/SOFT labels. Clarify only when the answer would materially change which vehicles are shown. Before activation, give a short natural summary. Activation/update of live search still requires propose_mutation + confirmation.
+- report_business_event only for explicit dealer-stated outcomes (sold, external purchase, no-deal). Do not guess which vehicle/match.
 - propose_mutation only for real domain/database actions. REMATCHER Action Gateway authorizes, confirms and executes.
 - Match existence, privacy, Reveal, ownership and writes remain deterministic REMATCHER authority — never invent them.
 - Hierarchy: DEALER MEMORY is long-term context; CURRENT REMATCHER TRUTH comes from authorized tool results in this turn and wins for live system state.
@@ -386,6 +390,24 @@ export async function runAgentToolLoop(params: {
             role: "tool",
             tool_call_id: call.id,
             content: JSON.stringify(executed.result),
+          });
+          continue;
+        }
+
+        if (isSearchIntentTool(name)) {
+          const args = parseToolArgs(call.function.arguments);
+          const t0 = Date.now();
+          const result = await executeSearchIntentTool({
+            name,
+            dealerId: params.dealerId,
+            args,
+          });
+          toolDurations[name] = (toolDurations[name] ?? 0) + (Date.now() - t0);
+          toolResults[name] = result;
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify(result),
           });
           continue;
         }

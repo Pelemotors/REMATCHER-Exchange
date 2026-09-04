@@ -2,10 +2,20 @@ import { prisma } from "@/lib/prisma";
 import { getProductConfig } from "@/config/product";
 import { explainMatch } from "@/services/ai";
 import {
-  demandProfileFromConstraints,
-  evaluateMatch,
   scoreBandToEnum,
 } from "@/services/matching/engine";
+import {
+  evaluateMatchV2,
+  matchBandV2ToScoreBand,
+  MATCH_ENGINE_VERSION,
+} from "@/services/matching/engine-v2";
+import {
+  ensureSearchIntentForDemand,
+  parseStructuredIntent,
+} from "@/services/matching/search-intent-service";
+import { emitExchangeEvent } from "@/services/exchange/events";
+import { upsertMatchExchangeCase } from "@/services/exchange/cases";
+import { runExchangeIntelligenceShadow } from "@/services/exchange/intelligence-shadow";
 import {
   createNotification,
   logAppEvent,
@@ -33,9 +43,9 @@ export async function runMatchingForDemand(demandId: string) {
   await expireStaleDemands(demand.dealerId);
   await notifyExpiringDemands(demand.dealerId);
 
-  const profile = demandProfileFromConstraints(
-    demand.constraints,
-    demand.confirmedJson
+  const intentVersion = await ensureSearchIntentForDemand(demandId);
+  const structuredIntent = parseStructuredIntent(
+    intentVersion?.structuredIntent
   );
 
   const vehicles = await prisma.vehicle.findMany({
@@ -64,8 +74,32 @@ export async function runMatchingForDemand(demandId: string) {
       }
     }
 
-    const evaluation = evaluateMatch(vehicle, profile);
-    if (evaluation.overallBand === "HIDDEN") continue;
+    const evaluationV2 = evaluateMatchV2({
+      vehicle,
+      intent: structuredIntent,
+      searchIntentVersionId: intentVersion?.id,
+    });
+    if (evaluationV2.band === "NO_MATCH") continue;
+
+    // Compat evaluation shape for explainer / legacy consumers
+    const evaluation = {
+      overallBand: matchBandV2ToScoreBand(evaluationV2.band),
+      score: evaluationV2.score,
+      hardPassed: evaluationV2.hardPassed,
+      fieldResults: evaluationV2.dimensions.map((d) => ({
+        field: d.field,
+        result:
+          d.status === "MATCH" || d.status === "OPEN"
+            ? ("MATCH" as const)
+            : d.status === "UNKNOWN"
+              ? ("UNKNOWN" as const)
+              : ("MISMATCH" as const),
+        label: d.field,
+        detail: d.detail,
+      })),
+      gaps: [...evaluationV2.compromises, ...evaluationV2.unknowns],
+      fits: evaluationV2.fits,
+    };
 
     const explanation = await explainMatch(evaluation);
     const needsAvailability =
@@ -73,10 +107,12 @@ export async function runMatchingForDemand(demandId: string) {
       vehicle.freshnessState === "VALIDATION_REQUIRED" ||
       vehicle.freshnessState === "UNKNOWN";
     const needsB2bPrice = vehicle.b2bPrice == null;
+    const needsCriticalVerification = evaluationV2.verificationRequired;
 
-    let status: "PENDING_VALIDATION" | "VALIDATED" = needsAvailability || needsB2bPrice
-      ? "PENDING_VALIDATION"
-      : "VALIDATED";
+    let status: "PENDING_VALIDATION" | "VALIDATED" =
+      needsAvailability || needsB2bPrice || needsCriticalVerification
+        ? "PENDING_VALIDATION"
+        : "VALIDATED";
 
     const match = await prisma.candidateMatch.upsert({
       where: {
@@ -92,6 +128,10 @@ export async function runMatchingForDemand(demandId: string) {
         evaluationJson: toPrismaJson(evaluation),
         explanationJson: toPrismaJson(explanation),
         explanationText: explanation.summary,
+        searchIntentVersionId: intentVersion?.id ?? null,
+        engineVersion: MATCH_ENGINE_VERSION,
+        matchBandV2: evaluationV2.band,
+        evaluationV2Json: toPrismaJson(evaluationV2),
       },
       update: {
         status,
@@ -101,8 +141,62 @@ export async function runMatchingForDemand(demandId: string) {
         evaluationJson: toPrismaJson(evaluation),
         explanationJson: toPrismaJson(explanation),
         explanationText: explanation.summary,
+        searchIntentVersionId: intentVersion?.id ?? null,
+        engineVersion: MATCH_ENGINE_VERSION,
+        matchBandV2: evaluationV2.band,
+        evaluationV2Json: toPrismaJson(evaluationV2),
       },
     });
+
+    await emitExchangeEvent({
+      eventType: "MATCH_CREATED",
+      dealerId: demand.dealerId,
+      demandId,
+      vehicleId: vehicle.id,
+      candidateMatchId: match.id,
+      evidenceType: "SYSTEM_OBSERVED",
+      privacyClass: "DEALER_SCOPED",
+      eventData: {
+        band: evaluationV2.band,
+        engineVersion: MATCH_ENGINE_VERSION,
+        searchIntentVersionId: intentVersion?.id,
+      },
+      idempotencyKey: `match-created:${demandId}:${vehicle.id}:${intentVersion?.id ?? "legacy"}`,
+    });
+
+    await upsertMatchExchangeCase({
+      dealerId: demand.dealerId,
+      demandId,
+      vehicleId: vehicle.id,
+      candidateMatchId: match.id,
+      searchIntentVersionId: intentVersion?.id,
+      demandSnapshot: { id: demand.id, status: demand.status },
+      vehicleSnapshot: {
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        mileage: vehicle.mileage,
+        color: vehicle.color,
+        trim: vehicle.trim,
+        b2bPrice: vehicle.b2bPrice,
+        retailPrice: vehicle.retailPrice,
+        region: vehicle.region,
+        freshnessState: vehicle.freshnessState,
+      },
+      matchEvaluationSnapshot: evaluationV2,
+      searchIntentSnapshot: structuredIntent,
+      rationale: explanation.summary,
+    });
+
+    // Shadow intelligence — never changes visibility
+    if (status === "VALIDATED" || status === "PENDING_VALIDATION") {
+      void runExchangeIntelligenceShadow({
+        candidateMatchId: match.id,
+        intent: structuredIntent,
+        engine: evaluationV2,
+        vehicle,
+      }).catch(() => undefined);
+    }
 
     if (needsAvailability && status === "PENDING_VALIDATION") {
       const existing = await prisma.validationEvent.findFirst({
@@ -178,13 +272,23 @@ export async function runMatchingForDemand(demandId: string) {
       await notifyDealerUsers(demand.dealerId, {
         type: "BUYER_MATCH",
         title:
-          evaluation.overallBand === "STRONG"
+          evaluation.overallBand === "STRONG" || evaluation.overallBand === "GOOD"
             ? "נמצאה התאמה גבוהה לחיפוש שלך"
             : COPY.matchPossible,
         body: explanation.summary,
         link: `/matches?focus=${match.id}`,
         entityType: "match",
         entityId: match.id,
+      });
+      await emitExchangeEvent({
+        eventType: "MATCH_PRESENTED",
+        dealerId: demand.dealerId,
+        demandId,
+        vehicleId: vehicle.id,
+        candidateMatchId: match.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        idempotencyKey: `match-presented:${match.id}:${intentVersion?.id ?? "x"}`,
       });
       await logAppEvent({
         eventType: "match_validated",
@@ -358,6 +462,50 @@ export async function recordBuyerInterest(params: {
     dealerId: params.dealerId,
   });
 
+  try {
+    const { emitExchangeEvent } = await import("@/services/exchange/events");
+    const { closeExchangeCaseOutcome } = await import(
+      "@/services/exchange/cases"
+    );
+    if (params.status === "INTERESTED") {
+      await emitExchangeEvent({
+        eventType: "MATCH_INTERESTED",
+        dealerId: params.dealerId,
+        demandId: match.demandId,
+        vehicleId: match.vehicleId,
+        candidateMatchId: match.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        idempotencyKey: `match-interested:${match.id}:${params.dealerId}`,
+      });
+    } else if (params.status === "REJECTED") {
+      await emitExchangeEvent({
+        eventType: "MATCH_DECLINED",
+        dealerId: params.dealerId,
+        demandId: match.demandId,
+        vehicleId: match.vehicleId,
+        candidateMatchId: match.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        reason: params.rejectReason ?? null,
+        privacyClass: "DEALER_SCOPED",
+        idempotencyKey: `match-declined:${match.id}:${params.dealerId}`,
+      });
+      const irrelevant =
+        /לא מה שחיפש|irrelevant|לא רלוונט|בכלל לא/i.test(
+          params.rejectReason ?? ""
+        );
+      await closeExchangeCaseOutcome({
+        candidateMatchId: match.id,
+        relevanceOutcome: irrelevant ? "IRRELEVANT" : "UNKNOWN",
+        transactionOutcome: "NO_DEAL",
+        outcomeReasonCategory: irrelevant ? "SPEC_MISMATCH" : "DEALER_DECISION",
+        evidenceType: "SYSTEM_OBSERVED",
+      });
+    }
+  } catch {
+    // non-blocking
+  }
+
   // I-05: Opportunity only after Buyer Interest
   if (params.status === "INTERESTED") {
     const existingOpp = await prisma.sellerOpportunity.findUnique({
@@ -457,6 +605,20 @@ export async function recordSellerInterest(params: {
     params.status === "INTERESTED" &&
     opp.buyerInterest.status === "INTERESTED"
   ) {
+    try {
+      const { emitExchangeEvent } = await import("@/services/exchange/events");
+      await emitExchangeEvent({
+        eventType: "MATCH_MUTUAL_INTEREST",
+        dealerId: params.dealerId,
+        vehicleId: opp.vehicleId,
+        candidateMatchId: opp.candidateMatchId,
+        evidenceType: "BILATERAL_CONFIRMED",
+        privacyClass: "DEALER_SCOPED",
+        idempotencyKey: `match-mutual:${opp.candidateMatchId}`,
+      });
+    } catch {
+      // non-blocking
+    }
     let mutual = await prisma.mutualInterest.findUnique({
       where: { sellerInterestId: sellerInterest.id },
     });

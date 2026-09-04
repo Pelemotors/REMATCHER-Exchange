@@ -74,6 +74,8 @@ model Dealer {
   revealUsages    RevealUsage[]
   onboardingState DealerOnboardingState?
   memoryItems     DealerMemoryItem[]
+  exchangeEvents  ExchangeEvent[]
+  exchangeCases   ExchangeCase[]
 }
 
 // ─── Dealer Memory (Agent long-term business context) ───────────
@@ -221,6 +223,8 @@ model Vehicle {
   candidateMatches CandidateMatch[]
   validationEvents ValidationEvent[]
   sellerOpportunities SellerOpportunity[]
+  exchangeEvents  ExchangeEvent[]
+  exchangeCases   ExchangeCase[]
 }
 
 enum VehicleStatus {
@@ -273,6 +277,9 @@ model Demand {
   expiresAt       DateTime?
   renewedAt       DateTime?
 
+  /** Active Search Intent version id (Matching & Learning 2.0) */
+  activeSearchIntentVersionId String? @unique
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -280,6 +287,8 @@ model Demand {
   constraints     DemandConstraint[]
   candidateMatches CandidateMatch[]
   buyerInterests  BuyerInterest[]
+  searchIntentVersions SearchIntentVersion[]
+  activeSearchIntentVersion SearchIntentVersion? @relation("DemandActiveIntent", fields: [activeSearchIntentVersionId], references: [id], onDelete: SetNull)
 }
 
 enum DemandStatus {
@@ -288,6 +297,35 @@ enum DemandStatus {
   ACTIVE
   EXPIRED
   CANCELLED
+}
+
+enum SearchIntentStatus {
+  DRAFT
+  PENDING_CONFIRMATION
+  ACTIVE
+  SUPERSEDED
+  CLOSED
+}
+
+model SearchIntentVersion {
+  id                    String             @id @default(cuid())
+  demandId              String
+  version               Int
+  status                SearchIntentStatus @default(DRAFT)
+  source                String             @default("agent")
+  naturalLanguageSummary String?
+  structuredIntent      Json
+  confirmedAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  demand                Demand             @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  activeForDemand       Demand?            @relation("DemandActiveIntent")
+  candidateMatches      CandidateMatch[]
+  exchangeCases         ExchangeCase[]
+
+  @@unique([demandId, version])
+  @@index([demandId, status])
 }
 
 model DemandConstraint {
@@ -324,16 +362,26 @@ model CandidateMatch {
   explanationJson Json?
   explanationText String?
 
+  searchIntentVersionId String?
+  engineVersion     String?
+  matchBandV2       String?
+  evaluationV2Json  Json?
+  intelligenceShadowJson Json?
+
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   demand          Demand            @relation(fields: [demandId], references: [id], onDelete: Cascade)
   vehicle         Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  searchIntentVersion SearchIntentVersion? @relation(fields: [searchIntentVersionId], references: [id], onDelete: SetNull)
   validationEvents ValidationEvent[]
   buyerInterests  BuyerInterest[]
   sellerOpportunities SellerOpportunity[]
+  exchangeCases   ExchangeCase[]
+  decisionComparisons MatchDecisionComparison[]
 
   @@unique([demandId, vehicleId])
+  @@index([searchIntentVersionId])
 }
 
 enum CandidateMatchStatus {
@@ -346,7 +394,9 @@ enum CandidateMatchStatus {
 
 enum ScoreBand {
   STRONG
+  GOOD
   ALTERNATIVE
+  NO_MATCH
   HIDDEN
 }
 
@@ -766,6 +816,158 @@ model AppEvent {
   @@index([entityType, entityId])
   @@index([userId, createdAt])
   @@index([source, createdAt])
+}
+
+// ─── Exchange Learning 2.0 (Events / Cases / Learnings) ─────────
+
+enum ExchangeEvidenceType {
+  SYSTEM_OBSERVED
+  DEALER_REPORTED
+  BILATERAL_CONFIRMED
+  AI_INFERRED
+}
+
+enum ExchangePrivacyClass {
+  SYSTEM
+  DEALER_SCOPED
+  AGGREGATE_SAFE
+  RESTRICTED
+}
+
+model ExchangeEvent {
+  id               String               @id @default(cuid())
+  eventType        String
+  occurredAt       DateTime             @default(now())
+  evidenceType     ExchangeEvidenceType @default(SYSTEM_OBSERVED)
+  confidence       Float                @default(1)
+  evidenceNote     String?
+  dealerId         String?
+  vehicleId        String?
+  demandId         String?
+  candidateMatchId String?
+  eventData        Json?
+  reason           String?
+  privacyClass     ExchangePrivacyClass @default(DEALER_SCOPED)
+  idempotencyKey   String?              @unique
+  createdAt        DateTime             @default(now())
+
+  dealer           Dealer?              @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  vehicle          Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, occurredAt])
+  @@index([dealerId, occurredAt])
+  @@index([vehicleId, occurredAt])
+  @@index([demandId, occurredAt])
+  @@index([candidateMatchId])
+}
+
+enum RelevanceOutcome {
+  RELEVANT
+  IRRELEVANT
+  UNKNOWN
+}
+
+enum TransactionOutcome {
+  DEAL_CONFIRMED
+  NO_DEAL
+  STILL_ACTIVE
+  UNKNOWN
+}
+
+enum OutcomeReasonCategory {
+  PRICE
+  VEHICLE_CONDITION
+  SPEC_MISMATCH
+  AVAILABILITY
+  CUSTOMER_CHANGED_MIND
+  FINANCING
+  DEALER_DECISION
+  TIMING
+  SOLD_ELSEWHERE
+  NO_RESPONSE
+  OTHER
+  UNKNOWN
+}
+
+model ExchangeCase {
+  id                      String                 @id @default(cuid())
+  caseType                String                 @default("MATCH")
+  dealerId                String?
+  demandId                String?
+  vehicleId               String?
+  candidateMatchId        String?
+  searchIntentVersionId   String?
+  demandSnapshot          Json?
+  vehicleSnapshot         Json?
+  matchEvaluationSnapshot Json?
+  searchIntentSnapshot    Json?
+  rationale               String?
+  relevanceOutcome        RelevanceOutcome       @default(UNKNOWN)
+  transactionOutcome      TransactionOutcome     @default(UNKNOWN)
+  outcomeReasonCategory   OutcomeReasonCategory  @default(UNKNOWN)
+  evidenceType            ExchangeEvidenceType   @default(SYSTEM_OBSERVED)
+  closedAt                DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  dealer                  Dealer?                @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  vehicle                 Vehicle?               @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  candidateMatch          CandidateMatch?        @relation(fields: [candidateMatchId], references: [id], onDelete: SetNull)
+  searchIntentVersion     SearchIntentVersion?   @relation(fields: [searchIntentVersionId], references: [id], onDelete: SetNull)
+
+  @@index([caseType, createdAt])
+  @@index([candidateMatchId])
+  @@index([vehicleId, createdAt])
+  @@index([demandId, createdAt])
+}
+
+enum ExchangeLearningStatus {
+  ACTIVE
+  WEAKENED
+  SUPERSEDED
+  STALE
+}
+
+model ExchangeLearning {
+  id                   String                 @id @default(cuid())
+  topic                String
+  learningType         String
+  summary              String
+  structuredInsight    Json?
+  segmentContext       Json?
+  supportingCaseIds    Json?
+  contradictingCaseIds Json?
+  supportCount         Int                    @default(0)
+  contradictCount      Int                    @default(0)
+  confidence           Float                  @default(0.3)
+  validFrom            DateTime?
+  validTo              DateTime?
+  status               ExchangeLearningStatus @default(ACTIVE)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  lastEvaluatedAt      DateTime?
+
+  @@index([topic, status])
+  @@index([learningType, status])
+  @@index([status, lastEvaluatedAt])
+}
+
+model MatchDecisionComparison {
+  id                     String   @id @default(cuid())
+  candidateMatchId       String
+  engineBand             String
+  engineScore            Float?
+  intelligenceDecision   Json
+  intelligenceBand       String?
+  intelligenceConfidence Float?
+  modelVersion           String?
+  promptVersion          String?
+  createdAt              DateTime @default(now())
+
+  candidateMatch         CandidateMatch @relation(fields: [candidateMatchId], references: [id], onDelete: Cascade)
+
+  @@index([candidateMatchId, createdAt])
+  @@index([engineBand, intelligenceBand])
 }
 
 // ─── Rate Limiting (shared across serverless instances) ───────────

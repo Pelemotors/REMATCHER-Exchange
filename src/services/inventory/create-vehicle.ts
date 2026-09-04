@@ -137,6 +137,26 @@ export async function createVehicleForDealer(input: {
     },
   });
 
+  try {
+    const { emitExchangeEvent } = await import("@/services/exchange/events");
+    await emitExchangeEvent({
+      eventType: "INVENTORY_ADDED",
+      dealerId: input.dealerId,
+      vehicleId: vehicle.id,
+      evidenceType: "SYSTEM_OBSERVED",
+      privacyClass: "DEALER_SCOPED",
+      eventData: {
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        source: input.source ?? "domain",
+      },
+      idempotencyKey: `inventory-added:${vehicle.id}`,
+    });
+  } catch {
+    // non-blocking
+  }
+
   return { ok: true as const, vehicle, source: input.source ?? "domain" };
 }
 

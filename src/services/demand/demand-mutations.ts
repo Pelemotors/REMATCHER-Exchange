@@ -139,6 +139,45 @@ export async function activateDemandForDealer(params: {
     },
   });
 
+  try {
+    const { legacyToSearchIntent } = await import(
+      "@/services/matching/legacy-search-intent-adapter"
+    );
+    const { createAndActivateSearchIntent, parseStructuredIntent } = await import(
+      "@/services/matching/search-intent-service"
+    );
+    const latestDraft = await prisma.searchIntentVersion.findFirst({
+      where: {
+        demandId: params.demandId,
+        status: { in: ["DRAFT", "PENDING_CONFIRMATION"] },
+      },
+      orderBy: { version: "desc" },
+    });
+    if (latestDraft) {
+      await createAndActivateSearchIntent({
+        demandId: params.demandId,
+        structuredIntent: parseStructuredIntent(latestDraft.structuredIntent),
+        naturalLanguageSummary: latestDraft.naturalLanguageSummary ?? undefined,
+        source: "demand_activate_from_draft",
+        confirm: true,
+      });
+    } else {
+      const constraints = await prisma.demandConstraint.findMany({
+        where: { demandId: params.demandId },
+      });
+      const adapted = legacyToSearchIntent(confirmed, constraints);
+      await createAndActivateSearchIntent({
+        demandId: params.demandId,
+        structuredIntent: adapted.structuredIntent,
+        naturalLanguageSummary: adapted.naturalLanguageSummary,
+        source: "demand_activate",
+        confirm: true,
+      });
+    }
+  } catch {
+    // matching can still adapt lazily
+  }
+
   await runMatchingForDemand(params.demandId);
 
   return { ok: true as const, demand: updated, title: demandTitle(confirmed) };

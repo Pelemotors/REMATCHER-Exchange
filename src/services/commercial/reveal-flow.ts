@@ -78,6 +78,21 @@ export async function createRevealFromMutualInterest(params: {
   await notifyDealerUsers(params.buyerDealerId, notifyPayload);
   await notifyDealerUsers(params.sellerDealerId, notifyPayload);
 
+  try {
+    const { emitExchangeEvent } = await import("@/services/exchange/events");
+    await emitExchangeEvent({
+      eventType: "MATCH_REVEALED",
+      dealerId: params.buyerDealerId,
+      candidateMatchId: params.candidateMatchId ?? null,
+      evidenceType: "BILATERAL_CONFIRMED",
+      privacyClass: "DEALER_SCOPED",
+      eventData: { revealId: reveal.id },
+      idempotencyKey: `match-revealed:${reveal.id}`,
+    });
+  } catch {
+    // non-blocking
+  }
+
   await logAppEvent({
     eventType: "reveal_created",
     entityType: "Reveal",

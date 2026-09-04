@@ -97,5 +97,55 @@ export async function updateVehicleForDealer(input: {
     });
   }
 
+  try {
+    const { emitExchangeEvent } = await import("@/services/exchange/events");
+    if (f.status === "SOLD" && vehicle.status !== "SOLD") {
+      await emitExchangeEvent({
+        eventType: "VEHICLE_SOLD",
+        dealerId: input.dealerId,
+        vehicleId: updated.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: { source: input.source ?? "domain" },
+        idempotencyKey: `vehicle-sold:${updated.id}`,
+      });
+    } else if (f.status === "ARCHIVED" && vehicle.status !== "ARCHIVED") {
+      await emitExchangeEvent({
+        eventType: "INVENTORY_REMOVED",
+        dealerId: input.dealerId,
+        vehicleId: updated.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: { source: input.source ?? "domain", note: "archived_not_sold" },
+        idempotencyKey: `inventory-removed:${updated.id}:${updated.archivedAt?.toISOString() ?? "x"}`,
+      });
+    } else if (f.status === "ACTIVE" && vehicle.status !== "ACTIVE") {
+      await emitExchangeEvent({
+        eventType: "INVENTORY_REACTIVATED",
+        dealerId: input.dealerId,
+        vehicleId: updated.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        idempotencyKey: `inventory-reactivated:${updated.id}:${Date.now()}`,
+      });
+    } else if (
+      Object.keys(f).some((k) =>
+        ["make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color"].includes(k)
+      )
+    ) {
+      await emitExchangeEvent({
+        eventType: "INVENTORY_UPDATED",
+        dealerId: input.dealerId,
+        vehicleId: updated.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: { fields: Object.keys(f) },
+        idempotencyKey: `inventory-updated:${updated.id}:${updated.updatedAt.toISOString()}`,
+      });
+    }
+  } catch {
+    // non-blocking
+  }
+
   return { ok: true as const, vehicle: updated };
 }

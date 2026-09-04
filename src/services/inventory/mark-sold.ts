@@ -48,6 +48,20 @@ export async function markVehicleSoldForDealer(input: {
       dealerId: input.dealerId,
       metadata: { source: input.source ?? "domain" },
     });
+    try {
+      const { emitExchangeEvent } = await import("@/services/exchange/events");
+      await emitExchangeEvent({
+        eventType: "VEHICLE_SOLD",
+        dealerId: input.dealerId,
+        vehicleId: updated.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: { source: input.source ?? "domain" },
+        idempotencyKey: `vehicle-sold:${updated.id}`,
+      });
+    } catch {
+      // non-blocking
+    }
   }
 
   return { ok: true as const, vehicle: updated, alreadySold: false as const };

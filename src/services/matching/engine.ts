@@ -274,7 +274,15 @@ export function evaluateMatch(
 }
 
 export function scoreBandToEnum(
-  band: MatchEvaluation["overallBand"]
-): "STRONG" | "ALTERNATIVE" | "HIDDEN" {
-  return band;
+  band: string
+): "STRONG" | "GOOD" | "ALTERNATIVE" | "HIDDEN" {
+  if (
+    band === "STRONG" ||
+    band === "GOOD" ||
+    band === "ALTERNATIVE" ||
+    band === "HIDDEN"
+  ) {
+    return band;
+  }
+  return "HIDDEN";
 }
