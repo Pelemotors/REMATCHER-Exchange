@@ -1,11 +1,15 @@
 name: Agent Production QA
 
-# Keep this workflow as the production conversation regression check for Agent changes.
+# Production conversation regression check for changes that can affect the Exchange Agent.
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/agent-production-qa.yml'
+      - 'src/services/assistant/**'
+      - 'src/config/product.ts'
+      - 'scripts/agent-commercial-production-qa.ts'
+      - 'scripts/agent-v2-smoke.ts'
   workflow_dispatch:
 
 jobs:
