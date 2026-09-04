@@ -23,7 +23,11 @@ import styles from "./matches.module.css";
 
 interface MatchItem {
   id: string;
-  scoreBand: string;
+  scoreBand: string | null;
+  resolutionState?: string;
+  potential?: boolean;
+  infoRequestOpen?: boolean;
+  decisionBlockingUnknowns?: string[];
   explanation: MatchExplanation;
   vehicle: Record<string, unknown>;
   interest: { status: string } | null;
@@ -205,10 +209,17 @@ function MatchesPageContent() {
                   vehicle={
                     m.vehicle as MatchItem["vehicle"] & { b2bPrice?: number }
                   }
-                  band={m.scoreBand as "STRONG" | "ALTERNATIVE"}
+                  band={
+                    m.potential
+                      ? null
+                      : (m.scoreBand as "STRONG" | "GOOD" | "ALTERNATIVE" | null)
+                  }
+                  potential={Boolean(m.potential)}
+                  infoRequestOpen={Boolean(m.infoRequestOpen)}
                   loading={actionLoading === m.id}
                   showActions={showActions}
                   onInterested={() => handleAction(m.id, "interested")}
+                  onRequestInfo={() => handleAction(m.id, "request_info")}
                   onReject={() => handleAction(m.id, "reject")}
                 />
               </div>

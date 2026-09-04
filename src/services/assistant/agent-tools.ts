@@ -43,6 +43,7 @@ export const SEARCH_INTENT_TOOL_NAMES = [
   "clarify_search_intent",
   "summarize_search_intent",
   "report_business_event",
+  "get_inventory_enrichment_context",
 ] as const;
 
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
@@ -389,6 +390,18 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
         "outcomeReasonCategory",
         "eventData",
       ],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "get_inventory_enrichment_context",
+    "Read open interest-driven enrichment requests for THIS dealer's own vehicle (fields other dealers need to decide match). Never returns requester identity. Use after seller opens inventory from enrichment push. Ask only for listed missing fields; update via propose_mutation after confirmation.",
+    {
+      type: "object",
+      properties: {
+        vehicleId: { type: "string" },
+      },
+      required: ["vehicleId"],
       additionalProperties: false,
     }
   ),

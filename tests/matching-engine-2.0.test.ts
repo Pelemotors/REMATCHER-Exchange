@@ -159,7 +159,7 @@ describe("Matching Engine 2.0 suite", () => {
     expect(["STRONG", "GOOD", "ALTERNATIVE"]).toContain(ev.band);
   });
 
-  it("E: missing critical mileage cannot be STRONG", () => {
+  it("E: missing critical mileage cannot be STRONG — NEEDS_INFORMATION", () => {
     const ev = evaluateMatchV2({
       vehicle: vehicle({ mileage: null }),
       intent: baseIntent({
@@ -176,7 +176,8 @@ describe("Matching Engine 2.0 suite", () => {
       }),
     });
     expect(ev.band).not.toBe("STRONG");
-    expect(ev.verificationRequired || ev.unknowns.length > 0).toBe(true);
+    expect(ev.resolutionState).toBe("NEEDS_INFORMATION");
+    expect(ev.decisionBlockingUnknowns).toContain("mileage");
   });
 
   it("F: wrong model with perfect price/year/color is not STRONG", () => {

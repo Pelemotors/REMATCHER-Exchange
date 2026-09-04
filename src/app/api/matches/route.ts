@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { recordBuyerInterest } from "@/services/domain/matching-flow";
 import { canDealerReveal } from "@/services/commercial/reveal-usage";
 import { toBuyerMatchView } from "@/lib/privacy-views";
+import { requestCandidateInformation } from "@/services/matching/information-request";
 import type { MatchExplanation } from "@/lib/schemas/ai";
 
 export async function GET() {
@@ -15,27 +16,52 @@ export async function GET() {
   const matches = await prisma.candidateMatch.findMany({
     where: {
       demand: { dealerId: session.user.dealerId },
-      status: { in: ["VALIDATED", "PENDING_VALIDATION"] },
-      scoreBand: { in: ["STRONG", "ALTERNATIVE"] },
+      OR: [
+        {
+          status: { in: ["VALIDATED", "PENDING_VALIDATION"] },
+          scoreBand: { in: ["STRONG", "GOOD", "ALTERNATIVE"] },
+          resolutionState: "RESOLVED",
+        },
+        {
+          resolutionState: "NEEDS_INFORMATION",
+          status: { in: ["CANDIDATE", "PENDING_VALIDATION"] },
+        },
+      ],
     },
     include: {
       vehicle: true,
       buyerInterests: {
         where: { dealerId: session.user.dealerId },
       },
+      informationRequests: {
+        where: {
+          requesterDealerId: session.user.dealerId,
+          status: "OPEN",
+        },
+        take: 1,
+      },
     },
     orderBy: { score: "desc" },
-    take: 4,
+    take: 12,
   });
 
-  const safe = matches.map((m) => ({
-    id: m.id,
-    status: m.status,
-    scoreBand: m.scoreBand,
-    explanation: m.explanationJson as MatchExplanation,
-    vehicle: toBuyerMatchView(m.vehicle),
-    interest: m.buyerInterests[0] ?? null,
-  }));
+  const safe = matches.map((m) => {
+    const blocking = Array.isArray(m.decisionBlockingUnknowns)
+      ? (m.decisionBlockingUnknowns as string[])
+      : [];
+    return {
+      id: m.id,
+      status: m.status,
+      scoreBand: m.scoreBand,
+      resolutionState: m.resolutionState,
+      decisionBlockingUnknowns: blocking,
+      explanation: m.explanationJson as MatchExplanation,
+      vehicle: toBuyerMatchView(m.vehicle),
+      interest: m.buyerInterests[0] ?? null,
+      infoRequestOpen: Boolean(m.informationRequests[0]),
+      potential: m.resolutionState === "NEEDS_INFORMATION",
+    };
+  });
 
   return NextResponse.json(safe);
 }
@@ -46,7 +72,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { matchId, action, rejectReason } = await req.json();
+  const body = await req.json();
+  const { matchId, action, rejectReason } = body as {
+    matchId: string;
+    action: string;
+    rejectReason?: string;
+  };
+
+  if (action === "request_info") {
+    const result = await requestCandidateInformation({
+      requesterDealerId: session.user.dealerId,
+      candidateMatchId: matchId,
+    });
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    return NextResponse.json({
+      ok: true,
+      created: result.created,
+      message: result.message,
+      // Never return seller identity
+      informationRequestId: result.request.id,
+    });
+  }
+
   const status =
     action === "interested"
       ? "INTERESTED"

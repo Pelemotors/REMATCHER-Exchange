@@ -116,6 +116,15 @@ export async function executeDemandClosure(dealerId: string, demandId: string) {
     dealerId,
   });
 
+  try {
+    const { cancelOpenRequestsForDemand } = await import(
+      "@/services/matching/information-request"
+    );
+    await cancelOpenRequestsForDemand(demandId);
+  } catch {
+    // non-blocking
+  }
+
   return { ok: true as const };
 }
 

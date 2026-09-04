@@ -79,11 +79,21 @@ export async function runMatchingForDemand(demandId: string) {
       intent: structuredIntent,
       searchIntentVersionId: intentVersion?.id,
     });
-    if (evaluationV2.band === "NO_MATCH") continue;
+    if (
+      evaluationV2.resolutionState === "RESOLVED" &&
+      evaluationV2.band === "NO_MATCH"
+    ) {
+      continue;
+    }
+
+    const isPotential =
+      evaluationV2.resolutionState === "NEEDS_INFORMATION";
 
     // Compat evaluation shape for explainer / legacy consumers
     const evaluation = {
-      overallBand: matchBandV2ToScoreBand(evaluationV2.band),
+      overallBand: isPotential
+        ? ("HIDDEN" as const)
+        : matchBandV2ToScoreBand(evaluationV2.band),
       score: evaluationV2.score,
       hardPassed: evaluationV2.hardPassed,
       fieldResults: evaluationV2.dimensions.map((d) => ({
@@ -97,20 +107,38 @@ export async function runMatchingForDemand(demandId: string) {
         label: d.field,
         detail: d.detail,
       })),
-      gaps: [...evaluationV2.compromises, ...evaluationV2.unknowns],
-      fits: evaluationV2.fits,
+      gaps: [
+        ...evaluationV2.compromises,
+        ...evaluationV2.unknowns,
+        ...(evaluationV2.whyPotential ? [evaluationV2.whyPotential] : []),
+      ],
+      fits: evaluationV2.knownFits.length
+        ? evaluationV2.knownFits
+        : evaluationV2.fits,
     };
 
-    const explanation = await explainMatch(evaluation);
-    const needsAvailability =
-      vehicle.freshnessState === "STALE" ||
-      vehicle.freshnessState === "VALIDATION_REQUIRED" ||
-      vehicle.freshnessState === "UNKNOWN";
-    const needsB2bPrice = vehicle.b2bPrice == null;
-    const needsCriticalVerification = evaluationV2.verificationRequired;
+    const explanation = isPotential
+      ? {
+          summary:
+            evaluationV2.whyPotential ??
+            "התאמה אפשרית — חסרים כמה פרטים כדי לדעת אם היא מתאימה.",
+          fits: evaluationV2.knownFits,
+          gaps: evaluationV2.decisionBlockingUnknowns.map(
+            (f) => `חסר: ${f}`
+          ),
+        }
+      : await explainMatch(evaluation);
 
-    let status: "PENDING_VALIDATION" | "VALIDATED" =
-      needsAvailability || needsB2bPrice || needsCriticalVerification
+    const needsAvailability =
+      !isPotential &&
+      (vehicle.freshnessState === "STALE" ||
+        vehicle.freshnessState === "VALIDATION_REQUIRED" ||
+        vehicle.freshnessState === "UNKNOWN");
+    const needsB2bPrice = !isPotential && vehicle.b2bPrice == null;
+
+    let status: "CANDIDATE" | "PENDING_VALIDATION" | "VALIDATED" = isPotential
+      ? "CANDIDATE"
+      : needsAvailability || needsB2bPrice
         ? "PENDING_VALIDATION"
         : "VALIDATED";
 
@@ -132,6 +160,10 @@ export async function runMatchingForDemand(demandId: string) {
         engineVersion: MATCH_ENGINE_VERSION,
         matchBandV2: evaluationV2.band,
         evaluationV2Json: toPrismaJson(evaluationV2),
+        resolutionState: evaluationV2.resolutionState,
+        decisionBlockingUnknowns: toPrismaJson(
+          evaluationV2.decisionBlockingUnknowns
+        ),
       },
       update: {
         status,
@@ -145,24 +177,47 @@ export async function runMatchingForDemand(demandId: string) {
         engineVersion: MATCH_ENGINE_VERSION,
         matchBandV2: evaluationV2.band,
         evaluationV2Json: toPrismaJson(evaluationV2),
+        resolutionState: evaluationV2.resolutionState,
+        decisionBlockingUnknowns: toPrismaJson(
+          evaluationV2.decisionBlockingUnknowns
+        ),
       },
     });
 
-    await emitExchangeEvent({
-      eventType: "MATCH_CREATED",
-      dealerId: demand.dealerId,
-      demandId,
-      vehicleId: vehicle.id,
-      candidateMatchId: match.id,
-      evidenceType: "SYSTEM_OBSERVED",
-      privacyClass: "DEALER_SCOPED",
-      eventData: {
-        band: evaluationV2.band,
-        engineVersion: MATCH_ENGINE_VERSION,
-        searchIntentVersionId: intentVersion?.id,
-      },
-      idempotencyKey: `match-created:${demandId}:${vehicle.id}:${intentVersion?.id ?? "legacy"}`,
-    });
+    if (isPotential) {
+      await emitExchangeEvent({
+        eventType: "POTENTIAL_MATCH_IDENTIFIED",
+        dealerId: demand.dealerId,
+        demandId,
+        vehicleId: vehicle.id,
+        candidateMatchId: match.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: {
+          decisionBlockingUnknowns: evaluationV2.decisionBlockingUnknowns,
+          whyPotential: evaluationV2.whyPotential,
+          searchIntentVersionId: intentVersion?.id,
+        },
+        idempotencyKey: `potential-match:${demandId}:${vehicle.id}:${intentVersion?.id ?? "legacy"}`,
+      });
+      // No seller push until explicit buyer CTA
+    } else {
+      await emitExchangeEvent({
+        eventType: "MATCH_CREATED",
+        dealerId: demand.dealerId,
+        demandId,
+        vehicleId: vehicle.id,
+        candidateMatchId: match.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: {
+          band: evaluationV2.band,
+          engineVersion: MATCH_ENGINE_VERSION,
+          searchIntentVersionId: intentVersion?.id,
+        },
+        idempotencyKey: `match-created:${demandId}:${vehicle.id}:${intentVersion?.id ?? "legacy"}`,
+      });
+    }
 
     await upsertMatchExchangeCase({
       dealerId: demand.dealerId,
@@ -188,14 +243,20 @@ export async function runMatchingForDemand(demandId: string) {
       rationale: explanation.summary,
     });
 
-    // Shadow intelligence — never changes visibility
-    if (status === "VALIDATED" || status === "PENDING_VALIDATION") {
+    // Shadow intelligence — only for resolved matches; never changes visibility
+    if (!isPotential && (status === "VALIDATED" || status === "PENDING_VALIDATION")) {
       void runExchangeIntelligenceShadow({
         candidateMatchId: match.id,
         intent: structuredIntent,
         engine: evaluationV2,
         vehicle,
       }).catch(() => undefined);
+    }
+
+    if (isPotential) {
+      // Buyer can see potential in matches API — no BUYER_MATCH push for unresolved
+      results.push(match);
+      continue;
     }
 
     if (needsAvailability && status === "PENDING_VALIDATION") {
@@ -665,6 +726,14 @@ export async function expireStaleDemands(dealerId?: string) {
       where: { id: d.id },
       data: { status: "EXPIRED" },
     });
+    try {
+      const { cancelOpenRequestsForDemand } = await import(
+        "@/services/matching/information-request"
+      );
+      await cancelOpenRequestsForDemand(d.id);
+    } catch {
+      // non-blocking
+    }
     await notifyDealerUsers(d.dealerId, {
       type: "DEMAND_EXPIRY",
       title: "חיפוש פג תוקף",

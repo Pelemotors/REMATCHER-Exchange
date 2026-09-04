@@ -15,6 +15,7 @@ import {
 } from "@/services/matching/search-intent-types";
 import { reportDealerBusinessEvent } from "@/services/exchange/events";
 import { closeExchangeCaseOutcome } from "@/services/exchange/cases";
+import { getOpenEnrichmentForVehicle } from "@/services/matching/information-request";
 
 export const SEARCH_INTENT_TOOL_NAMES = [
   "draft_search_intent",
@@ -22,6 +23,7 @@ export const SEARCH_INTENT_TOOL_NAMES = [
   "clarify_search_intent",
   "summarize_search_intent",
   "report_business_event",
+  "get_inventory_enrichment_context",
 ] as const;
 
 export type SearchIntentToolName = (typeof SEARCH_INTENT_TOOL_NAMES)[number];
@@ -265,6 +267,21 @@ export async function executeSearchIntentTool(params: {
     }
 
     return { ok: true, eventId: event?.id, eventType };
+  }
+
+  if (name === "get_inventory_enrichment_context") {
+    const vehicleId = String(args.vehicleId ?? "");
+    if (!vehicleId) return { ok: false, error: "vehicleId_required" };
+    const ctx = await getOpenEnrichmentForVehicle({
+      dealerId,
+      vehicleId,
+    });
+    if (!ctx) return { ok: false, error: "not_found" };
+    return {
+      ok: true,
+      ...ctx,
+      note: "Ask only for requestedFields/labels. Never invent requester identity. Persist vehicle updates via propose_mutation + confirmation.",
+    };
   }
 
   return { ok: false, error: "unknown_tool" };

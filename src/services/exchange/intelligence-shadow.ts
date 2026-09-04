@@ -155,7 +155,7 @@ export async function runExchangeIntelligenceShadow(params: {
         parsed.decision === "ALTERNATIVE" ||
         parsed.decision === "NO_MATCH"
           ? parsed.decision
-          : params.engine.band,
+          : params.engine.band ?? "ALTERNATIVE",
       commercialRationale: String(parsed.commercialRationale ?? "").slice(0, 800),
       keyFits: Array.isArray(parsed.keyFits)
         ? parsed.keyFits.map(String).slice(0, 8)
@@ -180,7 +180,7 @@ export async function runExchangeIntelligenceShadow(params: {
     await prisma.matchDecisionComparison.create({
       data: {
         candidateMatchId: params.candidateMatchId,
-        engineBand: params.engine.band,
+        engineBand: params.engine.band ?? "NEEDS_INFORMATION",
         engineScore: params.engine.score,
         intelligenceDecision: toPrismaJson(decision),
         intelligenceBand: decision.decision,

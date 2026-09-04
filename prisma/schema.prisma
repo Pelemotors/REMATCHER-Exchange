@@ -76,6 +76,7 @@ model Dealer {
   memoryItems     DealerMemoryItem[]
   exchangeEvents  ExchangeEvent[]
   exchangeCases   ExchangeCase[]
+  informationRequests InformationRequest[]
 }
 
 // ─── Dealer Memory (Agent long-term business context) ───────────
@@ -225,6 +226,7 @@ model Vehicle {
   sellerOpportunities SellerOpportunity[]
   exchangeEvents  ExchangeEvent[]
   exchangeCases   ExchangeCase[]
+  informationRequests InformationRequest[]
 }
 
 enum VehicleStatus {
@@ -289,6 +291,7 @@ model Demand {
   buyerInterests  BuyerInterest[]
   searchIntentVersions SearchIntentVersion[]
   activeSearchIntentVersion SearchIntentVersion? @relation("DemandActiveIntent", fields: [activeSearchIntentVersionId], references: [id], onDelete: SetNull)
+  informationRequests InformationRequest[]
 }
 
 enum DemandStatus {
@@ -323,6 +326,7 @@ model SearchIntentVersion {
   activeForDemand       Demand?            @relation("DemandActiveIntent")
   candidateMatches      CandidateMatch[]
   exchangeCases         ExchangeCase[]
+  informationRequests   InformationRequest[]
 
   @@unique([demandId, version])
   @@index([demandId, status])
@@ -367,6 +371,9 @@ model CandidateMatch {
   matchBandV2       String?
   evaluationV2Json  Json?
   intelligenceShadowJson Json?
+  /** Mass 2.5 — quality vs information completeness */
+  resolutionState   CandidateResolutionState @default(RESOLVED)
+  decisionBlockingUnknowns Json?
 
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -379,9 +386,16 @@ model CandidateMatch {
   sellerOpportunities SellerOpportunity[]
   exchangeCases   ExchangeCase[]
   decisionComparisons MatchDecisionComparison[]
+  informationRequests InformationRequest[]
 
   @@unique([demandId, vehicleId])
   @@index([searchIntentVersionId])
+  @@index([resolutionState, status])
+}
+
+enum CandidateResolutionState {
+  RESOLVED
+  NEEDS_INFORMATION
 }
 
 enum CandidateMatchStatus {
@@ -639,6 +653,7 @@ enum NotificationType {
   FRESHNESS
   DEALER_VERIFICATION
   OUTCOME_REMINDER
+  INVENTORY_ENRICHMENT
   SYSTEM
 }
 
@@ -968,6 +983,43 @@ model MatchDecisionComparison {
 
   @@index([candidateMatchId, createdAt])
   @@index([engineBand, intelligenceBand])
+}
+
+// ─── Mass 2.5 — Interest-driven inventory enrichment ────────────
+
+enum InformationRequestStatus {
+  OPEN
+  FULFILLED
+  CANCELLED
+  EXPIRED
+}
+
+model InformationRequest {
+  id                    String                    @id @default(cuid())
+  requesterDealerId     String
+  vehicleId             String
+  demandId              String
+  searchIntentVersionId String?
+  candidateMatchId      String
+  requestedFields       Json
+  fieldsHash            String
+  status                InformationRequestStatus  @default(OPEN)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  fulfilledAt           DateTime?
+  cancelledAt           DateTime?
+
+  requesterDealer       Dealer                    @relation(fields: [requesterDealerId], references: [id], onDelete: Cascade)
+  vehicle               Vehicle                   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  demand                Demand                    @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  searchIntentVersion   SearchIntentVersion?      @relation(fields: [searchIntentVersionId], references: [id], onDelete: SetNull)
+  candidateMatch        CandidateMatch            @relation(fields: [candidateMatchId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterDealerId, candidateMatchId, fieldsHash])
+  @@index([vehicleId, status])
+  @@index([demandId, status])
+  @@index([candidateMatchId, status])
+  @@index([status, updatedAt])
 }
 
 // ─── Rate Limiting (shared across serverless instances) ───────────

@@ -150,7 +150,7 @@ describe("ML2.0 scenario contracts", () => {
     );
     expect(flow).toContain("runExchangeIntelligenceShadow");
     expect(flow).toContain("evaluateMatchV2");
-    expect(flow).toMatch(/Shadow intelligence — never changes visibility/);
+    expect(flow).toMatch(/Shadow intelligence — only for resolved matches/);
   });
 
   it("constitution forbids weight questionnaires for Search Intent", () => {

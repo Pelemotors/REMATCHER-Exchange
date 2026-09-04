@@ -109,6 +109,10 @@ export async function updateVehicleForDealer(input: {
         eventData: { source: input.source ?? "domain" },
         idempotencyKey: `vehicle-sold:${updated.id}`,
       });
+      const { cancelOpenRequestsForVehicle } = await import(
+        "@/services/matching/information-request"
+      );
+      await cancelOpenRequestsForVehicle(updated.id);
     } else if (f.status === "ARCHIVED" && vehicle.status !== "ARCHIVED") {
       await emitExchangeEvent({
         eventType: "INVENTORY_REMOVED",
@@ -119,6 +123,10 @@ export async function updateVehicleForDealer(input: {
         eventData: { source: input.source ?? "domain", note: "archived_not_sold" },
         idempotencyKey: `inventory-removed:${updated.id}:${updated.archivedAt?.toISOString() ?? "x"}`,
       });
+      const { cancelOpenRequestsForVehicle } = await import(
+        "@/services/matching/information-request"
+      );
+      await cancelOpenRequestsForVehicle(updated.id);
     } else if (f.status === "ACTIVE" && vehicle.status !== "ACTIVE") {
       await emitExchangeEvent({
         eventType: "INVENTORY_REACTIVATED",
@@ -141,6 +149,17 @@ export async function updateVehicleForDealer(input: {
         privacyClass: "DEALER_SCOPED",
         eventData: { fields: Object.keys(f) },
         idempotencyKey: `inventory-updated:${updated.id}:${updated.updatedAt.toISOString()}`,
+      });
+      const updatedFields = Object.keys(f).map((k) =>
+        k === "b2bPrice" || k === "retailPrice" ? "price" : k
+      );
+      const { fulfillRequestsAfterVehicleUpdate } = await import(
+        "@/services/matching/information-request"
+      );
+      await fulfillRequestsAfterVehicleUpdate({
+        vehicleId: updated.id,
+        sellerDealerId: input.dealerId,
+        updatedFields,
       });
     }
   } catch {

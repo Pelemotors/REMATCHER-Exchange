@@ -15,6 +15,8 @@ export const MATCH_ENGINE_VERSION = "matching-engine-2.0";
 
 export type MatchBandV2 = "STRONG" | "GOOD" | "ALTERNATIVE" | "NO_MATCH";
 
+export type CandidateResolutionState = "RESOLVED" | "NEEDS_INFORMATION";
+
 export type DimensionFitResult = {
   field: string;
   importance: IntentImportance;
@@ -26,7 +28,9 @@ export type DimensionFitResult = {
 
 export type MatchEvaluationV2 = {
   engineVersion: typeof MATCH_ENGINE_VERSION;
-  band: MatchBandV2;
+  /** Quality band when RESOLVED; null when NEEDS_INFORMATION */
+  band: MatchBandV2 | null;
+  resolutionState: CandidateResolutionState;
   /** Internal numeric for analytics only */
   score: number;
   hardPassed: boolean;
@@ -37,6 +41,11 @@ export type MatchEvaluationV2 = {
   unknowns: string[];
   hardChecks: string[];
   criticalResults: string[];
+  /** Fields that truly block a Match decision for this Search Intent */
+  decisionBlockingUnknowns: string[];
+  knownFits: string[];
+  knownTensions: string[];
+  whyPotential: string | null;
   searchIntentVersionId?: string | null;
 };
 
@@ -550,7 +559,7 @@ export function evaluateMatchV2(params: {
 
   const score = total > 0 ? Math.round((weighted / total) * 100) : 50;
 
-  // Anti-compensation: critical identity + price must meet minimums
+  // Anti-compensation: critical identity + price must meet minimums (when known)
   const identity = dimensions.find((d) => d.field === "vehicleIdentity");
   const price = dimensions.find((d) => d.field === "price");
   const mileage = dimensions.find((d) => d.field === "mileage");
@@ -559,38 +568,70 @@ export function evaluateMatchV2(params: {
       "זהות רכב לא עומדת בסף קריטי",
     ]);
   }
-  if (price && price.critical && price.fit < 0.35) {
+  if (
+    price &&
+    price.critical &&
+    price.status !== "UNKNOWN" &&
+    price.fit < 0.35
+  ) {
     return noMatch(params.searchIntentVersionId, dimensions, hardChecks, [
       "פער מחיר מסחרי קיצוני",
     ]);
   }
 
-  // STRONG requires no critical UNKNOWN and high fits
-  if (
-    verificationRequired ||
-    (mileage?.critical && mileage.status === "UNKNOWN")
-  ) {
-    const band: MatchBandV2 =
-      score >= 75 ? "ALTERNATIVE" : score >= 55 ? "ALTERNATIVE" : "NO_MATCH";
-    if (band === "NO_MATCH") {
-      return noMatch(params.searchIntentVersionId, dimensions, hardChecks, [
-        "מידע קריטי חסר",
-      ]);
+  const decisionBlockingUnknowns = collectDecisionBlockingUnknowns(dimensions);
+  const knownFits = dimensions
+    .filter((d) => d.status === "MATCH" || d.status === "PARTIAL")
+    .map((d) => d.detail);
+  const knownTensions = dimensions
+    .filter((d) => d.status === "MISMATCH" || d.status === "PARTIAL")
+    .map((d) => d.detail);
+
+  // Mass 2.5: decision-blocking UNKNOWN → Potential / NEEDS_INFORMATION (not fake ALTERNATIVE)
+  if (decisionBlockingUnknowns.length > 0) {
+    const identityOk =
+      !identity ||
+      identity.status === "OPEN" ||
+      identity.status === "MATCH" ||
+      (identity.status === "PARTIAL" && identity.fit >= 0.85);
+    const knownCommercialOk =
+      !price ||
+      price.status === "UNKNOWN" ||
+      price.status === "OPEN" ||
+      price.fit >= 0.5;
+    const knownMileageOk =
+      !mileage ||
+      mileage.status === "UNKNOWN" ||
+      mileage.status === "OPEN" ||
+      mileage.status === "MATCH" ||
+      mileage.status === "PARTIAL" ||
+      (mileage.status === "MISMATCH" && mileage.importance === "PREFERENCE");
+
+    if (identityOk && knownCommercialOk && knownMileageOk) {
+      const why = `מידע ידוע תומך בפוטנציאל מסחרי, אך חסר: ${decisionBlockingUnknowns.join(", ")}`;
+      return {
+        engineVersion: MATCH_ENGINE_VERSION,
+        band: null,
+        resolutionState: "NEEDS_INFORMATION",
+        score,
+        hardPassed: true,
+        verificationRequired: true,
+        dimensions,
+        fits,
+        compromises,
+        unknowns,
+        hardChecks,
+        criticalResults,
+        decisionBlockingUnknowns,
+        knownFits,
+        knownTensions,
+        whyPotential: why,
+        searchIntentVersionId: params.searchIntentVersionId ?? null,
+      };
     }
-    return {
-      engineVersion: MATCH_ENGINE_VERSION,
-      band,
-      score,
-      hardPassed: true,
-      verificationRequired: true,
-      dimensions,
-      fits,
-      compromises,
-      unknowns,
-      hardChecks,
-      criticalResults,
-      searchIntentVersionId: params.searchIntentVersionId ?? null,
-    };
+    return noMatch(params.searchIntentVersionId, dimensions, hardChecks, [
+      "מידע חסר ללא פוטנציאל מסחרי מספיק",
+    ]);
   }
 
   let band: MatchBandV2 = "NO_MATCH";
@@ -613,17 +654,43 @@ export function evaluateMatchV2(params: {
   return {
     engineVersion: MATCH_ENGINE_VERSION,
     band,
+    resolutionState: "RESOLVED",
     score,
     hardPassed: true,
-    verificationRequired,
+    verificationRequired: false,
     dimensions,
     fits,
     compromises,
     unknowns,
     hardChecks,
     criticalResults,
+    decisionBlockingUnknowns: [],
+    knownFits,
+    knownTensions,
+    whyPotential: null,
     searchIntentVersionId: params.searchIntentVersionId ?? null,
   };
+}
+
+/** Fields that block Match decision for this intent — OPEN/PREFERENCE never block. */
+function collectDecisionBlockingUnknowns(
+  dimensions: DimensionFitResult[]
+): string[] {
+  const out: string[] = [];
+  for (const d of dimensions) {
+    if (d.status !== "UNKNOWN") continue;
+    if (d.importance === "OPEN" || d.importance === "PREFERENCE") continue;
+    // HARD / VERY_HIGH / HIGH always block when unknown; MEDIUM only if marked critical
+    if (
+      d.importance === "HARD" ||
+      d.importance === "VERY_HIGH" ||
+      d.importance === "HIGH" ||
+      (d.importance === "MEDIUM" && d.critical)
+    ) {
+      out.push(d.field);
+    }
+  }
+  return out;
 }
 
 function noMatch(
@@ -635,6 +702,7 @@ function noMatch(
   return {
     engineVersion: MATCH_ENGINE_VERSION,
     band: "NO_MATCH",
+    resolutionState: "RESOLVED",
     score: 0,
     hardPassed: hardChecks.length === 0,
     verificationRequired: false,
@@ -644,14 +712,18 @@ function noMatch(
     unknowns: [],
     hardChecks,
     criticalResults: reasons,
+    decisionBlockingUnknowns: [],
+    knownFits: [],
+    knownTensions: reasons,
+    whyPotential: null,
     searchIntentVersionId: searchIntentVersionId ?? null,
   };
 }
 
 /** Map V2 band to Prisma ScoreBand (compat with existing UI) */
 export function matchBandV2ToScoreBand(
-  band: MatchBandV2
+  band: MatchBandV2 | null
 ): "STRONG" | "GOOD" | "ALTERNATIVE" | "HIDDEN" {
-  if (band === "NO_MATCH") return "HIDDEN";
+  if (!band || band === "NO_MATCH") return "HIDDEN";
   return band;
 }

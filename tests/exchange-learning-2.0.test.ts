@@ -196,6 +196,7 @@ describe("Exchange Learning 2.0", () => {
       engine: {
         engineVersion: "matching-engine-2.0",
         band: "GOOD",
+        resolutionState: "RESOLVED",
         score: 80,
         hardPassed: true,
         verificationRequired: false,
@@ -205,6 +206,10 @@ describe("Exchange Learning 2.0", () => {
         unknowns: [],
         hardChecks: [],
         criticalResults: [],
+        decisionBlockingUnknowns: [],
+        knownFits: [],
+        knownTensions: [],
+        whyPotential: null,
       },
       vehicle: { make: "Hyundai", model: "Tucson" },
     });

@@ -59,6 +59,10 @@ export async function markVehicleSoldForDealer(input: {
         eventData: { source: input.source ?? "domain" },
         idempotencyKey: `vehicle-sold:${updated.id}`,
       });
+      const { cancelOpenRequestsForVehicle } = await import(
+        "@/services/matching/information-request"
+      );
+      await cancelOpenRequestsForVehicle(updated.id);
     } catch {
       // non-blocking
     }
