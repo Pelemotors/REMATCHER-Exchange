@@ -2,7 +2,7 @@
  * Exchange Assistant orchestrator — Agent 4.0 hybrid runtime.
  * READ/advice: bounded OpenAI tool loop (GPT chooses tools).
  * WRITE: Action Gateway (deterministic authorize → resolve → confirm → execute).
- * Turn Planner is NOT the mandatory conversational brain for reads.
+ * The universal Agent owns ordinary conversation in every surface, including inventory.
  */
 import "server-only";
 import { logAppEvent } from "@/services/notifications";
@@ -82,7 +82,7 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
-  // Narrow privacy gate — network fishing only
+  // Narrow privacy gate — network fishing only.
   const privacy = checkPrivacyGate(params.message);
   if (privacy.blocked && privacy.reason) {
     meta.responseType = "privacy_blocked";
@@ -120,6 +120,7 @@ export async function runExchangeAssistantV2(params: {
     isRejection(params.message) &&
     /^(לא|בטל|ביטול|cancel|no)$/i.test(params.message.trim());
 
+  // Exact confirmation/cancel remain deterministic shortcuts. They are not conversational routing.
   if (exactCancel && pendingConf) {
     meta.executor = "exact_cancel";
     meta.finalResponseSource = "exact_cta";
@@ -186,35 +187,12 @@ export async function runExchangeAssistantV2(params: {
     }
   }
 
-  // Forced inventory CTA from UI — domain workflow executor, not conversational owner
-  if (
-    params.conversation?.sessionContext?.forcedIntent === "create_inventory" &&
-    !params.conversation.pendingConfirmation
-  ) {
-    const inventoryTurn = await handleInventoryIngestTurn({
-      dealerId: params.dealerId,
-      userId: params.userId,
-      message: params.message,
-      conversation: params.conversation,
-      meta,
-      forceStart: true,
-    });
-    if (inventoryTurn) {
-      meta.executor = "inventory_ingest_forced";
-      meta.finalResponseSource = "action_gateway";
-      return {
-        ...inventoryTurn,
-        conversation: withHistory(
-          inventoryTurn.conversation ?? params.conversation,
-          params.message,
-          inventoryTurn.message
-        ),
-        meta,
-      };
-    }
-  }
+  // IMPORTANT: do not route ordinary inventory-draft turns directly into the legacy
+  // draft workflow. The pending draft is context for the universal Agent. If the user
+  // supplies/corrects inventory facts, the Agent proposes an INVENTORY mutation and
+  // Action Gateway delegates the structured facts to the inventory domain workflow.
+  // Questions, topic switches and meta-conversation stay with the Agent.
 
-  // ── Agent 4.0 primary path: tool-using GPT loop ──
   const loop = await runAgentToolLoop({
     dealerId: params.dealerId,
     userId: params.userId,
@@ -299,10 +277,7 @@ export async function runExchangeAssistantV2(params: {
     meta.fallbackReason = loop.fallbackReason;
     meta.finalResponseSource = "fallback";
     meta.executor = "agent_loop_fallback";
-    // Modest fallback — no second LLM planner, no unauthorized write
-    const message =
-      loop.message ||
-      productHelpAnswer(null, params.message);
+    const message = loop.message || productHelpAnswer(null, params.message);
     return {
       intent: "UNKNOWN",
       message,
@@ -342,9 +317,7 @@ export async function getAssistantContext(dealerId: string) {
   const suggestions: Array<{ label: string; href?: string }> = [];
 
   if (state?.expiringDemands) {
-    suggestions.push({
-      label: `${state.expiringDemands} חיפושים פגים בקרוב`,
-    });
+    suggestions.push({ label: `${state.expiringDemands} חיפושים פגים בקרוב` });
   }
   if (state?.pendingValidations) {
     suggestions.push({
