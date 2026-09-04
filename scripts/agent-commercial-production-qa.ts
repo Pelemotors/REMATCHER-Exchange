@@ -140,7 +140,9 @@ function assertQuality(turn: TurnResult) {
       `${turn.label} deferred a basic inventory check instead of doing it`
     );
     requireQa(
-      !/אני יכול לעזור.*(מלאי|חיפוש|התאמ).*או/.test(answer),
+      !/(?:אני יכול|אפשר) לעזור[^.]{0,60}(?:ב)?(?:מלאי|חיפוש|התאמ)[^.]{0,40}או[^.]{0,40}(?:חיפוש|התאמ|מלאי|הזדמנ)/.test(
+        answer
+      ),
       `${turn.label} answered with a capability menu`
     );
   }
