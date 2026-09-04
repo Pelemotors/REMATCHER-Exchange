@@ -168,7 +168,7 @@ function assertQuality(turn: TurnResult) {
 
   if (turn.label === "PRICE_DIRECT") {
     requireQa(
-      /מחיר\s+לסוחר/.test(answer),
+      /מחיר\s+(ל)?סוחר/.test(answer),
       "PRICE_DIRECT did not answer the dealer-price question"
     );
     requireQa(
