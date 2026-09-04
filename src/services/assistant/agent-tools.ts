@@ -63,35 +63,35 @@ const nullableNumber = { type: ["number", "null"] };
 export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   tool(
     "get_my_exchange_state",
-    "Compact authorized summary for THIS dealer only: active search count, expiring searches, pending validations, authorized matches, open opportunities, pending outcomes, remaining connections. Does NOT return network inventory or other dealers' data. Useful first glance before deeper reads."
+    "Compact authorized summary for THIS dealer only: active search count, expiring searches, pending validations, authorized matches, open opportunities, pending outcomes, remaining connections. Useful first glance before deeper reads. Does NOT return network inventory or other dealers' data. Zero counts mean none found for this dealer — not a market diagnosis."
   ),
   tool(
     "get_my_inventory",
-    "THIS dealer's own active inventory vehicles (make, model, year, mileage, dealer price). Never returns other dealers' inventory or network browse. Use when asking about stock, empty inventory, or what the dealer owns."
+    "THIS dealer's own active inventory vehicles (make, model, year, mileage, dealer price when present). Never returns other dealers' inventory or network browse. Does NOT prove market demand, fair price, or that missing optional fields block matching."
   ),
   tool(
     "get_my_inventory_attention",
-    "THIS dealer's inventory items requiring attention (stale / validation-required). Own inventory only."
+    "THIS dealer's inventory items the system marks as requiring attention (e.g. stale / validation-required). Own inventory only. Does NOT invent commercial problems beyond system flags."
   ),
   tool(
     "get_my_stale_inventory",
-    "THIS dealer's vehicles marked stale. Own inventory only."
+    "THIS dealer's vehicles marked stale by the system. Own inventory only. Stale is a freshness signal — it alone does NOT prove the price is wrong or that the car will not sell."
   ),
   tool(
     "get_my_searches",
-    "THIS dealer's active/expiring searches (demands) with display titles and days left. Never returns other dealers' searches."
+    "THIS dealer's active/expiring searches (demands) with display titles and days left. Never returns other dealers' searches. Own searches vs network inventory is a buy-side path separate from own inventory vs network demand."
   ),
   tool(
     "get_my_expiring_searches",
-    "THIS dealer's searches expiring within ~24h. Own searches only."
+    "THIS dealer's searches expiring within ~24h. Own searches only. Does NOT invent network supply for those searches."
   ),
   tool(
     "get_my_matches",
-    "Authorized pre-reveal match cards for THIS dealer as buyer — privacy-safe vehicle summary only. Does NOT invent matches. Match truth comes from stored deterministic matching. No seller identity before reveal."
+    "Authorized pre-reveal match cards for THIS dealer as buyer — privacy-safe vehicle summary only. Match existence comes only from stored deterministic matching; never invent matches. No seller identity before Reveal. Empty means no authorized matches."
   ),
   tool(
     "get_my_opportunities",
-    "Open seller opportunities for THIS dealer's vehicles (buyer interest exists). Does NOT reveal buyer identity. Own opportunities only."
+    "Open seller opportunities for THIS dealer's vehicles (buyer interest exists). Does NOT reveal buyer identity. Own opportunities only. Does not invent interest."
   ),
   tool(
     "get_my_reveals",
@@ -103,19 +103,19 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   ),
   tool(
     "get_my_validations",
-    "Pending availability validations for THIS dealer's vehicles."
+    "Pending availability validations for THIS dealer's vehicles. Validation ≠ seller interest."
   ),
   tool(
     "get_my_commercial_status",
-    "THIS dealer's commercial / reveal usage and plan limits. Pricing truth from product config — do not invent entitlements."
+    "THIS dealer's commercial / reveal usage and plan limits. Pricing/entitlement truth from product config — do not invent entitlements."
   ),
   tool(
     "get_my_pending_actions",
-    "Aggregated pending action counts for THIS dealer."
+    "Aggregated pending action counts for THIS dealer. Useful for urgency signals; does not by itself decide commercial priority."
   ),
   tool(
     "update_inventory_draft",
-    "Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user's message. This changes conversation state only — it does NOT write to the database and does NOT require confirmation. Use this instead of classifying the user's wording. You may create a new draft by supplying the first vehicle facts. Only include facts actually stated or clearly corrected by the user.",
+    "Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user's message. Conversation state only — does NOT write to the database and does NOT require confirmation. Use when describing/correcting an unsaved vehicle. Only include facts actually stated or clearly corrected. Do not invent model/year/mileage/price.",
     {
       type: "object",
       properties: {

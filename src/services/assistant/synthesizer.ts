@@ -4,7 +4,7 @@ import {
   isOpenAIConfigured,
   AI_MODELS,
 } from "@/services/ai/client";
-import { SYNTHESIZER_PROMPT } from "@/services/assistant/agent-constitution";
+import { SYNTHESIZER_PROMPT } from "@/services/assistant/legacy-prompts";
 import type { AssistantCard } from "@/services/assistant/conversation-state";
 import type { ConversationListItem, SessionContext } from "@/services/assistant/conversation-state";
 import {

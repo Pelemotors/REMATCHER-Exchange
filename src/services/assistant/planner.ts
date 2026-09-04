@@ -1,16 +1,20 @@
+/**
+ * Legacy v2 planner. NOT used by runExchangeAssistantV2 after Agent 3.1 / 4.0.
+ * Live conversational reasoning lives in agent-loop.ts + AGENT_CONSTITUTION.
+ */
 import "server-only";
 import {
   callOpenAIStructured,
   isOpenAIConfigured,
   AI_MODELS,
 } from "@/services/ai/client";
-import { PLANNER_PROMPT } from "@/services/assistant/agent-constitution";
+import { PLANNER_PROMPT } from "@/services/assistant/legacy-prompts";
 import {
   ALL_READ_TOOLS,
   TOOL_DESCRIPTIONS,
   type AgentPlan,
   type ReadToolName,
-} from "./tools/registry";
+} from "@/services/assistant/tools/registry";
 
 const VALID_TOOLS = new Set<string>(ALL_READ_TOOLS);
 
