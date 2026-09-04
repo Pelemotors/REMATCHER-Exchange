@@ -40,5 +40,17 @@ jobs:
           done
           echo "Production did not reach ${GITHUB_SHA} in time"
           exit 1
-      - name: Production Agent smoke
-        run: npx tsx scripts/agent-v2-smoke.ts
+      - name: Load existing pilot QA credentials
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('scripts/agent-v2-smoke.ts', 'utf8');
+          const email = src.match(/const EMAIL = process\.env\.E2E_EMAIL \?\? "([^"]+)"/)?.[1];
+          const password = src.match(/const PASSWORD = process\.env\.E2E_PASSWORD \?\? "([^"]+)"/)?.[1];
+          if (!email || !password) throw new Error('Pilot QA credentials not found');
+          console.log(`::add-mask::${password}`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `E2E_EMAIL=${email}\nE2E_PASSWORD=${password}\n`);
+          NODE
+      - name: Full commercial production conversation QA
+        run: npx tsx scripts/agent-commercial-production-qa.ts
