@@ -1,8 +1,8 @@
 /**
  * Exchange Assistant orchestrator — Agent 4.0 hybrid runtime.
- * READ/advice: bounded OpenAI tool loop (GPT chooses tools).
- * WRITE: Action Gateway (deterministic authorize → resolve → confirm → execute).
- * The universal Agent owns ordinary conversation in every surface, including inventory.
+ *
+ * Ordinary conversation always goes through the universal Agent. Deterministic
+ * code remains authority for privacy, authorization, confirmation and execution.
  */
 import "server-only";
 import { logAppEvent } from "@/services/notifications";
@@ -10,15 +10,14 @@ import {
   type AssistantCard,
   type ConversationState,
   appendRecentTurns,
-  isConfirmation,
-  isRejection,
 } from "@/services/assistant/conversation-state";
 import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
-import { AGENT_VERSION, type AgentMeta } from "@/services/assistant/tools/registry";
+import {
+  AGENT_VERSION,
+  type AgentMeta,
+} from "@/services/assistant/tools/registry";
 import { runAgentToolLoop } from "@/services/assistant/agent-loop";
 import { runActionGateway } from "@/services/assistant/action-gateway";
-import { executeSearchMutation } from "@/services/assistant/search-capability";
-import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
 import {
   checkPrivacyGate,
   privacyBlockedMessage,
@@ -82,7 +81,7 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
-  // Narrow privacy gate — network fishing only.
+  // Privacy is a hard deterministic boundary and intentionally remains before AI.
   const privacy = checkPrivacyGate(params.message);
   if (privacy.blocked && privacy.reason) {
     meta.responseType = "privacy_blocked";
@@ -108,91 +107,8 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
-  const pendingConf = params.conversation?.pendingConfirmation;
-  const exactConfirm =
-    pendingConf &&
-    isConfirmation(params.message) &&
-    /^(כן|אשר|מאשר|בצע|אישור|ok|yes|שמור|שמור במלאי|כן,?\s*נמכרה|עדכן|יאללה)$/i.test(
-      params.message.trim()
-    );
-  const exactCancel =
-    pendingConf &&
-    isRejection(params.message) &&
-    /^(לא|בטל|ביטול|cancel|no)$/i.test(params.message.trim());
-
-  // Exact confirmation/cancel remain deterministic shortcuts. They are not conversational routing.
-  if (exactCancel && pendingConf) {
-    meta.executor = "exact_cancel";
-    meta.finalResponseSource = "exact_cta";
-    const message = "בוטל. לא בוצעה פעולה.";
-    return {
-      intent: "UNKNOWN",
-      message,
-      conversation: withHistory(
-        {
-          lastList: params.conversation?.lastList,
-          pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
-          pendingSearchDraft: params.conversation?.pendingSearchDraft,
-          sessionContext: params.conversation?.sessionContext,
-          recentTurns: params.conversation?.recentTurns,
-        },
-        params.message,
-        message
-      ),
-      meta,
-    };
-  }
-
-  if (exactConfirm && pendingConf) {
-    const searchDone = await executeSearchMutation({
-      dealerId: params.dealerId,
-      pending: pendingConf,
-      conversation: params.conversation,
-      meta,
-    });
-    if (searchDone) {
-      meta.executor = searchDone.meta?.executor ?? "search_confirm";
-      meta.legacyPlannerUsed = false;
-      meta.finalResponseSource = "exact_cta";
-      return {
-        ...searchDone,
-        conversation: withHistory(
-          searchDone.conversation ?? params.conversation,
-          params.message,
-          searchDone.message
-        ),
-        meta,
-      };
-    }
-    if (pendingConf.action === "create_inventory") {
-      const inventoryTurn = await handleInventoryIngestTurn({
-        dealerId: params.dealerId,
-        userId: params.userId,
-        message: params.message,
-        conversation: params.conversation,
-        meta,
-      });
-      if (inventoryTurn) {
-        meta.finalResponseSource = "exact_cta";
-        return {
-          ...inventoryTurn,
-          conversation: withHistory(
-            inventoryTurn.conversation ?? params.conversation,
-            params.message,
-            inventoryTurn.message
-          ),
-          meta,
-        };
-      }
-    }
-  }
-
-  // IMPORTANT: do not route ordinary inventory-draft turns directly into the legacy
-  // draft workflow. The pending draft is context for the universal Agent. If the user
-  // supplies/corrects inventory facts, the Agent proposes an INVENTORY mutation and
-  // Action Gateway delegates the structured facts to the inventory domain workflow.
-  // Questions, topic switches and meta-conversation stay with the Agent.
-
+  // No intent regex, no turn classifier, no inventory workflow interception here.
+  // The universal Agent interprets the turn and chooses capabilities.
   const loop = await runAgentToolLoop({
     dealerId: params.dealerId,
     userId: params.userId,
@@ -204,6 +120,8 @@ export async function runExchangeAssistantV2(params: {
       params.conversation?.sessionContext?.operatingMode ===
         "inventory_management",
   });
+
+  const loopConversation = loop.conversation ?? params.conversation;
 
   meta.modelCallCount = loop.modelCallCount;
   meta.toolRoundCount = loop.toolRoundCount;
@@ -241,11 +159,12 @@ export async function runExchangeAssistantV2(params: {
       userId: params.userId,
       message: params.message,
       proposal: loop.proposal,
-      conversation: params.conversation,
+      conversation: loopConversation,
       meta,
       entityType: params.context.entityType,
       entityId: params.context.entityId,
     });
+
     meta.finalResponseSource = "action_gateway";
     await logAppEvent({
       eventType: "agent_action_gateway",
@@ -262,10 +181,11 @@ export async function runExchangeAssistantV2(params: {
         legacyPlannerUsed: false,
       },
     });
+
     return {
       ...gated,
       conversation: withHistory(
-        gated.conversation ?? params.conversation,
+        gated.conversation ?? loopConversation,
         params.message,
         gated.message
       ),
@@ -281,7 +201,7 @@ export async function runExchangeAssistantV2(params: {
     return {
       intent: "UNKNOWN",
       message,
-      conversation: withHistory(params.conversation, params.message, message),
+      conversation: withHistory(loopConversation, params.message, message),
       meta,
     };
   }
@@ -293,7 +213,7 @@ export async function runExchangeAssistantV2(params: {
   return {
     intent: "PENDING_ACTIONS",
     message,
-    conversation: withHistory(params.conversation, params.message, message),
+    conversation: withHistory(loopConversation, params.message, message),
     meta,
   };
 }
