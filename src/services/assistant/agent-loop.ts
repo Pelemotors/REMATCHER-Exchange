@@ -228,6 +228,22 @@ export async function runAgentToolLoop(params: {
       });
 
       const limited = toolCalls.slice(0, AGENT_LOOP_MAX_TOOLS_PER_ROUND);
+      const overflow = toolCalls.slice(AGENT_LOOP_MAX_TOOLS_PER_ROUND);
+
+      // Chat Completions requires one tool response for every emitted tool_call_id.
+      // We intentionally cap execution, but still acknowledge overflow calls so the
+      // conversation remains protocol-valid on the next model turn.
+      for (const call of overflow) {
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({
+            error: "tool_limit_per_round",
+            note: "This tool was not executed because the per-round read limit was reached. Use the authorized results already returned, or request it in a later round only if still necessary.",
+          }),
+        });
+      }
+
       const readBatch: Array<{
         call: ChatCompletionMessageToolCall;
         internal: ReadToolName;
