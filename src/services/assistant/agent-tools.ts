@@ -28,7 +28,11 @@ export const CONTROL_TOOL_NAMES = [
   "cancel_pending_action",
 ] as const;
 
+export const CONVERSATION_STATE_TOOL_NAMES = ["update_inventory_draft"] as const;
+
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
+export type ConversationStateToolName =
+  (typeof CONVERSATION_STATE_TOOL_NAMES)[number];
 
 function emptyParams() {
   return {
@@ -52,6 +56,9 @@ function tool(
     },
   };
 }
+
+const nullableString = { type: ["string", "null"] };
+const nullableNumber = { type: ["number", "null"] };
 
 export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   tool(
@@ -107,8 +114,36 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
     "Aggregated pending action counts for THIS dealer."
   ),
   tool(
+    "update_inventory_draft",
+    "Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user's message. This changes conversation state only — it does NOT write to the database and does NOT require confirmation. Use this instead of classifying the user's wording. You may create a new draft by supplying the first vehicle facts. Only include facts actually stated or clearly corrected by the user.",
+    {
+      type: "object",
+      properties: {
+        facts: {
+          type: "object",
+          properties: {
+            make: nullableString,
+            model: nullableString,
+            trim: nullableString,
+            year: nullableNumber,
+            mileage: nullableNumber,
+            color: nullableString,
+            ownershipHand: nullableNumber,
+            ownershipType: nullableString,
+            retailPrice: nullableNumber,
+            b2bPrice: nullableNumber,
+            region: nullableString,
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["facts"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
     "propose_mutation",
-    "Propose a WRITE action. Does NOT execute. REMATCHER Action Gateway authorizes, resolves targets, and requires confirmation. Use for create/update/close/renew searches, inventory create/update/mark sold, validation confirm. Never invent database IDs — use human targetReference.",
+    "Propose a DATABASE/DOMAIN write action. Does NOT execute. REMATCHER Action Gateway authorizes, resolves targets, and requires confirmation. Use for saving a prepared inventory draft, updating/selling an already-saved vehicle, create/update/close/renew searches, or validation confirmation. Do NOT use this merely to add facts to an unsaved inventory draft — use update_inventory_draft for that. Never invent database IDs; use human targetReference.",
     {
       type: "object",
       properties: {
@@ -159,7 +194,7 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
         facts: {
           type: ["object", "null"],
           description:
-            "Optional structured facts for CREATE/UPDATE (make, model, year, budgetMax, mileage, b2bPrice, etc.)",
+            "Optional structured facts for the database/domain mutation",
           additionalProperties: true,
         },
       },
@@ -176,7 +211,7 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   ),
   tool(
     "confirm_pending_action",
-    "Confirm the CURRENT pending confirmation shown to the dealer (same scope/targets). Use when the user clearly affirms that pending action (e.g. כן תבטל אותם). Do not use if they change scope."
+    "Confirm the CURRENT pending confirmation shown to the dealer (same scope/targets). Use when the user clearly affirms that pending action. Do not use if they change scope."
   ),
   tool(
     "cancel_pending_action",
@@ -186,6 +221,12 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
 
 export function isControlTool(name: string): name is ControlToolName {
   return (CONTROL_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+export function isConversationStateTool(
+  name: string
+): name is ConversationStateToolName {
+  return (CONVERSATION_STATE_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 export function isReadOpenAiTool(name: string): boolean {
