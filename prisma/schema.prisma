@@ -73,6 +73,57 @@ model Dealer {
   commercial      DealerCommercial?
   revealUsages    RevealUsage[]
   onboardingState DealerOnboardingState?
+  memoryItems     DealerMemoryItem[]
+}
+
+// ─── Dealer Memory (Agent long-term business context) ───────────
+
+enum DealerMemoryKind {
+  PROFILE
+  PREFERENCE
+  GOAL
+  BUSINESS_CONTEXT
+  DECISION
+  TEMPORARY
+}
+
+enum DealerMemoryStatus {
+  ACTIVE
+  SUPERSEDED
+  EXPIRED
+  FORGOTTEN
+}
+
+enum DealerMemoryProvenance {
+  USER_STATED
+  AGENT_INFERRED
+  SYSTEM_DERIVED
+}
+
+model DealerMemoryItem {
+  id            String                 @id @default(cuid())
+  dealerId      String
+  topicKey      String
+  kind          DealerMemoryKind
+  status        DealerMemoryStatus     @default(ACTIVE)
+  provenance    DealerMemoryProvenance
+  summary       String
+  details       Json?
+  confidence    Float                  @default(1)
+  evidenceNote  String?
+  expiresAt     DateTime?
+  supersedesId  String?
+  forgottenAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  dealer        Dealer                 @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  supersedes    DealerMemoryItem?      @relation("MemorySupersede", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy  DealerMemoryItem[]     @relation("MemorySupersede")
+
+  @@index([dealerId, status])
+  @@index([dealerId, topicKey, status])
+  @@index([dealerId, expiresAt])
 }
 
 model DealerOnboardingState {

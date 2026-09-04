@@ -143,6 +143,8 @@ export async function runExchangeAssistantV2(params: {
   meta.model = loop.model;
   meta.legacyPlannerUsed = false;
   meta.plannerUsed = false;
+  if (loop.memoryMeta) meta.memory = loop.memoryMeta;
+  if (loop.memoryDebug) meta.memoryDebug = loop.memoryDebug;
 
   await logAppEvent({
     eventType: "agent_loop_turn",

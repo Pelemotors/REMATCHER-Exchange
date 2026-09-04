@@ -30,9 +30,17 @@ export const CONTROL_TOOL_NAMES = [
 
 export const CONVERSATION_STATE_TOOL_NAMES = ["update_inventory_draft"] as const;
 
+export const DEALER_MEMORY_TOOL_NAMES = [
+  "remember_dealer_insight",
+  "get_my_dealer_memory",
+  "forget_dealer_insight",
+  "correct_dealer_insight",
+] as const;
+
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
 export type ConversationStateToolName =
   (typeof CONVERSATION_STATE_TOOL_NAMES)[number];
+export type DealerMemoryToolName = (typeof DEALER_MEMORY_TOOL_NAMES)[number];
 
 function emptyParams() {
   return {
@@ -142,6 +150,121 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
     }
   ),
   tool(
+    "remember_dealer_insight",
+    "Persist a durable business insight about THIS dealer for future personalization (goals, preferences, business context). Requires a stable topicKey (e.g. preference.liquidity_vs_margin, goal.current_cashflow). Same topicKey supersedes the previous ACTIVE item. Do NOT store live REMATCHER snapshots (inventory counts, matches, pending actions). AGENT_INFERRED requires evidenceNote and stays low-confidence — do not build personality from a single anecdote. USER_STATED for explicit dealer statements.",
+    {
+      type: "object",
+      properties: {
+        topicKey: { type: "string" },
+        kind: {
+          type: "string",
+          enum: [
+            "PROFILE",
+            "PREFERENCE",
+            "GOAL",
+            "BUSINESS_CONTEXT",
+            "DECISION",
+            "TEMPORARY",
+          ],
+        },
+        provenance: {
+          type: "string",
+          enum: ["USER_STATED", "AGENT_INFERRED", "SYSTEM_DERIVED"],
+        },
+        summary: { type: "string" },
+        confidence: nullableNumber,
+        evidenceNote: nullableString,
+        expiresAt: nullableString,
+        details: { type: ["object", "null"], additionalProperties: true },
+      },
+      required: [
+        "topicKey",
+        "kind",
+        "provenance",
+        "summary",
+        "confidence",
+        "evidenceNote",
+        "expiresAt",
+        "details",
+      ],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "get_my_dealer_memory",
+    "List THIS dealer's ACTIVE long-term memories (topicKey, id, kind, provenance, summary). Use before forget/correct when you need an exact memoryId. Does not return other dealers' memories. Does not prove live system facts.",
+    {
+      type: "object",
+      properties: {
+        topicKey: nullableString,
+        kind: {
+          type: ["string", "null"],
+          enum: [
+            "PROFILE",
+            "PREFERENCE",
+            "GOAL",
+            "BUSINESS_CONTEXT",
+            "DECISION",
+            "TEMPORARY",
+            null,
+          ],
+        },
+        limit: nullableNumber,
+      },
+      required: ["topicKey", "kind", "limit"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "forget_dealer_insight",
+    "Truly forget one memory by exact memoryId (status FORGOTTEN). No fuzzy text delete — resolve id via get_my_dealer_memory first.",
+    {
+      type: "object",
+      properties: {
+        memoryId: { type: "string" },
+      },
+      required: ["memoryId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "correct_dealer_insight",
+    "Apply a structured correction to an existing memory. NLP already happened in your reasoning — pass memoryId plus replacement summary/fields. Supersedes the prior ACTIVE item on the same topicKey as USER_STATED.",
+    {
+      type: "object",
+      properties: {
+        memoryId: { type: "string" },
+        summary: { type: "string" },
+        kind: {
+          type: ["string", "null"],
+          enum: [
+            "PROFILE",
+            "PREFERENCE",
+            "GOAL",
+            "BUSINESS_CONTEXT",
+            "DECISION",
+            "TEMPORARY",
+            null,
+          ],
+        },
+        confidence: nullableNumber,
+        expiresAt: nullableString,
+        details: { type: ["object", "null"], additionalProperties: true },
+        evidenceNote: nullableString,
+      },
+      required: [
+        "memoryId",
+        "summary",
+        "kind",
+        "confidence",
+        "expiresAt",
+        "details",
+        "evidenceNote",
+      ],
+      additionalProperties: false,
+    }
+  ),
+  tool(
     "propose_mutation",
     "Propose a DATABASE/DOMAIN write action. Does NOT execute. REMATCHER Action Gateway authorizes, resolves targets, and requires confirmation. Use for saving a prepared inventory draft, updating/selling an already-saved vehicle, create/update/close/renew searches, or validation confirmation. Do NOT use this merely to add facts to an unsaved inventory draft — use update_inventory_draft for that. Never invent database IDs; use human targetReference.",
     {
@@ -227,6 +350,12 @@ export function isConversationStateTool(
   name: string
 ): name is ConversationStateToolName {
   return (CONVERSATION_STATE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+export function isDealerMemoryTool(
+  name: string
+): name is DealerMemoryToolName {
+  return (DEALER_MEMORY_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 export function isReadOpenAiTool(name: string): boolean {

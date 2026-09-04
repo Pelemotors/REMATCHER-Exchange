@@ -65,6 +65,29 @@ export interface AgentMeta {
   totalTokens?: number;
   loopLatencyMs?: number;
   finalResponseSource?: "agent_loop" | "action_gateway" | "exact_cta" | "fallback" | "privacy";
+  /** Dealer Memory 1.0 — aggregate only (safe for client) */
+  memory?: {
+    retrievedCount: number;
+    mutationCount: number;
+    kinds: string[];
+    promptChars: number;
+    retrievalLatencyMs: number;
+  };
+  /** Present only when AGENT_MEMORY_DEBUG=true */
+  memoryDebug?: {
+    retrieved: Array<{
+      id: string;
+      topicKey: string;
+      provenance: string;
+      kind: string;
+    }>;
+    mutations: Array<{
+      action: string;
+      id?: string;
+      topicKey?: string;
+      reason?: string;
+    }>;
+  };
 }
 
 /** Tool catalog for planner prompt */

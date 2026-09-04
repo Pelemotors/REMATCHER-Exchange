@@ -26,9 +26,20 @@ import {
   AGENT_OPENAI_TOOLS,
   isControlTool,
   isConversationStateTool,
+  isDealerMemoryTool,
   isReadOpenAiTool,
   OPENAI_READ_TOOL_MAP,
 } from "@/services/assistant/agent-tools";
+import {
+  formatMemoryPromptBlock,
+  retrieveRelevantMemories,
+} from "@/services/assistant/dealer-memory";
+import { executeDealerMemoryTool } from "@/services/assistant/dealer-memory/tools";
+import type {
+  MemoryDebugMeta,
+  MemoryMutationRecord,
+  MemoryPublicMeta,
+} from "@/services/assistant/dealer-memory/types";
 import {
   parseActionProposalFromTool,
   type ActionProposal,
@@ -53,6 +64,8 @@ export type AgentLoopResult = {
   success: boolean;
   fallbackReason: string | null;
   toolResults: Record<string, unknown>;
+  memoryMeta?: MemoryPublicMeta;
+  memoryDebug?: MemoryDebugMeta;
 };
 
 function buildSystemPrompt(params: {
@@ -61,6 +74,7 @@ function buildSystemPrompt(params: {
   inventoryMode?: boolean;
   /** Soft page context — informational only, never forced intent */
   pageContextBlock?: string;
+  memoryBlock?: string;
 }): string {
   const pending = params.conversation?.pendingConfirmation;
   const pendingBlock = pending
@@ -89,15 +103,17 @@ RUNTIME BINDING (not a second constitution):
 - Conversation state (including pendingInventoryDraft) is context, not a cage. Follow topic changes; keep drafts unless the dealer abandons them.
 - Use authorized tools as capabilities. Do not treat tools as a menu or fixed checklist.
 - For unsaved inventory discussion, update_inventory_draft records structured facts you understood. It does not write to the database. When the dealer corrects a draft fact (year/model/km/hand/price/etc.), call update_inventory_draft so conversation state matches what you tell them.
+- Dealer Memory tools persist durable business context (goals/preferences). Use stable topicKey. Forget/correct require exact memoryId from get_my_dealer_memory. Memory is context, not REMATCHER truth.
 - propose_mutation only for real domain/database actions. REMATCHER Action Gateway authorizes, confirms and executes.
 - Match existence, privacy, Reveal, ownership and writes remain deterministic REMATCHER authority — never invent them.
+- Hierarchy: DEALER MEMORY is long-term context; CURRENT REMATCHER TRUTH comes from authorized tool results in this turn and wins for live system state.
 - System-truth check: if the dealer claims inventory/searches/matches/opportunities do not exist (or contradict a fact already established in this conversation), call the relevant authorized read tool before agreeing. Do not erase known REMATCHER facts to be agreeable.
 - Answer in natural concise Hebrew as a business advisor. Do not expose tool names, enums, routes, freshness codes (FRESH/STALE), or implementation jargon unless asked technically. Prefer Hebrew commercial wording: מעודכן / דורש רענון / מחיר לסוחר / עסקה בין סוחרים — avoid saying FRESH, STALE, or B2B to the dealer.
 
 CONTEXT:
 route=${params.route ?? "/"}
 inventoryMode=${Boolean(params.inventoryMode)}
-${params.pageContextBlock ? `${params.pageContextBlock}\n` : ""}${pendingBlock}${draftBlock}${searchDraft}`;
+${params.pageContextBlock ? `${params.pageContextBlock}\n` : ""}${params.memoryBlock ?? ""}${pendingBlock}${draftBlock}${searchDraft}`;
 }
 
 function historyMessages(
@@ -146,6 +162,9 @@ export async function runAgentToolLoop(params: {
   let completionTokens = 0;
   let cachedPromptTokens = 0;
   let proposal: ActionProposal | null = null;
+  const memoryMutations: MemoryMutationRecord[] = [];
+  let memoryMeta: MemoryPublicMeta | undefined;
+  let memoryDebug: MemoryDebugMeta | undefined;
 
   const addUsage = (usage: any) => {
     if (!usage) return;
@@ -181,6 +200,8 @@ export async function runAgentToolLoop(params: {
     totalTokens,
     latencyMs: Date.now() - started,
     toolResults,
+    memoryMeta,
+    memoryDebug,
   });
 
   if (!isOpenAIConfigured()) {
@@ -195,6 +216,29 @@ export async function runAgentToolLoop(params: {
     };
   }
 
+  const retrieved = await retrieveRelevantMemories({
+    dealerId: params.dealerId,
+  });
+  const memoryBlock = formatMemoryPromptBlock(retrieved.items);
+  memoryMeta = {
+    retrievedCount: retrieved.items.length,
+    mutationCount: 0,
+    kinds: [...new Set(retrieved.items.map((i) => i.kind))],
+    promptChars: memoryBlock.length,
+    retrievalLatencyMs: retrieved.latencyMs,
+  };
+  if (process.env.AGENT_MEMORY_DEBUG === "true") {
+    memoryDebug = {
+      retrieved: retrieved.items.map((i) => ({
+        id: i.id,
+        topicKey: i.topicKey,
+        provenance: i.provenance,
+        kind: i.kind,
+      })),
+      mutations: memoryMutations,
+    };
+  }
+
   const openai = getOpenAIClient();
   const model = AI_MODELS.agentLoop;
   const messages: ChatCompletionMessageParam[] = [
@@ -205,6 +249,7 @@ export async function runAgentToolLoop(params: {
         route: params.route,
         inventoryMode: params.inventoryMode,
         pageContextBlock: params.pageContextBlock,
+        memoryBlock,
       }),
     },
     ...historyMessages(workingConversation),
@@ -305,6 +350,46 @@ export async function runAgentToolLoop(params: {
           continue;
         }
 
+        if (isDealerMemoryTool(name)) {
+          const args = parseToolArgs(call.function.arguments);
+          const t0 = Date.now();
+          const executed = await executeDealerMemoryTool({
+            name,
+            dealerId: params.dealerId,
+            args,
+          });
+          toolDurations[name] = (toolDurations[name] ?? 0) + (Date.now() - t0);
+          toolResults[name] = executed.result;
+          if (executed.mutation) {
+            memoryMutations.push(executed.mutation);
+            if (memoryMeta) {
+              memoryMeta = {
+                ...memoryMeta,
+                mutationCount: memoryMutations.length,
+              };
+            }
+            if (memoryDebug) {
+              memoryDebug = { ...memoryDebug, mutations: [...memoryMutations] };
+            } else if (process.env.AGENT_MEMORY_DEBUG === "true") {
+              memoryDebug = {
+                retrieved: retrieved.items.map((i) => ({
+                  id: i.id,
+                  topicKey: i.topicKey,
+                  provenance: i.provenance,
+                  kind: i.kind,
+                })),
+                mutations: [...memoryMutations],
+              };
+            }
+          }
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify(executed.result),
+          });
+          continue;
+        }
+
         if (isControlTool(name)) {
           const parsed = parseActionProposalFromTool(
             name,
@@ -350,8 +435,17 @@ export async function runAgentToolLoop(params: {
             tool_call_id: item.call.id,
             content: truncateToolResult(
               errors[item.internal]
-                ? { error: errors[item.internal], data: null }
-                : { data: results[item.internal] }
+                ? {
+                    truthLayer: "CURRENT_REMATCHER_TRUTH",
+                    error: errors[item.internal],
+                    data: null,
+                    note: "Tool failed — do not invent a zero/none fact from this error.",
+                  }
+                : {
+                    truthLayer: "CURRENT_REMATCHER_TRUTH",
+                    data: results[item.internal],
+                    note: "Authorized live system facts for this dealer. Wins over Dealer Memory for current inventory/searches/matches/state.",
+                  }
             ),
           });
         }

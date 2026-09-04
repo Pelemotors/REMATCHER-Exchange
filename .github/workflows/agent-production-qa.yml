@@ -8,6 +8,11 @@ on:
       - '.github/workflows/agent-production-qa.yml'
       - 'src/services/assistant/**'
       - 'src/config/product.ts'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - 'scripts/agent-hard-safety-qa.ts'
+      - 'scripts/agent-judgment-eval.ts'
+      - 'scripts/agent-dealer-memory-qa.ts'
       - 'scripts/agent-commercial-production-qa.ts'
       - 'scripts/agent-v2-smoke.ts'
   workflow_dispatch:
@@ -15,7 +20,7 @@ on:
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,5 +62,10 @@ jobs:
           console.log(`::add-mask::${password}`);
           fs.appendFileSync(process.env.GITHUB_ENV, `E2E_EMAIL=${email}\nE2E_PASSWORD=${password}\n`);
           NODE
-      - name: Full commercial production conversation QA
-        run: npx tsx scripts/agent-commercial-production-qa.ts
+      - name: Hard Safety Production QA
+        run: npx tsx scripts/agent-hard-safety-qa.ts
+      - name: Dealer Memory Production QA
+        run: npx tsx scripts/agent-dealer-memory-qa.ts
+      - name: Judgment evaluation (non-blocking)
+        continue-on-error: true
+        run: npx tsx scripts/agent-judgment-eval.ts
