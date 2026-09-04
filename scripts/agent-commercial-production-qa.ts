@@ -338,9 +338,12 @@ async function main() {
     draftTopicSwitch.status === 200,
     `INVENTORY_TOPIC_SWITCH HTTP ${draftTopicSwitch.status}`
   );
-  requireQa(
+  const switchedToSearches =
     draftTopicSwitch.body.meta?.tools?.includes("get_my_searches") ||
-      /אין לך כרגע חיפושים|0 חיפושים/.test(switchAnswer),
+    draftTopicSwitch.body.meta?.tools?.includes("get_my_exchange_state") ||
+    /אין לך.{0,40}חיפוש|חיפושים פעילים|0 חיפוש/.test(switchAnswer);
+  requireQa(
+    switchedToSearches && !/אלפא רומיאו מיטו|חסר לי דגם|להשלים.*ק״מ/.test(switchAnswer),
     "INVENTORY_TOPIC_SWITCH did not leave the inventory topic naturally"
   );
   requireQa(
