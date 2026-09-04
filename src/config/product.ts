@@ -104,7 +104,7 @@ export const AI_MODELS = {
   turnInterpreter:
     process.env.OPENAI_TURN_INTERPRETER_MODEL ?? "gpt-4o-mini",
   turnPlanner: process.env.OPENAI_TURN_PLANNER_MODEL ?? "gpt-4o-mini",
-  agentLoop: process.env.OPENAI_AGENT_LOOP_MODEL ?? "gpt-4o-mini",
+  agentLoop: process.env.OPENAI_AGENT_LOOP_MODEL ?? "gpt-5.4-mini",
   matchExplainer: process.env.OPENAI_MATCH_EXPLAINER_MODEL ?? "gpt-4o-mini",
 } as const;
 
