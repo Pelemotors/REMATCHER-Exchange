@@ -35,6 +35,7 @@ export const DEALER_MEMORY_TOOL_NAMES = [
   "get_my_dealer_memory",
   "forget_dealer_insight",
   "correct_dealer_insight",
+  "get_my_privacy_settings",
 ] as const;
 
 export const SEARCH_INTENT_TOOL_NAMES = [
@@ -224,6 +225,10 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
       required: ["topicKey", "kind", "limit"],
       additionalProperties: false,
     }
+  ),
+  tool(
+    "get_my_privacy_settings",
+    "Read THIS dealer's optional Privacy & AI consent state (Dealer Memory, Agent→Exchange learning, Exchange activity learning, External activity learning). Deterministic server state only — does not change consents. Use when the dealer asks what is enabled or before explaining why memory/learning did not persist."
   ),
   tool(
     "forget_dealer_insight",

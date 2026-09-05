@@ -31,6 +31,15 @@ export async function upsertMatchExchangeCase(params: {
       closedAt: null,
     },
   });
+
+  let learningEligible = false;
+  if (params.dealerId) {
+    const { mayUseExchangeActivityForLearning } = await import(
+      "@/services/privacy/policy"
+    );
+    learningEligible = await mayUseExchangeActivityForLearning(params.dealerId);
+  }
+
   const data = {
     caseType: "MATCH",
     dealerId: params.dealerId ?? null,
@@ -51,6 +60,7 @@ export async function upsertMatchExchangeCase(params: {
       ? (toPrismaJson(params.searchIntentSnapshot) as Prisma.InputJsonValue)
       : undefined,
     rationale: params.rationale ?? null,
+    learningEligible,
   };
 
   if (existing) {
@@ -114,6 +124,7 @@ export async function retrieveRelevantCases(params: {
     where: {
       caseType: { in: ["MATCH", "EXTERNAL_INVENTORY"] },
       closedAt: { not: null },
+      learningEligible: true,
     },
     orderBy: { updatedAt: "desc" },
     take: 30,

@@ -62,14 +62,15 @@ describe("Agent Brain Consolidation — live AI path", () => {
 
   it("default agent loop model stays gpt-5.4-mini", () => {
     expect(AI_MODELS.agentLoop).toBe("gpt-5.4-mini");
-    expect(AI_PROMPT_VERSIONS.agentLoop).toContain("constitution-2.0");
+    expect(AI_PROMPT_VERSIONS.agentLoop).toContain("constitution-2.1");
+    expect(AI_PROMPT_VERSIONS.agentLoop).toContain("privacy-ai-v1");
   });
 });
 
-describe("Constitution 2.0 — identity and boundaries", () => {
+describe("Constitution 2.1 — identity and boundaries", () => {
   it("identifies as business advisor for a car dealer, not SaaS chatbot", () => {
     expect(AGENT_CONSTITUTION_VERSION).toBe(
-      "constitution-2.0-business-advisor-he"
+      "constitution-2.1-privacy-ai-v1-he"
     );
     expect(AGENT_CONSTITUTION).toContain("יועץ והמלווה העסקי");
     expect(AGENT_CONSTITUTION).toContain("לעשות עסקים טוב יותר");
@@ -121,6 +122,12 @@ describe("Constitution 2.0 — identity and boundaries", () => {
     );
     expect(AGENT_CONSTITUTION).not.toMatch(/if\s*\(.*includes/);
     expect(AGENT_CONSTITUTION).not.toContain("opportunityScore");
+  });
+
+  it("locks Dealer Memory privacy and Exchange contribution rules", () => {
+    expect(AGENT_CONSTITUTION).toContain("זיכרון העסק הוא פרטי");
+    expect(AGENT_CONSTITUTION).toContain("Exchange Intelligence אינו פרסונה");
+    expect(AGENT_CONSTITUTION).toContain("deterministic");
   });
 });
 

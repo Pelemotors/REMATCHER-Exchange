@@ -15,7 +15,6 @@ import {
 } from "@/services/matching/search-intent-service";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import { upsertMatchExchangeCase } from "@/services/exchange/cases";
-import { runExchangeIntelligenceShadow } from "@/services/exchange/intelligence-shadow";
 import {
   createNotification,
   logAppEvent,
@@ -287,14 +286,28 @@ export async function runMatchingForDemand(demandId: string) {
       rationale: explanation.summary,
     });
 
-    // Shadow intelligence — only for resolved matches; never changes visibility
+    // Controlled Live Intelligence — ranking assist; Hard/NO_MATCH remain deterministic
     if (!isPotential && (status === "VALIDATED" || status === "PENDING_VALIDATION")) {
-      void runExchangeIntelligenceShadow({
-        candidateMatchId: match.id,
-        intent: structuredIntent,
-        engine: evaluationV2,
-        vehicle,
-      }).catch(() => undefined);
+      try {
+        const { applyControlledIntelligenceRanking } = await import(
+          "@/services/exchange/intelligence-live"
+        );
+        const live = await applyControlledIntelligenceRanking({
+          candidateMatchId: match.id,
+          intent: structuredIntent,
+          engine: evaluationV2,
+          vehicle,
+        });
+        if (live.usedLive && live.adjustedScore !== match.score) {
+          await prisma.candidateMatch.update({
+            where: { id: match.id },
+            data: { score: live.adjustedScore },
+          });
+          match.score = live.adjustedScore;
+        }
+      } catch {
+        // fallback: deterministic score already stored
+      }
     }
 
     if (isPotential) {

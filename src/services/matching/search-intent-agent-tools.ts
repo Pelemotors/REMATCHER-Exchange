@@ -230,6 +230,17 @@ export async function executeSearchIntentTool(params: {
           : undefined,
     });
 
+    if ("blocked" in event && event.blocked) {
+      return {
+        ok: false,
+        error: "learning_consent_required",
+        note: "Optional Agent→Exchange / External learning consent is off. Core REMATCHER actions still work; no collective learning event was stored.",
+        eventType,
+      };
+    }
+
+    const created = "event" in event ? event.event : null;
+
     if (
       (eventType === "MATCH_NO_DEAL" || eventType === "MATCH_DEAL_CONFIRMED") &&
       candidateMatchId
@@ -266,7 +277,7 @@ export async function executeSearchIntentTool(params: {
       });
     }
 
-    return { ok: true, eventId: event?.id, eventType };
+    return { ok: true, eventId: created?.id ?? null, eventType };
   }
 
   if (name === "get_inventory_enrichment_context") {

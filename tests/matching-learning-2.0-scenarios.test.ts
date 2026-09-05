@@ -143,14 +143,20 @@ describe("ML2.0 scenario contracts", () => {
     expect(userPayloadSection).not.toMatch(/dealerMemory|Dealer Memory|memoryBlock/);
   });
 
-  it("SCENARIO 12: shadow mode never owns visibility", () => {
+  it("SCENARIO 12: controlled live intelligence never owns Hard/visibility", () => {
     const flow = readFileSync(
       join(process.cwd(), "src/services/domain/matching-flow.ts"),
       "utf8"
     );
-    expect(flow).toContain("runExchangeIntelligenceShadow");
+    expect(flow).toContain("applyControlledIntelligenceRanking");
     expect(flow).toContain("evaluateMatchV2");
-    expect(flow).toMatch(/Shadow intelligence — only for resolved matches/);
+    expect(flow).toMatch(/Controlled Live Intelligence/);
+    const live = readFileSync(
+      join(process.cwd(), "src/services/exchange/intelligence-live.ts"),
+      "utf8"
+    );
+    expect(live).toContain("runExchangeIntelligenceShadow");
+    expect(live).toContain("fallback_deterministic");
   });
 
   it("constitution forbids weight questionnaires for Search Intent", () => {

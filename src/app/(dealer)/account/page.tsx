@@ -179,6 +179,14 @@ export default function AccountPage() {
 
       <ButtonV2
         variant="secondary"
+        className="mb-4 w-full"
+        href="/account/privacy"
+      >
+        פרטיות ו־AI
+      </ButtonV2>
+
+      <ButtonV2
+        variant="secondary"
         className="w-full"
         onClick={() => signOut({ callbackUrl: "/login" })}
       >

@@ -513,6 +513,19 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, onOpen);
   }, [openAgent, send]);
 
+  // Privacy Center: clear current conversation UI (does not delete Dealer Memory).
+  useEffect(() => {
+    const clear = () => {
+      setMessages([]);
+      setConversation({});
+      conversationRef.current = {};
+      messagesRef.current = [];
+    };
+    window.addEventListener("rematcher:clear-agent-conversation", clear);
+    return () =>
+      window.removeEventListener("rematcher:clear-agent-conversation", clear);
+  }, []);
+
   // Sync body class for CSS (focus / desktop dock)
   useEffect(() => {
     document.documentElement.dataset.agentMode = presentationMode;

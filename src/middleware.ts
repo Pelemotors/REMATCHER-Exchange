@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-/** Auth routes no longer use blanket middleware rate limiting. */
-export function middleware() {
-  return NextResponse.next();
+/** Forward pathname to server layouts (e.g. Privacy AI gate). */
+export function middleware(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 }
 
 export const config = {
-  matcher: [],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icons|sw.js|manifest.json|.*\\..*).*)",
+  ],
 };

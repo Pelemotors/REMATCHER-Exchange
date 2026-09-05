@@ -21,6 +21,9 @@ vi.mock("@/lib/prisma", () => ({
       deleteMany: (...args: unknown[]) => mockDeleteMany(...args),
       findMany: (...args: unknown[]) => mockFindMany(...args),
     },
+    privacyConsentDecision: {
+      findFirst: vi.fn().mockResolvedValue({ value: true }),
+    },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         dealerMemoryItem: {
@@ -30,6 +33,16 @@ vi.mock("@/lib/prisma", () => ({
       }),
   },
 }));
+
+vi.mock("@/services/privacy/policy", async () => {
+  const actual = await vi.importActual<typeof import("@/services/privacy/policy")>(
+    "@/services/privacy/policy"
+  );
+  return {
+    ...actual,
+    mayPersistDealerMemory: vi.fn().mockResolvedValue(true),
+  };
+});
 
 import {
   createOrSupersedeMemory,

@@ -50,6 +50,23 @@ export function PublicLayout({ children, showHeader = true }: Props) {
     <div className={styles.root}>
       {showHeader && <PublicHeaderStatic />}
       {children}
+      <footer className={styles.footer}>
+        <div className={styles.footerInner}>
+          <Link href="/privacy" className={styles.footerLink}>
+            מדיניות פרטיות ו־AI
+          </Link>
+          <Link href="/terms" className={styles.footerLink}>
+            תנאי שימוש
+          </Link>
+          <a
+            href="mailto:privacy@rematcher.co.il"
+            className={styles.footerLink}
+            dir="ltr"
+          >
+            privacy@rematcher.co.il
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

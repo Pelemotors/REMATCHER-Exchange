@@ -135,6 +135,20 @@ export async function executeDealerMemoryTool(params: {
     };
   }
 
+  if (name === "get_my_privacy_settings") {
+    const { getConsentState } = await import(
+      "@/services/privacy/policy"
+    );
+    const consents = await getConsentState(dealerId);
+    return {
+      result: {
+        ok: true,
+        consents,
+        note: "Optional consents only. Core REMATCHER operations continue when all are false. Changing consents is done in Privacy & AI settings — not via this tool.",
+      },
+    };
+  }
+
   return {
     result: { ok: false, error: "unknown_memory_tool" },
     mutation: { action: "rejected", reason: "unknown_memory_tool" },

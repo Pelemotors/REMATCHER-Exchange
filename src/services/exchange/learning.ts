@@ -53,11 +53,38 @@ export async function distillLearningFromCases(params: {
   segmentContext?: Record<string, unknown>;
   supportingCaseIds: string[];
   confidence?: number;
+  dealerId?: string | null;
 }) {
   if (params.supportingCaseIds.length < 2) {
     return {
       ok: false as const,
       reason: "Need at least 2 supporting cases — refuse single-anecdote learning",
+    };
+  }
+
+  if (params.dealerId) {
+    const { mayUseExchangeActivityForLearning } = await import(
+      "@/services/privacy/policy"
+    );
+    const allowed = await mayUseExchangeActivityForLearning(params.dealerId);
+    if (!allowed) {
+      return {
+        ok: false as const,
+        reason: "exchange_activity_learning_consent_off",
+      };
+    }
+  }
+
+  const eligible = await prisma.exchangeCase.count({
+    where: {
+      id: { in: params.supportingCaseIds },
+      learningEligible: true,
+    },
+  });
+  if (eligible < 2) {
+    return {
+      ok: false as const,
+      reason: "Need at least 2 learning-eligible supporting cases",
     };
   }
 
@@ -101,6 +128,7 @@ export async function distillLearningFromCases(params: {
       ),
       lastEvaluatedAt: new Date(),
       status: "ACTIVE",
+      dealerId: params.dealerId ?? null,
     },
   });
   return { ok: true as const, learning: created };

@@ -9,6 +9,10 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { toPrismaJson } from "@/lib/prisma-json";
+import {
+  sanitizeExchangePayload,
+  scrubProhibitedText,
+} from "@/services/privacy/sanitizer";
 
 export type EmitExchangeEventInput = {
   eventType: string;
@@ -24,6 +28,8 @@ export type EmitExchangeEventInput = {
   reason?: string | null;
   privacyClass?: ExchangePrivacyClass;
   idempotencyKey?: string | null;
+  /** Skip optional-learning consent (operational system events). Default true for SYSTEM. */
+  operational?: boolean;
 };
 
 export async function emitExchangeEvent(input: EmitExchangeEventInput) {
@@ -34,6 +40,13 @@ export async function emitExchangeEvent(input: EmitExchangeEventInput) {
     if (existing) return existing;
   }
 
+  const note = input.evidenceNote
+    ? scrubProhibitedText(input.evidenceNote)
+    : null;
+  const eventData = input.eventData
+    ? sanitizeExchangePayload(input.eventData)
+    : null;
+
   try {
     return await prisma.exchangeEvent.create({
       data: {
@@ -41,13 +54,13 @@ export async function emitExchangeEvent(input: EmitExchangeEventInput) {
         occurredAt: input.occurredAt ?? new Date(),
         evidenceType: input.evidenceType ?? "SYSTEM_OBSERVED",
         confidence: input.confidence ?? 1,
-        evidenceNote: input.evidenceNote ?? null,
+        evidenceNote: note,
         dealerId: input.dealerId ?? null,
         vehicleId: input.vehicleId ?? null,
         demandId: input.demandId ?? null,
         candidateMatchId: input.candidateMatchId ?? null,
-        eventData: input.eventData
-          ? (toPrismaJson(sanitizeEventData(input.eventData)) as Prisma.InputJsonValue)
+        eventData: eventData
+          ? (toPrismaJson(eventData) as Prisma.InputJsonValue)
           : undefined,
         reason: input.reason ?? null,
         privacyClass: input.privacyClass ?? "DEALER_SCOPED",
@@ -55,7 +68,6 @@ export async function emitExchangeEvent(input: EmitExchangeEventInput) {
       },
     });
   } catch (err: unknown) {
-    // Unique idempotency race
     if (
       input.idempotencyKey &&
       typeof err === "object" &&
@@ -71,31 +83,6 @@ export async function emitExchangeEvent(input: EmitExchangeEventInput) {
   }
 }
 
-/** Strip secrets / PII-looking keys from event payloads */
-function sanitizeEventData(
-  data: Record<string, unknown>
-): Record<string, unknown> {
-  const blocked = new Set([
-    "password",
-    "token",
-    "phone",
-    "email",
-    "contactName",
-    "businessName",
-    "address",
-    "conversation",
-    "transcript",
-    "dealerMemory",
-    "rawConversation",
-  ]);
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(data)) {
-    if (blocked.has(k)) continue;
-    out[k] = v;
-  }
-  return out;
-}
-
 export async function reportDealerBusinessEvent(params: {
   dealerId: string;
   eventType: string;
@@ -106,8 +93,23 @@ export async function reportDealerBusinessEvent(params: {
   evidenceNote?: string;
   reason?: string;
 }) {
+  const { mayDeriveAgentExchangeEvent } = await import(
+    "@/services/privacy/policy"
+  );
+  const allowed = await mayDeriveAgentExchangeEvent(
+    params.dealerId,
+    params.eventType
+  );
+  if (!allowed) {
+    return {
+      blocked: true as const,
+      reason: "optional_learning_consent_off",
+      eventType: params.eventType,
+    };
+  }
+
   // Never infer VEHICLE_SOLD from removal — caller must choose eventType explicitly.
-  return emitExchangeEvent({
+  const event = await emitExchangeEvent({
     eventType: params.eventType,
     dealerId: params.dealerId,
     vehicleId: params.vehicleId,
@@ -119,6 +121,7 @@ export async function reportDealerBusinessEvent(params: {
     reason: params.reason ?? null,
     eventData: params.eventData ?? null,
     privacyClass: "DEALER_SCOPED",
-    idempotencyKey: `dealer-report:${params.dealerId}:${params.eventType}:${params.vehicleId ?? ""}:${params.candidateMatchId ?? ""}:${params.evidenceNote?.slice(0, 40) ?? Date.now()}`,
+    idempotencyKey: `dealer-report:${params.dealerId}:${params.eventType}:${params.vehicleId ?? ""}:${params.candidateMatchId ?? ""}:${Date.now()}`,
   });
+  return { blocked: false as const, event };
 }

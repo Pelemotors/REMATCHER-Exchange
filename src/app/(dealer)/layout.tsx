@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { canAccessExchange } from "@/lib/auth-routing";
 import { AppShellV2 } from "@/components/layout/app-shell-v2";
+import { hasCompletedPrivacyAiV1 } from "@/services/privacy/policy";
 
 export default async function DealerLayout({
   children,
@@ -29,6 +31,24 @@ export default async function DealerLayout({
 
   if (!canAccessExchange(session.user) && session.user.role !== "ADMIN") {
     redirect("/pending-approval");
+  }
+
+  const headerList = await headers();
+  const pathname = headerList.get("x-pathname") ?? "";
+  const onPrivacyAi = pathname.startsWith("/privacy-ai");
+
+  if (
+    session.user.dealerId &&
+    session.user.id &&
+    !onPrivacyAi
+  ) {
+    const completed = await hasCompletedPrivacyAiV1({
+      userId: session.user.id,
+      dealerId: session.user.dealerId,
+    });
+    if (!completed) {
+      redirect("/privacy-ai");
+    }
   }
 
   return (

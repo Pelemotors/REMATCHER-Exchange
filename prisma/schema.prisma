@@ -32,6 +32,10 @@ model User {
   sellerInterests SellerInterest[]
   aiLogs        AiOperationLog[]
   verificationTokens VerificationToken[]
+  privacyConsentDecisions PrivacyConsentDecision[]
+  legalAcceptances LegalAcceptance[]
+  privacyAiOnboarding PrivacyAiOnboardingState[]
+  accountDeletionRequests AccountDeletionRequest[]
 }
 
 enum UserRole {
@@ -77,6 +81,11 @@ model Dealer {
   exchangeEvents  ExchangeEvent[]
   exchangeCases   ExchangeCase[]
   informationRequests InformationRequest[]
+  privacyConsentDecisions PrivacyConsentDecision[]
+  legalAcceptances LegalAcceptance[]
+  privacyAiOnboarding PrivacyAiOnboardingState[]
+  accountDeletionRequests AccountDeletionRequest[]
+  exchangeLearnings ExchangeLearning[]
 }
 
 // ─── Dealer Memory (Agent long-term business context) ───────────
@@ -921,6 +930,8 @@ model ExchangeCase {
   transactionOutcome      TransactionOutcome     @default(UNKNOWN)
   outcomeReasonCategory   OutcomeReasonCategory  @default(UNKNOWN)
   evidenceType            ExchangeEvidenceType   @default(SYSTEM_OBSERVED)
+  /** When false, case remains operational but must not feed Exchange Learning / Intelligence retrieval. */
+  learningEligible        Boolean                @default(false)
   closedAt                DateTime?
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
@@ -934,6 +945,7 @@ model ExchangeCase {
   @@index([candidateMatchId])
   @@index([vehicleId, createdAt])
   @@index([demandId, createdAt])
+  @@index([learningEligible, createdAt])
 }
 
 enum ExchangeLearningStatus {
@@ -955,6 +967,8 @@ model ExchangeLearning {
   supportCount         Int                    @default(0)
   contradictCount      Int                    @default(0)
   confidence           Float                  @default(0.3)
+  /** Optional dealer-scoped learning (identity-aware, never for disclosure) */
+  dealerId             String?
   validFrom            DateTime?
   validTo              DateTime?
   status               ExchangeLearningStatus @default(ACTIVE)
@@ -962,9 +976,96 @@ model ExchangeLearning {
   updatedAt            DateTime               @updatedAt
   lastEvaluatedAt      DateTime?
 
+  dealer               Dealer?                @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+
   @@index([topic, status])
   @@index([learningType, status])
   @@index([status, lastEvaluatedAt])
+  @@index([dealerId, status])
+}
+
+// ─── Privacy & AI Model v1 ──────────────────────────────────────
+
+enum PrivacyConsentType {
+  DEALER_MEMORY
+  AGENT_TO_EXCHANGE_LEARNING
+  EXCHANGE_ACTIVITY_LEARNING
+  EXTERNAL_ACTIVITY_LEARNING
+}
+
+/** Append-only consent audit trail. Current state = latest row per type. */
+model PrivacyConsentDecision {
+  id                   String             @id @default(cuid())
+  userId               String
+  dealerId             String
+  consentType          PrivacyConsentType
+  value                Boolean
+  consentTextVersion   String
+  privacyPolicyVersion String
+  source               String?
+  createdAt            DateTime           @default(now())
+
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealer               Dealer             @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId, consentType, createdAt])
+  @@index([userId, consentType, createdAt])
+}
+
+model LegalAcceptance {
+  id                   String   @id @default(cuid())
+  userId               String
+  dealerId             String
+  termsVersion         String
+  privacyPolicyVersion String
+  consentTextVersion   String
+  source               String?
+  acceptedAt           DateTime @default(now())
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealer               Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dealerId, acceptedAt])
+  @@index([dealerId, acceptedAt])
+}
+
+model PrivacyAiOnboardingState {
+  id          String    @id @default(cuid())
+  userId      String
+  dealerId    String
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealer      Dealer    @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dealerId])
+}
+
+enum AccountDeletionStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+model AccountDeletionRequest {
+  id          String                @id @default(cuid())
+  userId      String
+  dealerId    String
+  status      AccountDeletionStatus @default(PENDING)
+  requestedAt DateTime              @default(now())
+  confirmedAt DateTime?
+  completedAt DateTime?
+  note        String?
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealer      Dealer                @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId, status])
+  @@index([userId, status])
 }
 
 model MatchDecisionComparison {

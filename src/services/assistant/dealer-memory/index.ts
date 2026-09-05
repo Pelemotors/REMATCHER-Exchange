@@ -135,6 +135,18 @@ export type RememberInput = {
 export async function createOrSupersedeMemory(
   input: RememberInput
 ): Promise<{ ok: boolean; item?: MemoryItemView; mutation: MemoryMutationRecord }> {
+  const { mayPersistDealerMemory } = await import("@/services/privacy/policy");
+  if (!(await mayPersistDealerMemory(input.dealerId))) {
+    return {
+      ok: false,
+      mutation: {
+        action: "rejected",
+        reason:
+          "DEALER_MEMORY consent is off — new persistent memory is blocked. Existing memories are unchanged.",
+      },
+    };
+  }
+
   const topicKey = normalizeTopicKey(input.topicKey);
   if (!topicKey) {
     return {
@@ -318,6 +330,14 @@ export async function forgetMemory(params: {
       topicKey: row.topicKey,
     },
   };
+}
+
+export async function forgetAllMemoryForDealer(dealerId: string) {
+  const result = await prisma.dealerMemoryItem.updateMany({
+    where: { dealerId, status: "ACTIVE" },
+    data: { status: "FORGOTTEN", forgottenAt: new Date() },
+  });
+  return { forgotten: result.count };
 }
 
 export async function correctMemory(params: {
