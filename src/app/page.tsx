@@ -97,16 +97,6 @@ export default async function LandingPage() {
           </Surface>
         </section>
 
-        <section className="border-t border-v2-border bg-v2-signal-soft/20 py-16">
-          <div className="container-app text-center">
-            <h2 className="text-h2 font-bold text-v2-warm">5 החיבורים הראשונים ללא עלות</h2>
-            <p className="mx-auto mt-4 max-w-xl text-v2-text-secondary">
-              מתחילים להשתמש ברשת, בודקים את הערך בפועל ורק לאחר מכן מחליטים איך
-              להמשיך.
-            </p>
-          </div>
-        </section>
-
         <section className="container-app py-16 text-center">
           <ButtonV2 variant="signal" href="/signup" className="px-10 py-3">
             הצטרפות ל-{BRAND.productShort}
