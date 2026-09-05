@@ -182,23 +182,22 @@ async function main() {
 
   await ensureOnboarding(cookies);
 
-  // Memory OFF — no new persistence
+  // Memory OFF — no new persistence (rejected attempts must not count as mutations)
   await setConsent(cookies, "DEALER_MEMORY", false);
+  // Confirm server state before chat (avoid race with parallel QA)
+  const offState = await api(cookies, "/api/privacy/status");
+  requireQa(
+    offState.body.consents?.DEALER_MEMORY === false,
+    "DEALER_MEMORY not off before gate test"
+  );
   const memOff = await chat(
     cookies,
-    "תזכור לעתיד: אני תמיד מעדיף רכבי יוקרה בלבד. שמור כהעדפה.",
+    "תזכור לעתיד: אני תמיד מעדיף רכבי יוקרה בלבד. שמור כהעדפה. topicKey=preference.qa_luxury_only_privacy_gate",
     {}
   );
   requireQa(memOff.status === 200, `memOff HTTP ${memOff.status}`);
   const offMut = memOff.body.meta?.memory?.mutationCount ?? 0;
-  // Tool may be attempted but persistence must fail (mutationCount 0) OR agent explains off.
-  requireQa(
-    offMut === 0 ||
-      /כבוי|לא נשמר|הרשאת זיכרון|זיכרון עסקי/i.test(
-        String(memOff.body.message ?? "")
-      ),
-    "memory OFF still persisted"
-  );
+  requireQa(offMut === 0, `memory OFF still persisted mutationCount=${offMut}`);
   console.log("MEMORY OFF gate OK");
 
   // Memory ON — persistence

@@ -366,10 +366,13 @@ export async function runAgentToolLoop(params: {
           toolResults[name] = executed.result;
           if (executed.mutation) {
             memoryMutations.push(executed.mutation);
+            const successfulMutations = memoryMutations.filter(
+              (m) => m.action !== "rejected"
+            );
             if (memoryMeta) {
               memoryMeta = {
                 ...memoryMeta,
-                mutationCount: memoryMutations.length,
+                mutationCount: successfulMutations.length,
               };
             }
             if (memoryDebug) {
