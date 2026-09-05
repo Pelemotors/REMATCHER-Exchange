@@ -79,10 +79,11 @@ export function HomeV2({
       <PageHeaderV2
         eyebrow={dealerName ?? BRAND.product}
         title={`שלום, ${userName}`}
-        subtitle="מרכז העבודה — מה דורש טיפול עכשיו"
+        subtitle="REMATCHER עובדת ברקע — כאן רק מה שדורש אותך"
       />
 
-      {!setupStatus.shouldShowOnboarding && (
+      {/* Mobile hierarchy: action-first; cold-start setup may lead */}
+      {isColdStart && !setupStatus.shouldShowOnboarding && (
         <HomeSetupPanel
           status={{
             hasInventory: setupStatus.hasInventory,
@@ -95,7 +96,7 @@ export function HomeV2({
       )}
 
       {actionItems.length > 0 ? (
-        <section>
+        <section className={styles.prioritySection}>
           <SectionHeader title="דורש פעולה" />
           <div className={styles.actionList}>
             {actionItems.map((item) => (
@@ -139,6 +140,18 @@ export function HomeV2({
             )}
           </div>
         </Surface>
+      )}
+
+      {!isColdStart && !setupStatus.shouldShowOnboarding && (
+        <HomeSetupPanel
+          status={{
+            hasInventory: setupStatus.hasInventory,
+            hasActiveDemand: setupStatus.hasActiveDemand,
+            pushEnabled: setupStatus.pushEnabled,
+            inventoryCount,
+            activeDemandCount: activeDemands,
+          }}
+        />
       )}
 
       <section className={styles.opportunitySection}>

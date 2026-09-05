@@ -62,6 +62,10 @@ body {
   font-family: var(--font-heebo), 'Heebo', Arial, sans-serif;
   font-size: 15px;
   line-height: 23px;
+}
+
+/* Public/auth pages (no App Shell) own safe-area. Dealer App Shell owns its chrome insets. */
+body:not(:has([data-app-shell="true"])) {
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
 }

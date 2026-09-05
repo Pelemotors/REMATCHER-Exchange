@@ -14,6 +14,9 @@ import {
   markPushOnboardingDismissed,
 } from "@/components/pwa/push-settings";
 
+/**
+ * Floating prompt — does not shift Home layout when it appears after idle eval.
+ */
 export function PushOnboardingPrompt() {
   const { data: session } = useSession();
   const userId = session?.user?.id;
@@ -76,13 +79,26 @@ export function PushOnboardingPrompt() {
   }
 
   return (
-    <div className="mb-4 md:hidden">
-      <PushOnboardingCard
-        onEnable={handleEnable}
-        onDismiss={handleDismiss}
-        busy={busy}
-      />
-      {error && <p className="mt-2 text-sm text-error">{error}</p>}
+    <div
+      className="pointer-events-none fixed inset-x-0 z-30 px-3 md:hidden"
+      style={{
+        bottom: "calc(3.75rem + env(safe-area-inset-bottom, 0px))",
+      }}
+      role="region"
+      aria-label="הפעלת התראות"
+    >
+      <div className="pointer-events-auto mx-auto max-w-lg shadow-lg">
+        <PushOnboardingCard
+          onEnable={handleEnable}
+          onDismiss={handleDismiss}
+          busy={busy}
+        />
+        {error && (
+          <p className="mt-2 rounded-md bg-v2-surface px-3 py-2 text-sm text-error">
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

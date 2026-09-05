@@ -4,6 +4,10 @@
   gap: 1.5rem;
 }
 
+.prioritySection {
+  order: 0;
+}
+
 @media (min-width: 768px) {
   .page {
     gap: 2rem;

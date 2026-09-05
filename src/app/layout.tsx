@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { Providers } from "./providers";
 import { PwaRegister } from "@/components/pwa/pwa-register";
+import { PwaNavigationBridge } from "@/components/pwa/pwa-navigation-bridge";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -20,8 +22,12 @@ export const metadata: Metadata = {
     title: "Exchange",
   },
   icons: {
-    icon: "/icons/icon.svg",
-    apple: "/icons/icon.svg",
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
@@ -44,6 +50,9 @@ export default function RootLayout({
         <Providers>
           {children}
           <PwaRegister />
+          <Suspense fallback={null}>
+            <PwaNavigationBridge />
+          </Suspense>
         </Providers>
       </body>
     </html>

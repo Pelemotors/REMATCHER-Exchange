@@ -1,23 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  Package,
-  Search,
-  Link2,
-  Bell,
-  User,
-  Menu,
-} from "lucide-react";
+import { User } from "lucide-react";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
 import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
 import { AgentWorkspaceProvider } from "@/components/assistant/agent-workspace-provider";
 import { useAgentShellFlags } from "@/components/layout/agent-shell-chrome";
 import { BRAND } from "@/config/brand";
+import { MOBILE_BOTTOM_NAV_ITEMS } from "@/config/mobile-nav";
 import { cn } from "@/lib/utils";
 import styles from "./app-shell-v2.module.css";
 
@@ -36,14 +28,6 @@ const PushOnboardingPrompt = dynamic(
     })),
   { ssr: false }
 );
-
-const navItems = [
-  { href: "/home", label: "בית", icon: Home },
-  { href: "/inventory", label: "מלאי", icon: Package },
-  { href: "/demand", label: "חיפושים", icon: Search },
-  { href: "/matches", label: "התאמות", icon: Link2 },
-  { href: "/activity", label: "פעילות", icon: Bell },
-] as const;
 
 const pageTitles: Record<string, string> = {
   "/home": "בית",
@@ -65,12 +49,12 @@ function resolveTitle(pathname: string) {
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
   const title = resolveTitle(pathname);
   const { hideMobileNav, desktopAgentOpen } = useAgentShellFlags();
 
   return (
     <div
+      data-app-shell="true"
       className={cn(
         styles.shell,
         desktopAgentOpen && styles.shellWithAgent
@@ -91,7 +75,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </Link>
 
         <nav className={styles.sidebarNav} aria-label="ניווט ראשי">
-          {navItems.map((item) => (
+          {MOBILE_BOTTOM_NAV_ITEMS.map((item) => (
             <NavItemV2
               key={item.href}
               href={item.href}
@@ -114,14 +98,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       <div className={styles.mainColumn}>
         <header className={styles.mobileHeader}>
-          <button
-            type="button"
-            className={styles.menuButton}
-            aria-label="תפריט"
-            onClick={() => setMenuOpen(true)}
-          >
-            <Menu className="h-5 w-5" strokeWidth={1.75} />
-          </button>
+          <span className={styles.headerSpacer} aria-hidden />
           <span className={styles.mobileTitle}>{title}</span>
           <Link
             href="/account"
@@ -132,10 +109,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </Link>
         </header>
 
-        <main className={styles.content}>
-          <PushOnboardingPrompt />
-          {children}
-        </main>
+        <main className={styles.content}>{children}</main>
+        <PushOnboardingPrompt />
         <ExchangeAssistant />
       </div>
 
@@ -148,7 +123,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         hidden={hideMobileNav}
       >
         <div className={styles.mobileNavInner}>
-          {navItems.map((item) => (
+          {MOBILE_BOTTOM_NAV_ITEMS.map((item) => (
             <NavItemV2
               key={item.href}
               href={item.href}
@@ -160,56 +135,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           ))}
         </div>
       </nav>
-
-      {menuOpen && (
-        <div
-          className={styles.menuOverlay}
-          onClick={() => setMenuOpen(false)}
-          role="presentation"
-        >
-          <nav
-            className={styles.menuPanel}
-            aria-label="תפריט מובייל"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Link
-              href="/home"
-              className={styles.brandLockup}
-              onClick={() => setMenuOpen(false)}
-            >
-              <ExchangeMark
-                state="idle"
-                variant="hero"
-                className={styles.brandMark}
-                decorative
-              />
-              <div className={styles.brandText}>
-                <p className={styles.brandParent}>{BRAND.parent}</p>
-                <p className={styles.brandProduct}>{BRAND.productShort}</p>
-              </div>
-            </Link>
-            {navItems.map((item) => (
-              <NavItemV2
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                icon={item.icon}
-                active={pathname.startsWith(item.href)}
-                onClick={() => setMenuOpen(false)}
-              />
-            ))}
-            <div className={styles.sidebarFooter}>
-              <NavItemV2
-                href="/account"
-                label="חשבון"
-                icon={User}
-                active={pathname.startsWith("/account")}
-                onClick={() => setMenuOpen(false)}
-              />
-            </div>
-          </nav>
-        </div>
-      )}
     </div>
   );
 }

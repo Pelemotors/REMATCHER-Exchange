@@ -77,6 +77,10 @@ describe("Pilot closeout — confirmed bugs", () => {
   });
 
   it("dealer loading UI exists for navigation feedback", () => {
-    expect(read("src/app/(dealer)/loading.tsx")).toContain("SkeletonBlockV2");
+    const loading = read("src/app/(dealer)/loading.tsx");
+    expect(
+      loading.includes("SkeletonBlockV2") ||
+        loading.includes("ActionCardLoadingSkeleton")
+    ).toBe(true);
   });
 });

@@ -32,13 +32,20 @@
   top: 0;
   z-index: 40;
   display: flex;
-  height: 56px;
+  min-height: calc(56px + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--rm2-border);
   background: rgba(7, 12, 20, 0.92);
+  padding-top: env(safe-area-inset-top, 0px);
   padding-inline: 1rem;
   backdrop-filter: blur(10px);
+}
+
+.headerSpacer {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
 }
 
 .mobileTitle {
@@ -94,7 +101,7 @@
 .content {
   flex: 1;
   min-width: 0;
-  padding: 1rem 1rem 5.5rem;
+  padding: 1rem 1rem calc(4.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 .mobileNav {
@@ -105,7 +112,7 @@
   display: flex;
   border-top: 1px solid var(--rm2-border);
   background: rgba(7, 12, 20, 0.96);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   backdrop-filter: blur(10px);
 }
 
@@ -116,46 +123,14 @@
 .mobileNavInner {
   display: flex;
   width: 100%;
-}
-
-.menuOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.menuPanel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: min(280px, 86vw);
-  border-inline-start: 1px solid var(--rm2-border);
-  background: var(--rm2-midnight);
-  padding: 1.25rem 1rem;
-}
-
-.menuButton {
-  display: flex;
-  height: 40px;
-  width: 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  border: 1px solid var(--rm2-border);
-  color: var(--rm2-text-secondary);
-}
-
-.menuButton:hover {
-  background: var(--rm2-surface-secondary);
-  color: var(--rm2-warm-white);
+  min-width: 0;
 }
 
 .accountButton {
   display: flex;
   height: 40px;
   width: 40px;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 6px;

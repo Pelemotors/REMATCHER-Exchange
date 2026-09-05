@@ -1,4 +1,4 @@
-const CACHE_NAME = "rematcher-exchange-v5";
+const CACHE_NAME = "rematcher-exchange-v6";
 const APP_NAME = "REMATCHER Exchange";
 const OFFLINE_URL = "/offline";
 
@@ -65,8 +65,8 @@ self.addEventListener("push", (event) => {
       await self.registration.showNotification(data.title || APP_NAME, {
         body: data.body,
         tag: deliveryId || APP_NAME,
-        icon: "/icons/icon.svg",
-        badge: "/icons/icon.svg",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
         data: { link: data.link, deliveryId },
         dir: "rtl",
         lang: "he",
@@ -101,15 +101,8 @@ self.addEventListener("notificationclick", (event) => {
       for (const client of sameOrigin) {
         if ("focus" in client) {
           await client.focus();
-          if ("navigate" in client) {
-            try {
-              await client.navigate(targetUrl);
-            } catch {
-              client.postMessage({ type: "REMATCHER_NAVIGATE", url: rawLink });
-            }
-          } else {
-            client.postMessage({ type: "REMATCHER_NAVIGATE", url: rawLink });
-          }
+          // Prefer SPA client navigation — avoid full document reload via client.navigate()
+          client.postMessage({ type: "REMATCHER_NAVIGATE", url: rawLink });
           await reportTelemetry(deliveryId, "destination_opened");
           return;
         }
