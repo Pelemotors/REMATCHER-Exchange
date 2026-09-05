@@ -3,6 +3,7 @@ import {
   InventoryPageClient,
   type InventoryFilterId,
 } from "@/components/inventory/inventory-page-client";
+import { InventoryEnrichmentPanel } from "@/components/inventory/inventory-enrichment-panel";
 import { getInventoryList } from "@/services/inventory/list-inventory";
 
 const FILTERS: InventoryFilterId[] = [
@@ -38,10 +39,20 @@ export default async function InventoryPage({
     filter: initialFilter,
   });
 
+  const focus = Array.isArray(params.focus) ? params.focus[0] : params.focus;
+  const enrich = Array.isArray(params.enrich) ? params.enrich[0] : params.enrich;
+  const enrichmentVehicle =
+    enrich === "1" && focus
+      ? initialData.vehicles.find((vehicle) => vehicle.id === focus) ?? null
+      : null;
+
   return (
-    <InventoryPageClient
-      initialData={initialData}
-      initialFilter={initialFilter}
-    />
+    <>
+      {enrichmentVehicle && <InventoryEnrichmentPanel vehicle={enrichmentVehicle} />}
+      <InventoryPageClient
+        initialData={initialData}
+        initialFilter={initialFilter}
+      />
+    </>
   );
 }
