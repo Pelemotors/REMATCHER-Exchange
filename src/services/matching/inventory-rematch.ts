@@ -5,26 +5,38 @@ import { prisma } from "@/lib/prisma";
  * Canonical inventory-side discovery trigger.
  * Every inventory mutation that can change match eligibility must call this.
  *
- * Important: this discovers across ALL active demands owned by other dealers.
- * It must not depend on CandidateMatch rows already existing, otherwise a newly
- * eligible vehicle can never be discovered.
+ * Discovery is intentionally based on ACTIVE demands, not existing CandidateMatch
+ * rows. That guarantees a newly eligible vehicle can create a brand-new match.
  */
 export async function rematchAfterInventoryMutation(params: {
   vehicleId: string;
   sellerDealerId: string;
 }) {
-  const vehicle = await prisma.vehicle.findUnique({
-    where: { id: params.vehicleId },
-    select: { id: true, dealerId: true, status: true },
+  return rematchInventoryBatch({
+    vehicleIds: [params.vehicleId],
+    sellerDealerId: params.sellerDealerId,
   });
+}
 
-  if (
-    !vehicle ||
-    vehicle.dealerId !== params.sellerDealerId ||
-    vehicle.status !== "ACTIVE"
-  ) {
-    return [] as string[];
-  }
+/**
+ * Batch variant used by imports. We rematch each active demand once after the
+ * whole inventory batch instead of once per touched vehicle.
+ */
+export async function rematchInventoryBatch(params: {
+  vehicleIds: string[];
+  sellerDealerId: string;
+}) {
+  const uniqueVehicleIds = [...new Set(params.vehicleIds)].filter(Boolean);
+  if (uniqueVehicleIds.length === 0) return [] as string[];
+
+  const activeTouchedVehicles = await prisma.vehicle.count({
+    where: {
+      id: { in: uniqueVehicleIds },
+      dealerId: params.sellerDealerId,
+      status: "ACTIVE",
+    },
+  });
+  if (activeTouchedVehicles === 0) return [] as string[];
 
   const demands = await prisma.demand.findMany({
     where: {
@@ -33,7 +45,6 @@ export async function rematchAfterInventoryMutation(params: {
     },
     select: { id: true },
   });
-
   if (demands.length === 0) return [] as string[];
 
   const { runMatchingForDemand } = await import(
