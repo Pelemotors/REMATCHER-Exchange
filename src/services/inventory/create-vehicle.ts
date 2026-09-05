@@ -157,6 +157,26 @@ export async function createVehicleForDealer(input: {
     // non-blocking
   }
 
+  const { recordActivationMilestone } = await import(
+    "@/services/activation/milestones"
+  );
+  void recordActivationMilestone({
+    dealerId: input.dealerId,
+    milestone: "FIRST_INVENTORY_CREATED",
+    userId: input.userId,
+    entityType: "Vehicle",
+    entityId: vehicle.id,
+  }).catch(() => undefined);
+  if (vehicle.b2bPrice != null) {
+    void recordActivationMilestone({
+      dealerId: input.dealerId,
+      milestone: "FIRST_PRIVATE_PRICE_SET",
+      userId: input.userId,
+      entityType: "Vehicle",
+      entityId: vehicle.id,
+    }).catch(() => undefined);
+  }
+
   return { ok: true as const, vehicle, source: input.source ?? "domain" };
 }
 

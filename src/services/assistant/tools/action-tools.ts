@@ -81,6 +81,16 @@ export async function executeDemandRenewal(dealerId: string, demandId: string) {
     dealerId,
   });
 
+  const { recordActivationMilestone } = await import(
+    "@/services/activation/milestones"
+  );
+  void recordActivationMilestone({
+    dealerId,
+    milestone: "FIRST_DEMAND_ACTIVATED",
+    entityType: "Demand",
+    entityId: demandId,
+  }).catch(() => undefined);
+
   await runMatchingForDemand(demandId);
 
   const verified = await getDemandByIdForDealer(dealerId, demandId);

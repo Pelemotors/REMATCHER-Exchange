@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   BadgeV2,
   EmptyStateV2,
@@ -20,20 +21,46 @@ interface OppItem {
   explanation: MatchExplanation;
 }
 
-export default function OpportunitiesPage() {
+function OpportunitiesContent() {
+  const searchParams = useSearchParams();
+  const focusId = searchParams.get("focus");
   const [opps, setOpps] = useState<OppItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [staleFocus, setStaleFocus] = useState(false);
 
   async function load() {
     const res = await fetch("/api/opportunities");
-    setOpps(await res.json());
+    const data = await res.json();
+    const list: OppItem[] = Array.isArray(data) ? data : [];
+    setOpps(list);
     setLoading(false);
+    if (focusId) {
+      const found = list.find((o) => o.id === focusId);
+      setStaleFocus(!found);
+      if (found) {
+        void fetch("/api/events/interaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventType: "opportunity_opened",
+            entityType: "SellerOpportunity",
+            entityId: focusId,
+          }),
+        }).catch(() => undefined);
+        window.setTimeout(() => {
+          document
+            .getElementById(`opp-${focusId}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
+      }
+    }
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
 
   async function handleAction(id: string, action: string) {
     setActionLoading(id);
@@ -47,6 +74,9 @@ export default function OpportunitiesPage() {
     if (action === "interested" && data.reveal?.id) {
       window.location.href = `/reveals/${data.reveal.id}`;
       return;
+    }
+    if (action === "interested" && data.error === "vehicle_unavailable") {
+      setStaleFocus(true);
     }
     load();
   }
@@ -81,6 +111,15 @@ export default function OpportunitiesPage() {
         </p>
       </Surface>
 
+      {staleFocus && (
+        <Surface depth="secondary" className="mb-4 px-4 py-3">
+          <p className="text-sm text-v2-text-secondary">
+            ההזדמנות מההתראה כבר אינה פעילה — ייתכן שהרכב אינו זמין או שהסטטוס
+            השתנה. מוצג המצב העדכני.
+          </p>
+        </Surface>
+      )}
+
       {opps.length === 0 ? (
         <EmptyStateV2
           title={COPY.emptyOpportunities.title}
@@ -89,22 +128,37 @@ export default function OpportunitiesPage() {
       ) : (
         <div className="space-y-4">
           {opps.map((o) => (
-            <OpportunityCard
+            <div
               key={o.id}
-              headline="יש עניין ברכב שלך"
-              summary={
-                o.explanation?.summary ?? "הביקוש מתאים לרכב שלך"
+              id={`opp-${o.id}`}
+              className={
+                focusId === o.id ? "ring-2 ring-v2-signal rounded-lg" : undefined
               }
-              demandSummary={o.demandSummary}
-              vehicleSummary={o.vehicle}
-              gaps={o.explanation?.gaps ?? []}
-              loading={actionLoading === o.id}
-              onInterested={() => handleAction(o.id, "interested")}
-              onReject={() => handleAction(o.id, "reject")}
-            />
+            >
+              <OpportunityCard
+                headline="יש עניין ברכב שלך"
+                summary={
+                  o.explanation?.summary ?? "הביקוש מתאים לרכב שלך"
+                }
+                demandSummary={o.demandSummary}
+                vehicleSummary={o.vehicle}
+                gaps={o.explanation?.gaps ?? []}
+                loading={actionLoading === o.id}
+                onInterested={() => handleAction(o.id, "interested")}
+                onReject={() => handleAction(o.id, "reject")}
+              />
+            </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+export default function OpportunitiesPage() {
+  return (
+    <Suspense fallback={<MatchCardSkeletonV2 />}>
+      <OpportunitiesContent />
+    </Suspense>
   );
 }

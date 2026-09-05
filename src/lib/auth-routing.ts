@@ -1,4 +1,5 @@
 import { isAdminRole } from "@/lib/brand-copy";
+import { sanitizeReturnPath } from "@/lib/deep-links";
 
 export interface AuthRoutingUser {
   role?: string | null;
@@ -12,8 +13,9 @@ export function getPostAuthRedirect(
   user: AuthRoutingUser,
   callbackUrl?: string | null
 ): string {
-  if (callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
-    return callbackUrl;
+  const safe = sanitizeReturnPath(callbackUrl);
+  if (safe) {
+    return safe;
   }
 
   if (isAdminRole(user.role) && !user.dealerId) {

@@ -46,25 +46,56 @@ export default function MatchesPage() {
 function MatchesPageContent() {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as TabId) || "action";
+  const focusId = searchParams.get("focus");
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [staleFocus, setStaleFocus] = useState(false);
   const [tab, setTab] = useState<TabId>(
     ["action", "waiting", "history"].includes(initialTab) ? initialTab : "action"
   );
 
   useSetAgentPageContext({ surface: "matches", route: "/matches" }, []);
 
-
   async function load() {
     const res = await fetch("/api/matches");
-    setMatches(await res.json());
+    const data = await res.json();
+    const list: MatchItem[] = Array.isArray(data) ? data : [];
+    setMatches(list);
     setLoading(false);
+
+    if (focusId) {
+      const found = list.find((m) => m.id === focusId);
+      if (!found) {
+        setStaleFocus(true);
+      } else {
+        setStaleFocus(false);
+        const lane = interestLane(found.interest?.status);
+        if (lane === "action" || lane === "waiting" || lane === "history") {
+          setTab(lane);
+        }
+        void fetch("/api/events/interaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventType: "match_opened",
+            entityType: "CandidateMatch",
+            entityId: focusId,
+          }),
+        }).catch(() => undefined);
+        window.setTimeout(() => {
+          document
+            .getElementById(`match-${focusId}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
+      }
+    }
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
 
   useEffect(() => {
     const t = searchParams.get("tab") as TabId | null;
@@ -161,6 +192,15 @@ function MatchesPageContent() {
         ]}
       />
 
+      {staleFocus && (
+        <Surface depth="secondary" className="mb-4 px-4 py-3">
+          <p className="text-sm text-v2-text-secondary">
+            ההתאמה מההתראה כבר אינה זמינה או אינה פעילה עבורך. מוצג המצב
+            העדכני.
+          </p>
+        </Surface>
+      )}
+
       {matches.length === 0 ? (
         <EmptyStateV2
           title={EMPTY_COPY.matches.title}
@@ -195,7 +235,11 @@ function MatchesPageContent() {
             const lane = interestLane(m.interest?.status);
             const showActions = lane === "action";
             return (
-              <div key={m.id} className="space-y-2">
+              <div
+                key={m.id}
+                id={`match-${m.id}`}
+                className={`space-y-2 ${focusId === m.id ? "ring-2 ring-v2-signal rounded-lg" : ""}`}
+              >
                 {lane === "waiting" && (
                   <Surface depth="secondary" className="px-3 py-2">
                     <BadgeV2 variant="warning">ממתין לצד השני</BadgeV2>

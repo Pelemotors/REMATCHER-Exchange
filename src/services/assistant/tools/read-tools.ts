@@ -152,6 +152,7 @@ export async function executeReadTool(
       return events.map((e) => ({
         id: e.id,
         title: `${e.vehicle.make ?? ""} ${e.vehicle.model ?? ""} ${e.vehicle.year ?? ""}`.trim(),
+        href: `/validations?focus=${e.id}`,
       }));
     }
     case "getMyCommercialStatus":
@@ -167,7 +168,7 @@ export async function executeReadTool(
       });
       return opps.map((o) => ({
         id: o.id,
-        href: "/opportunities",
+        href: `/opportunities?focus=${o.id}`,
         vehicleTitle:
           `${o.vehicle.make ?? ""} ${o.vehicle.model ?? ""} ${o.vehicle.year ?? ""}`.trim(),
         note: "סוחר מאומת ברשת הביע עניין",
@@ -225,6 +226,7 @@ export async function executeReadTool(
         id: v.id,
         title: `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""}`.trim(),
         freshness: freshnessLabelHe(v.freshnessState),
+        href: `/inventory?focus=${v.id}`,
       }));
     }
     case "getMyStaleInventory": {

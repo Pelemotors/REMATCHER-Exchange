@@ -4,14 +4,25 @@ import { auth } from "@/lib/auth";
 import { canAccessExchange } from "@/lib/auth-routing";
 import { AppShellV2 } from "@/components/layout/app-shell-v2";
 import { hasCompletedPrivacyAiV1 } from "@/services/privacy/policy";
+import { sanitizeReturnPath } from "@/lib/deep-links";
 
 export default async function DealerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const headerList = await headers();
+  const pathname = headerList.get("x-pathname") ?? "";
+  const search = headerList.get("x-search") ?? "";
+  const returnTarget = sanitizeReturnPath(`${pathname}${search}`);
+
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) {
+    const cb = returnTarget
+      ? `?callbackUrl=${encodeURIComponent(returnTarget)}`
+      : "";
+    redirect(`/login${cb}`);
+  }
 
   if (!session.user.emailVerifiedAt) {
     redirect("/verify-email");
@@ -33,8 +44,6 @@ export default async function DealerLayout({
     redirect("/pending-approval");
   }
 
-  const headerList = await headers();
-  const pathname = headerList.get("x-pathname") ?? "";
   const onPrivacyAi = pathname.startsWith("/privacy-ai");
 
   if (

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseDemand } from "@/services/ai";
 import { toPrismaJson } from "@/lib/prisma-json";
+import { recordActivationMilestone } from "@/services/activation/milestones";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -26,6 +27,14 @@ export async function POST(req: Request) {
       parsedAt: new Date(),
     },
   });
+
+  void recordActivationMilestone({
+    dealerId: session.user.dealerId,
+    milestone: "FIRST_DEMAND_CREATED",
+    userId: session.user.id,
+    entityType: "Demand",
+    entityId: demand.id,
+  }).catch(() => undefined);
 
   return NextResponse.json({ demandId: demand.id, parsed });
 }

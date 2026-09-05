@@ -127,7 +127,40 @@ function InventoryPageContent() {
 
   useEffect(() => {
     if (searchParams.get("filter") === "attention") setFilter("attention");
-  }, [searchParams]);
+    const focus = searchParams.get("focus");
+    if (focus) {
+      setHighlightId(focus);
+      setFilter("all");
+      if (searchParams.get("enrich") === "1") {
+        // Prefer opening edit for private-price / enrichment deep links
+        window.setTimeout(() => {
+          const v = vehicles.find((x) => x.id === focus);
+          if (v) {
+            setEditVehicle(v);
+            setEditForm({
+              make: v.make ?? "",
+              model: v.model ?? "",
+              year: v.year != null ? String(v.year) : "",
+              mileage: v.mileage != null ? String(v.mileage) : "",
+              b2bPrice: v.b2bPrice != null ? String(v.b2bPrice) : "",
+              retailPrice: v.retailPrice != null ? String(v.retailPrice) : "",
+              color: v.color ?? "",
+              trim: v.trim ?? "",
+            });
+          }
+          document
+            .getElementById(`vehicle-${focus}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 120);
+      } else {
+        window.setTimeout(() => {
+          document
+            .getElementById(`vehicle-${focus}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 120);
+      }
+    }
+  }, [searchParams, vehicles]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -490,6 +523,7 @@ function InventoryPageContent() {
                 missingB2b: v.b2bPrice == null,
               });
               return (
+                <div id={`vehicle-${v.id}`}>
                 <Surface
                   key={v.id}
                   depth="raised"
@@ -589,6 +623,7 @@ function InventoryPageContent() {
                     )}
                   </div>
                 </Surface>
+                </div>
               );
             })}
           </div>

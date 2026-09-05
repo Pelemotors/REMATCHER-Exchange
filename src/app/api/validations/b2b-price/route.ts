@@ -49,6 +49,19 @@ export async function POST(req: Request) {
     },
   });
 
+  if (validation.vehicle.b2bPrice == null) {
+    const { recordActivationMilestone } = await import(
+      "@/services/activation/milestones"
+    );
+    void recordActivationMilestone({
+      dealerId: session.user.dealerId,
+      milestone: "FIRST_PRIVATE_PRICE_SET",
+      userId: session.user.id,
+      entityType: "Vehicle",
+      entityId: validation.vehicleId,
+    }).catch(() => undefined);
+  }
+
   if (validation.candidateMatchId) {
     await runMatchingForDemand(validation.candidateMatch!.demandId);
     const match = await prisma.candidateMatch.findUnique({

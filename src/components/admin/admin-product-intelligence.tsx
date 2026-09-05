@@ -8,9 +8,24 @@ export function AdminProductIntelligence() {
   const [days, setDays] = useState(7);
 
   useEffect(() => {
-    fetch(`/api/admin/intelligence?days=${days}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setData);
+    let cancelled = false;
+    (async () => {
+      const [intel, activation] = await Promise.all([
+        fetch(`/api/admin/intelligence?days=${days}`).then((r) =>
+          r.ok ? r.json() : null
+        ),
+        fetch(`/api/admin/activation`).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      if (cancelled) return;
+      setData(
+        intel
+          ? { ...intel, activation: activation?.activation ?? null, ops: activation?.ops ?? null }
+          : null
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [days]);
 
   if (!data) {
@@ -70,6 +85,16 @@ export function AdminProductIntelligence() {
       <Surface depth="raised" className="p-4">
         <h3 className="mb-2 font-semibold">Funnel</h3>
         <pre className="overflow-x-auto text-xs">{JSON.stringify(lifecycle.funnel, null, 2)}</pre>
+      </Surface>
+
+      <Surface depth="raised" className="p-4">
+        <h3 className="mb-2 font-semibold">Pilot Activation (TEST excluded)</h3>
+        <p className="mb-2 text-xs text-v2-text-muted">
+          Analytics only — לא Readiness / לא הרשאה
+        </p>
+        <pre className="overflow-x-auto text-xs">
+          {JSON.stringify(data.activation ?? {}, null, 2)}
+        </pre>
       </Surface>
 
       <Surface depth="raised" className="p-4">

@@ -6,6 +6,7 @@ import {
 } from "@/services/email";
 import { logAppEvent } from "@/services/notifications";
 import { createNotification } from "@/services/notifications";
+import { recordActivationMilestone } from "@/services/activation/milestones";
 
 export async function getPendingDealers() {
   return prisma.dealer.findMany({
@@ -68,6 +69,7 @@ export async function approveDealer(dealerId: string, adminUserId: string) {
     data: {
       verificationStatus: "VERIFIED",
       rejectionReason: null,
+      ...(dealer.cohort == null ? { cohort: "PILOT" } : {}),
     },
   });
 
@@ -85,6 +87,12 @@ export async function approveDealer(dealerId: string, adminUserId: string) {
       sendPush: true,
     });
   }
+
+  void recordActivationMilestone({
+    dealerId,
+    milestone: "DEALER_VERIFIED",
+    userId: owner?.id,
+  }).catch(() => undefined);
 
   await logAppEvent({
     eventType: "dealer_approved",

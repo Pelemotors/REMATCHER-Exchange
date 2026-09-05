@@ -4,6 +4,8 @@ import { getProductConfig } from "@/config/product";
 import { recordRevealUsageBothSides } from "@/services/commercial/reveal-usage";
 import { notifyDealerUsers, logAppEvent } from "@/services/notifications";
 import { toPrismaJson } from "@/lib/prisma-json";
+import { recordActivationMilestone } from "@/services/activation/milestones";
+import { isKillSwitchOn } from "@/config/kill-switches";
 
 export async function createRevealFromMutualInterest(params: {
   mutualInterestId: string;
@@ -17,6 +19,9 @@ export async function createRevealFromMutualInterest(params: {
   });
   if (existing) {
     return existing;
+  }
+  if (isKillSwitchOn("reveal")) {
+    throw new Error("REVEAL_DISABLED");
   }
 
   const [buyerDealer, sellerDealer, match] = await Promise.all([
@@ -104,6 +109,19 @@ export async function createRevealFromMutualInterest(params: {
     },
   });
 
+  void recordActivationMilestone({
+    dealerId: params.buyerDealerId,
+    milestone: "FIRST_REVEAL",
+    entityType: "Reveal",
+    entityId: reveal.id,
+  }).catch(() => undefined);
+  void recordActivationMilestone({
+    dealerId: params.sellerDealerId,
+    milestone: "FIRST_REVEAL",
+    entityType: "Reveal",
+    entityId: reveal.id,
+  }).catch(() => undefined);
+
   return reveal;
 }
 
@@ -162,6 +180,20 @@ export async function submitOutcome(params: {
       dealerId: params.dealerId,
       metadata: { revealId: params.revealId, status: params.status },
     });
+    if (params.status === "DEAL_CLOSED") {
+      void recordActivationMilestone({
+        dealerId: reveal.buyerDealerId,
+        milestone: "FIRST_REPORTED_DEAL",
+        entityType: "Outcome",
+        entityId: updated.id,
+      }).catch(() => undefined);
+      void recordActivationMilestone({
+        dealerId: reveal.sellerDealerId,
+        milestone: "FIRST_REPORTED_DEAL",
+        entityType: "Outcome",
+        entityId: updated.id,
+      }).catch(() => undefined);
+    }
     return updated;
   }
 
@@ -200,6 +232,21 @@ export async function submitOutcome(params: {
     dealerId: params.dealerId,
     metadata: { revealId: params.revealId, status: params.status },
   });
+
+  if (params.status === "DEAL_CLOSED") {
+    void recordActivationMilestone({
+      dealerId: reveal.buyerDealerId,
+      milestone: "FIRST_REPORTED_DEAL",
+      entityType: "Outcome",
+      entityId: outcome.id,
+    }).catch(() => undefined);
+    void recordActivationMilestone({
+      dealerId: reveal.sellerDealerId,
+      milestone: "FIRST_REPORTED_DEAL",
+      entityType: "Outcome",
+      entityId: outcome.id,
+    }).catch(() => undefined);
+  }
 
   return outcome;
 }

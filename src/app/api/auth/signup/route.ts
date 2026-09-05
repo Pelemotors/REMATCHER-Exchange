@@ -8,6 +8,7 @@ import { createEmailVerificationToken } from "@/services/auth/verification-token
 import { sendUserVerificationEmail } from "@/services/email";
 import { logAppEvent } from "@/services/notifications";
 import { ensureDealerCommercial } from "@/services/commercial/reveal-usage";
+import { recordActivationMilestone } from "@/services/activation/milestones";
 
 const signupSchema = z
   .object({
@@ -90,6 +91,12 @@ export async function POST(req: Request) {
 
   const dealer = user.memberships[0]!.dealer;
   await ensureDealerCommercial(dealer.id);
+
+  void recordActivationMilestone({
+    dealerId: dealer.id,
+    milestone: "DEALER_SIGNED_UP",
+    userId: user.id,
+  }).catch(() => undefined);
 
   const token = await createEmailVerificationToken(user.id);
   await sendUserVerificationEmail({ to: email, name: user.name, token });

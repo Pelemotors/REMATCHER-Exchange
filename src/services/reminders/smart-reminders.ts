@@ -43,7 +43,7 @@ export async function runSmartReminders(): Promise<{ sent: number }> {
       opp.vehicle.dealerId,
       "יש עניין שמחכה לתגובה",
       "סוחר הביע עניין — חזרו ל-REMATCHER לבדוק את ההזדמנות.",
-      `/opportunities`,
+      `/opportunities?focus=${entityId}`,
       "smart_reminder_opportunity",
       "seller_opportunity",
       entityId

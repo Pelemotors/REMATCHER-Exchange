@@ -367,5 +367,16 @@ export async function confirmImport(params: {
     metadata: { created, updated },
   });
 
+  const { recordActivationMilestone } = await import(
+    "@/services/activation/milestones"
+  );
+  void recordActivationMilestone({
+    dealerId: params.dealerId,
+    milestone: "FIRST_INVENTORY_IMPORT_COMPLETED",
+    entityType: "InventoryImport",
+    entityId: params.importId,
+    metadata: { created, updated },
+  }).catch(() => undefined);
+
   return { created, updated };
 }

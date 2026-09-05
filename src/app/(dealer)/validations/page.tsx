@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ButtonV2,
   EmptyStateV2,
@@ -12,6 +13,7 @@ import {
 interface Validation {
   id: string;
   type: "AVAILABILITY" | "B2B_PRICE";
+  candidateMatchId?: string | null;
   vehicle: {
     make: string | null;
     model: string | null;
@@ -50,21 +52,40 @@ function whyNow(v: Validation): string {
   return `יש התאמה פוטנציאלית ל-${vehicleName || "רכב"} שלך. מה מחיר ה-B2B העדכני?`;
 }
 
-export default function ValidationsPage() {
+function ValidationsContent() {
+  const searchParams = useSearchParams();
+  const focusId = searchParams.get("focus");
   const [items, setItems] = useState<Validation[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [staleFocus, setStaleFocus] = useState(false);
 
   async function load() {
     const res = await fetch("/api/validations");
-    setItems(await res.json());
+    const data = await res.json();
+    const list: Validation[] = Array.isArray(data) ? data : [];
+    setItems(list);
     setLoading(false);
+    if (focusId) {
+      const found = list.find(
+        (v) => v.id === focusId || v.candidateMatchId === focusId
+      );
+      setStaleFocus(!found);
+      if (found) {
+        window.setTimeout(() => {
+          document
+            .getElementById(`validation-${found.id}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
+      }
+    }
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
 
   async function respondAvailability(id: string, available: boolean) {
     setSubmitting(id);
@@ -108,68 +129,91 @@ export default function ValidationsPage() {
         title="דורש אימות"
         subtitle="אימות זמינות או מחיר — לא עניין ולא חיוב"
       />
-
-      <div className="space-y-4">
-        {items.map((v) => (
-          <Surface key={v.id} depth="raised" className="space-y-3 p-4">
-            <p className="text-sm text-v2-text-secondary">{whyNow(v)}</p>
-            <p className="text-h3 font-bold text-v2-warm">
-              {v.vehicle.make} {v.vehicle.model} {v.vehicle.year}
-            </p>
-
-            {v.type === "AVAILABILITY" ? (
-              <div className="flex gap-3 pt-1">
-                <ButtonV2
-                  variant="signal"
-                  className="flex-1"
-                  disabled={submitting === v.id}
-                  onClick={() => respondAvailability(v.id, true)}
-                >
-                  כן, עדיין זמין
-                </ButtonV2>
-                <ButtonV2
-                  variant="secondary"
-                  className="flex-1"
-                  disabled={submitting === v.id}
-                  onClick={() => respondAvailability(v.id, false)}
-                >
-                  כבר נמכר
-                </ButtonV2>
-              </div>
-            ) : (
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  className="input flex-1"
-                  placeholder="134,000"
-                  dir="ltr"
-                  value={priceInputs[v.id] ?? ""}
-                  onChange={(e) =>
-                    setPriceInputs((prev) => ({
-                      ...prev,
-                      [v.id]: e.target.value,
-                    }))
-                  }
-                />
-                <ButtonV2
-                  variant="signal"
-                  className="shrink-0"
-                  disabled={submitting === v.id}
-                  onClick={() => submitPrice(v.id)}
-                >
-                  אישור מחיר
-                </ButtonV2>
-              </div>
-            )}
-          </Surface>
-        ))}
-        {items.length === 0 && (
-          <EmptyStateV2
-            title="אין אימותים ממתינים"
-            description="כשתופיע התאמה פוטנציאלית שדורשת אימות זמינות או מחיר — היא תופיע כאן עם הסבר למה עכשיו."
-          />
-        )}
-      </div>
+      {staleFocus && (
+        <Surface depth="secondary" className="mb-4 px-4 py-3">
+          <p className="text-sm text-v2-text-secondary">
+            בקשת האימות מההתראה כבר אינה פתוחה. מוצג המצב העדכני.
+          </p>
+        </Surface>
+      )}
+      {items.length === 0 ? (
+        <EmptyStateV2
+          title="אין אימותים ממתינים"
+          description="כשתופיע התאמה שדורשת אימות זמינות או מחיר — היא תופיע כאן."
+        />
+      ) : (
+        <div className="space-y-4">
+          {items.map((v) => (
+            <div
+              key={v.id}
+              id={`validation-${v.id}`}
+              className={
+                focusId === v.id || focusId === v.candidateMatchId
+                  ? "ring-2 ring-v2-signal rounded-md"
+                  : undefined
+              }
+            >
+            <Surface
+              depth="raised"
+              className="space-y-3 p-4"
+            >
+              <p className="text-sm text-v2-text-secondary">{whyNow(v)}</p>
+              <p className="text-h3 font-bold text-v2-warm">
+                {v.vehicle.make} {v.vehicle.model} {v.vehicle.year}
+              </p>
+              {v.type === "AVAILABILITY" ? (
+                <div className="flex gap-2">
+                  <ButtonV2
+                    variant="signal"
+                    disabled={submitting === v.id}
+                    onClick={() => respondAvailability(v.id, true)}
+                  >
+                    כן, עדיין זמין
+                  </ButtonV2>
+                  <ButtonV2
+                    variant="secondary"
+                    disabled={submitting === v.id}
+                    onClick={() => respondAvailability(v.id, false)}
+                  >
+                    לא זמין
+                  </ButtonV2>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    placeholder="מחיר סוחר"
+                    value={priceInputs[v.id] ?? ""}
+                    onChange={(e) =>
+                      setPriceInputs((prev) => ({
+                        ...prev,
+                        [v.id]: e.target.value,
+                      }))
+                    }
+                  />
+                  <ButtonV2
+                    variant="signal"
+                    disabled={submitting === v.id}
+                    onClick={() => submitPrice(v.id)}
+                  >
+                    שמור מחיר
+                  </ButtonV2>
+                </div>
+              )}
+            </Surface>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function ValidationsPage() {
+  return (
+    <Suspense fallback={<SkeletonBlockV2 lines={4} />}>
+      <ValidationsContent />
+    </Suspense>
   );
 }

@@ -79,10 +79,25 @@ export async function updateVehicleForDealer(input: {
     data.archivedAt = null;
   }
 
+  const b2bNewlySet =
+    "b2bPrice" in f && f.b2bPrice != null && vehicle.b2bPrice == null;
+
   const updated = await db.vehicle.update({
     where: { id: vehicle.id },
     data,
   });
+
+  if (b2bNewlySet) {
+    const { recordActivationMilestone } = await import(
+      "@/services/activation/milestones"
+    );
+    void recordActivationMilestone({
+      dealerId: input.dealerId,
+      milestone: "FIRST_PRIVATE_PRICE_SET",
+      entityType: "Vehicle",
+      entityId: updated.id,
+    }).catch(() => undefined);
+  }
 
   if (!input.skipEventLog) {
     await logAppEvent({

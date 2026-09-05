@@ -49,6 +49,7 @@ export async function GET() {
     pending.map((v) => ({
       id: v.id,
       type: v.type,
+      candidateMatchId: v.candidateMatchId,
       vehicle: v.vehicle,
       candidateMatch: v.candidateMatch
         ? {

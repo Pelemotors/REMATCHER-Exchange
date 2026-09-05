@@ -112,6 +112,7 @@ function buildActionItems(
   const items: ActionItem[] = [];
 
   const opportunities = toolResults.getMyOpportunities as
+    | Array<{ id: string; href?: string }>
     | { count: number; href?: string }
     | undefined;
   const state = toolResults.getMyExchangeState as
@@ -121,14 +122,23 @@ function buildActionItems(
     ? opportunities.length
     : opportunities?.count ?? state?.openOpportunities ?? 0;
   if (oppCount > 0) {
+    const firstOpp = Array.isArray(opportunities) ? opportunities[0] : null;
     items.push({
       text: "יש עניין חדש ברכב שלך שכדאי לבדוק.",
-      card: { type: "pending_action", title: "יש עניין ברכב שלך", href: "/opportunities" },
+      card: {
+        type: "pending_action",
+        title: "יש עניין ברכב שלך",
+        href:
+          firstOpp?.href ??
+          (firstOpp?.id
+            ? `/opportunities?focus=${firstOpp.id}`
+            : "/opportunities"),
+      },
     });
   }
 
   const validations = toolResults.getMyPendingValidations as
-    | Array<{ id: string; title: string }>
+    | Array<{ id: string; title: string; href?: string }>
     | undefined;
   if (validations?.length) {
     for (const v of validations) {
@@ -139,19 +149,29 @@ function buildActionItems(
           type: "pending_action",
           title: v.title,
           body: "נדרש אישור זמינות",
-          href: "/validations",
+          href: v.href ?? `/validations?focus=${v.id}`,
         },
         listItem: { id: v.id, title: v.title, type: "validation" },
       });
     }
   }
 
+  const authorizedMatches = toolResults.getMyAuthorizedMatches as
+    | Array<{ id: string; href?: string }>
+    | undefined;
   const matchCount =
     authorizedMatchCount(toolResults) || state?.authorizedMatches || 0;
   if (matchCount > 0 && !items.some((i) => i.text.includes("התאמה"))) {
+    const firstMatch = authorizedMatches?.[0];
     items.push({
       text: "נמצאה התאמה שכדאי לבדוק.",
-      card: { type: "pending_action", title: "התאמות לבדיקה", href: "/matches" },
+      card: {
+        type: "pending_action",
+        title: "התאמות לבדיקה",
+        href:
+          firstMatch?.href ??
+          (firstMatch?.id ? `/matches?focus=${firstMatch.id}` : "/matches"),
+      },
     });
   }
 
@@ -182,13 +202,18 @@ function buildActionItems(
   }
 
   const inventory = toolResults.getMyInventoryRequiringAttention as
-    | Array<{ id: string; title: string; freshnessState: string }>
+    | Array<{ id: string; title: string; freshnessState?: string; href?: string }>
     | undefined;
   if (!options.skipInventory && inventory?.length) {
     for (const v of inventory) {
       const name = displayShortName(v.title);
       items.push({
         text: `צריך לאשר שה${name} עדיין במלאי.`,
+        card: {
+          type: "pending_action",
+          title: v.title,
+          href: v.href ?? `/inventory?focus=${v.id}`,
+        },
         listItem: { id: v.id, title: v.title, type: "validation" },
       });
     }

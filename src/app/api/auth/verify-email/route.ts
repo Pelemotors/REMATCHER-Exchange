@@ -7,6 +7,7 @@ import { logAppEvent } from "@/services/notifications";
 import { prisma } from "@/lib/prisma";
 import { getClientIp } from "@/lib/client-ip";
 import { checkResendVerification } from "@/lib/rate-limit";
+import { recordActivationMilestone } from "@/services/activation/milestones";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -32,6 +33,13 @@ export async function GET(req: Request) {
   }
 
   const dealer = result.dealer;
+  if (dealer) {
+    void recordActivationMilestone({
+      dealerId: dealer.id,
+      milestone: "EMAIL_VERIFIED",
+      userId: result.user.id,
+    }).catch(() => undefined);
+  }
   if (dealer && dealer.verificationStatus === "PENDING") {
     await sendAdminDealerPendingEmail({
       businessName: dealer.businessName,

@@ -9,6 +9,7 @@ import {
   runMatchingForDemand,
 } from "@/services/domain/matching-flow";
 import { logAppEvent } from "@/services/notifications";
+import { recordActivationMilestone } from "@/services/activation/milestones";
 
 export async function persistDemandDraftForDealer(params: {
   dealerId: string;
@@ -32,6 +33,12 @@ export async function persistDemandDraftForDealer(params: {
     entityId: demand.id,
     dealerId: params.dealerId,
   });
+  void recordActivationMilestone({
+    dealerId: params.dealerId,
+    milestone: "FIRST_DEMAND_CREATED",
+    entityType: "Demand",
+    entityId: demand.id,
+  }).catch(() => undefined);
   return demand;
 }
 
@@ -71,6 +78,15 @@ export async function updateDemandForDealer(params: {
 
   if (updated.status === "ACTIVE" || updated.status === "PENDING_CONFIRMATION") {
     await runMatchingForDemand(params.demandId);
+  }
+
+  if (updated.status === "ACTIVE" && demand.status !== "ACTIVE") {
+    void recordActivationMilestone({
+      dealerId: params.dealerId,
+      milestone: "FIRST_DEMAND_ACTIVATED",
+      entityType: "Demand",
+      entityId: params.demandId,
+    }).catch(() => undefined);
   }
 
   return { ok: true as const, demand: updated, title: demandTitle(params.confirmed) };
@@ -179,6 +195,13 @@ export async function activateDemandForDealer(params: {
   }
 
   await runMatchingForDemand(params.demandId);
+
+  void recordActivationMilestone({
+    dealerId: params.dealerId,
+    milestone: "FIRST_DEMAND_ACTIVATED",
+    entityType: "Demand",
+    entityId: params.demandId,
+  }).catch(() => undefined);
 
   return { ok: true as const, demand: updated, title: demandTitle(confirmed) };
 }

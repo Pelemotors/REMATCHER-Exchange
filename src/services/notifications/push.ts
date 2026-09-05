@@ -9,6 +9,8 @@ import type {
 import { PUSH_EVENTS } from "@/services/events/contract";
 import { logEvent } from "@/services/events/log-event";
 import { pushDeliveryIdempotencyKey } from "@/services/events/contract";
+import { isSafeInternalPath } from "@/lib/deep-links";
+import { isKillSwitchOn } from "@/config/kill-switches";
 
 const MAX_TITLE = 120;
 const MAX_BODY = 500;
@@ -45,8 +47,8 @@ export function validatePushContent(input: {
   if (input.link && input.link.length > MAX_LINK) {
     return { ok: false, error: "Link too long" };
   }
-  if (input.link && !input.link.startsWith("/")) {
-    return { ok: false, error: "Link must be an internal path" };
+  if (input.link && !isSafeInternalPath(input.link)) {
+    return { ok: false, error: "Link must be a safe internal application path" };
   }
   return { ok: true };
 }
@@ -101,6 +103,9 @@ export interface DeliverPushParams {
 export async function deliverPushToUser(
   params: DeliverPushParams
 ): Promise<{ sent: number; failed: number; deliveries: string[] }> {
+  if (isKillSwitchOn("push")) {
+    return { sent: 0, failed: 0, deliveries: [] };
+  }
   if (!configureWebPush()) return { sent: 0, failed: 0, deliveries: [] };
 
   const subs = await prisma.pushSubscription.findMany({

@@ -8,6 +8,7 @@ import {
 import type { ParsedDemand } from "@/lib/schemas/ai";
 import type { Prisma } from "@prisma/client";
 import { toPrismaJson } from "@/lib/prisma-json";
+import { recordActivationMilestone } from "@/services/activation/milestones";
 
 function toJson(value: object): Prisma.InputJsonValue {
   return toPrismaJson(value);
@@ -85,6 +86,14 @@ export async function POST(req: Request) {
       expiresAt: computeDemandExpiry(),
     },
   });
+
+  void recordActivationMilestone({
+    dealerId: session.user.dealerId,
+    milestone: "FIRST_DEMAND_ACTIVATED",
+    userId: session.user.id,
+    entityType: "Demand",
+    entityId: demandId,
+  }).catch(() => undefined);
 
   await runMatchingForDemand(demandId);
 

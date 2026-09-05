@@ -31,8 +31,13 @@ import { computeFreshnessState } from "@/services/inventory/freshness";
 import { COPY, BRAND } from "@/config/brand";
 
 import { createRevealFromMutualInterest } from "@/services/commercial/reveal-flow";
+import { recordActivationMilestone } from "@/services/activation/milestones";
+import { isKillSwitchOn } from "@/config/kill-switches";
 
 export async function runMatchingForDemand(demandId: string) {
+  if (isKillSwitchOn("matching_new")) {
+    return [];
+  }
   const demand = await prisma.demand.findUnique({
     where: { id: demandId, status: "ACTIVE" },
     include: { constraints: true },
@@ -414,6 +419,12 @@ export async function runMatchingForDemand(demandId: string) {
         entityId: match.id,
         dealerId: demand.dealerId,
       });
+      void recordActivationMilestone({
+        dealerId: demand.dealerId,
+        milestone: "FIRST_MATCH_PRESENTED",
+        entityType: "CandidateMatch",
+        entityId: match.id,
+      }).catch(() => undefined);
     }
 
     await logAppEvent({
@@ -518,6 +529,12 @@ export async function confirmAvailabilityValidation(
           entityType: "match",
           entityId: match.id,
         });
+        void recordActivationMilestone({
+          dealerId: demand.dealerId,
+          milestone: "FIRST_MATCH_PRESENTED",
+          entityType: "CandidateMatch",
+          entityId: match.id,
+        }).catch(() => undefined);
       }
     }
 
@@ -537,6 +554,9 @@ export async function recordBuyerInterest(params: {
   status: "INTERESTED" | "REJECTED" | "NO_RESPONSE";
   rejectReason?: string;
 }) {
+  if (params.status === "INTERESTED" && isKillSwitchOn("interest_new")) {
+    throw new Error("INTEREST_DISABLED");
+  }
   const match = await prisma.candidateMatch.findFirst({
     where: {
       id: params.candidateMatchId,
@@ -579,6 +599,16 @@ export async function recordBuyerInterest(params: {
     entityId: interest.id,
     dealerId: params.dealerId,
   });
+
+  if (params.status === "INTERESTED") {
+    void recordActivationMilestone({
+      dealerId: params.dealerId,
+      milestone: "FIRST_BUYER_INTEREST",
+      userId: params.userId,
+      entityType: "BuyerInterest",
+      entityId: interest.id,
+    }).catch(() => undefined);
+  }
 
   try {
     const { emitExchangeEvent } = await import("@/services/exchange/events");
@@ -653,6 +683,12 @@ export async function recordBuyerInterest(params: {
         entityId: opp.id,
         dealerId: match.vehicle.dealerId,
       });
+      void recordActivationMilestone({
+        dealerId: match.vehicle.dealerId,
+        milestone: "FIRST_SELLER_OPPORTUNITY",
+        entityType: "SellerOpportunity",
+        entityId: opp.id,
+      }).catch(() => undefined);
     }
   }
 
@@ -666,6 +702,9 @@ export async function recordSellerInterest(params: {
   status: "INTERESTED" | "REJECTED" | "NO_RESPONSE";
   rejectReason?: string;
 }) {
+  if (params.status === "INTERESTED" && isKillSwitchOn("interest_new")) {
+    throw new Error("INTEREST_DISABLED");
+  }
   const opp = await prisma.sellerOpportunity.findFirst({
     where: {
       id: params.opportunityId,
@@ -749,6 +788,19 @@ export async function recordSellerInterest(params: {
         entityType: "MutualInterest",
         entityId: mutual.id,
       });
+      void recordActivationMilestone({
+        dealerId: opp.buyerInterest.dealerId,
+        milestone: "FIRST_MUTUAL_INTEREST",
+        entityType: "MutualInterest",
+        entityId: mutual.id,
+      }).catch(() => undefined);
+      void recordActivationMilestone({
+        dealerId: params.dealerId,
+        milestone: "FIRST_MUTUAL_INTEREST",
+        userId: params.userId,
+        entityType: "MutualInterest",
+        entityId: mutual.id,
+      }).catch(() => undefined);
     }
 
     const reveal = await createRevealFromMutualInterest({
