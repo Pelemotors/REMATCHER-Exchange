@@ -74,6 +74,11 @@ export type AttentionItem = {
   urgent?: boolean;
 };
 
+function attentionHref(item: AttentionItem): string {
+  if (item.href !== "/validations") return item.href;
+  return `/validations?focus=${encodeURIComponent(item.id)}`;
+}
+
 export function AttentionList({
   title = "דורש טיפול",
   items,
@@ -97,7 +102,7 @@ export function AttentionList({
       <SectionHeader title={title} />
       <div className="space-y-2">
         {items.map((item) => (
-          <Link key={item.id} href={item.href} className="block">
+          <Link key={item.id} href={attentionHref(item)} className="block">
             <Surface depth="raised" className="flex items-start justify-between gap-3 p-3">
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-v2-text-primary">{item.title}</p>
