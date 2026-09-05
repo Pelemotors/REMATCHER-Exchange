@@ -19,6 +19,8 @@ export type VehicleUpdateFields = {
   retailPrice?: number | null;
   b2bPrice?: number | null;
   region?: string | null;
+  /** Merge into fieldProvenance JSON (fuel/drivetrain/transmission/seats) */
+  fieldProvenance?: Record<string, string>;
   /** ARCHIVED only — SOLD must use markVehicleSoldForDealer; ACTIVE reactivation uses reactivateVehicleForDealer */
   status?: "ARCHIVED";
   rawInput?: string | null;
@@ -82,6 +84,17 @@ export async function updateVehicleForDealer(input: {
   if ("region" in f) data.region = f.region;
   if ("rawInput" in f) data.rawInput = f.rawInput;
 
+  if (f.fieldProvenance && Object.keys(f.fieldProvenance).length > 0) {
+    const { toPrismaJson } = await import("@/lib/prisma-json");
+    const prev =
+      vehicle.fieldProvenance &&
+      typeof vehicle.fieldProvenance === "object" &&
+      !Array.isArray(vehicle.fieldProvenance)
+        ? (vehicle.fieldProvenance as Record<string, unknown>)
+        : {};
+    data.fieldProvenance = toPrismaJson({ ...prev, ...f.fieldProvenance });
+  }
+
   // Availability confirmation is explicit — not implied by generic edits
   if ("lastAvailabilityConfirmedAt" in f && f.lastAvailabilityConfirmedAt) {
     data.lastAvailabilityConfirmedAt = f.lastAvailabilityConfirmedAt;
@@ -142,9 +155,18 @@ export async function updateVehicleForDealer(input: {
       await cancelOpenRequestsForVehicle(updated.id);
     } else if (
       Object.keys(f).some((k) =>
-        ["make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color"].includes(
-          k
-        )
+        [
+          "make",
+          "model",
+          "year",
+          "mileage",
+          "b2bPrice",
+          "retailPrice",
+          "color",
+          "trim",
+          "ownershipHand",
+          "fieldProvenance",
+        ].includes(k)
       )
     ) {
       await emitExchangeEvent({
@@ -156,9 +178,14 @@ export async function updateVehicleForDealer(input: {
         eventData: { fields: Object.keys(f) },
         idempotencyKey: `inventory-updated:${updated.id}:${updated.updatedAt.toISOString()}`,
       });
-      const updatedFields = Object.keys(f).map((k) =>
-        k === "b2bPrice" || k === "retailPrice" ? "price" : k
-      );
+      const updatedFields = Object.keys(f).flatMap((k) => {
+        if (k === "b2bPrice" || k === "retailPrice") return ["price"];
+        if (k === "ownershipHand") return ["hand"];
+        if (k === "fieldProvenance" && f.fieldProvenance) {
+          return Object.keys(f.fieldProvenance);
+        }
+        return [k];
+      });
       const { fulfillRequestsAfterVehicleUpdate } = await import(
         "@/services/matching/information-request"
       );

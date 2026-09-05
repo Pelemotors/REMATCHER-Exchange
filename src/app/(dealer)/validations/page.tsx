@@ -47,9 +47,9 @@ function whyNow(v: Validation): string {
   }
 
   if (demandName) {
-    return `יש ביקוש שעשוי להתאים ל-${vehicleName || "רכב"} שלך${demandName ? ` (${demandName})` : ""}. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית. מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?`;
+    return `יש ביקוש שעשוי להתאים ל-${vehicleName || "רכב"} שלך${demandName ? ` (${demandName})` : ""}. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית. באיזה מחיר תרצה להציע את הרכב?`;
   }
-  return `יש ביקוש שעשוי להתאים ל-${vehicleName || "רכב"} שלך. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית. מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?`;
+  return `יש ביקוש שעשוי להתאים ל-${vehicleName || "רכב"} שלך. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית. באיזה מחיר תרצה להציע את הרכב?`;
 }
 
 function ValidationsContent() {
@@ -183,7 +183,7 @@ function ValidationsContent() {
                   <input
                     className="input"
                     inputMode="numeric"
-                    placeholder="מחיר סוחר"
+                    placeholder="מחיר"
                     value={priceInputs[v.id] ?? ""}
                     onChange={(e) =>
                       setPriceInputs((prev) => ({

@@ -91,6 +91,11 @@ function InventoryPageContent() {
   const [workspaceTab, setWorkspaceTab] = useState<"agent" | "import">("import");
   const [editVehicle, setEditVehicle] = useState<Vehicle | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [enrichVehicle, setEnrichVehicle] = useState<Vehicle | null>(null);
+  const [enrichFields, setEnrichFields] = useState<
+    Array<{ key: string; label: string }>
+  >([]);
+  const [enrichValues, setEnrichValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [soldConfirm, setSoldConfirm] = useState<Vehicle | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -173,21 +178,36 @@ function InventoryPageContent() {
       setHighlightId(focus);
       setFilter("all");
       if (searchParams.get("enrich") === "1") {
-        // Prefer opening edit for private-price / enrichment deep links
         window.setTimeout(() => {
           const v = vehicles.find((x) => x.id === focus);
           if (v) {
-            setEditVehicle(v);
-            setEditForm({
-              make: v.make ?? "",
-              model: v.model ?? "",
-              year: v.year != null ? String(v.year) : "",
-              mileage: v.mileage != null ? String(v.mileage) : "",
-              b2bPrice: v.b2bPrice != null ? String(v.b2bPrice) : "",
-              retailPrice: v.retailPrice != null ? String(v.retailPrice) : "",
-              color: v.color ?? "",
-              trim: v.trim ?? "",
-            });
+            void (async () => {
+              const res = await fetch(
+                `/api/inventory/enrichment?vehicleId=${encodeURIComponent(v.id)}`
+              );
+              if (!res.ok) {
+                // Fallback to edit if no open enrichment
+                setEditVehicle(v);
+                setEditForm({
+                  make: v.make ?? "",
+                  model: v.model ?? "",
+                  year: v.year != null ? String(v.year) : "",
+                  mileage: v.mileage != null ? String(v.mileage) : "",
+                  b2bPrice: v.b2bPrice != null ? String(v.b2bPrice) : "",
+                  retailPrice:
+                    v.retailPrice != null ? String(v.retailPrice) : "",
+                  color: v.color ?? "",
+                  trim: v.trim ?? "",
+                });
+                return;
+              }
+              const data = await res.json();
+              setEnrichVehicle(v);
+              setEnrichFields(
+                Array.isArray(data.fields) ? data.fields : []
+              );
+              setEnrichValues({});
+            })();
           }
           document
             .getElementById(`vehicle-${focus}`)
@@ -227,6 +247,29 @@ function InventoryPageContent() {
       return;
     }
     showToast("הרכב הוסר מהמלאי הפעיל");
+    await load();
+  }
+
+  async function saveEnrichment() {
+    if (!enrichVehicle) return;
+    setSaving(true);
+    const res = await fetch("/api/inventory/enrichment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId: enrichVehicle.id,
+        values: enrichValues,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      showToast("לא הצלחתי לעדכן. שום דבר לא השתנה.");
+      return;
+    }
+    setEnrichVehicle(null);
+    setEnrichFields([]);
+    setEnrichValues({});
+    showToast("הפרטים עודכנו — בודקים התאמה");
     await load();
   }
 
@@ -280,7 +323,7 @@ function InventoryPageContent() {
         if (v.pendingValidationCount > 0 || v.freshnessState !== "FRESH") {
           body = "צריך לאמת זמינות";
         } else if (v.b2bPrice == null) {
-          body = "חסר מחיר לעסקת סוחר";
+          body = "חסר מחיר";
           badge = "מידע חסר";
         }
         return {
@@ -417,6 +460,69 @@ function InventoryPageContent() {
         מציג {filtered.length} מתוך {pagination.totalCount || snapshot.total} ·
         פעילים במלאי: {snapshot.total}
       </p>
+      {enrichVehicle && (
+        <Surface depth="raised" className="mb-4 space-y-3 border border-v2-signal/30 p-4">
+          <h3 className="font-semibold text-v2-text-primary">
+            {vehicleName(enrichVehicle)}
+          </h3>
+          <p className="text-sm text-v2-text-secondary">
+            יש ביקוש שעשוי להתאים לרכב הזה. חסרים לנו כמה פרטים כדי לבדוק אם
+            זו התאמה אמיתית.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {enrichFields.map((f) => (
+              <div key={f.key}>
+                <label className="label">
+                  {f.key === "price" ? "מחיר" : f.label}
+                </label>
+                <input
+                  className="input"
+                  inputMode={
+                    f.key === "price" ||
+                    f.key === "mileage" ||
+                    f.key === "year" ||
+                    f.key === "hand"
+                      ? "numeric"
+                      : "text"
+                  }
+                  placeholder={
+                    f.key === "price"
+                      ? "באיזה מחיר תרצה להציע את הרכב?"
+                      : f.label
+                  }
+                  value={enrichValues[f.key] ?? ""}
+                  onChange={(e) =>
+                    setEnrichValues((prev) => ({
+                      ...prev,
+                      [f.key]: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <ButtonV2
+              variant="signal"
+              onClick={saveEnrichment}
+              disabled={saving || enrichFields.length === 0}
+            >
+              {saving ? "מעדכן..." : "עדכן ובדוק התאמה"}
+            </ButtonV2>
+            <ButtonV2
+              variant="ghost"
+              onClick={() => {
+                setEnrichVehicle(null);
+                setEnrichFields([]);
+                setEnrichValues({});
+              }}
+            >
+              ביטול
+            </ButtonV2>
+          </div>
+        </Surface>
+      )}
+
       {editVehicle && (
         <Surface depth="raised" className="mb-4 space-y-3 p-4">
           <h3 className="font-semibold text-v2-text-primary">
@@ -432,7 +538,7 @@ function InventoryPageContent() {
                 ["mileage", "ק״מ"],
                 ["color", "צבע"],
                 ["retailPrice", "מחיר קמעונאי"],
-                ["b2bPrice", "מחיר B2B"],
+                ["b2bPrice", "מחיר"],
               ] as const
             ).map(([key, label]) => (
               <div key={key}>
@@ -552,7 +658,7 @@ function InventoryPageContent() {
                       <p className="text-sm text-v2-text-secondary">
                         {formatNumber(v.mileage)} ק״מ
                         {v.b2bPrice != null
-                          ? ` · ${formatCurrency(v.b2bPrice)} B2B`
+                          ? ` · ${formatCurrency(v.b2bPrice)}`
                           : ""}
                       </p>
                     </div>

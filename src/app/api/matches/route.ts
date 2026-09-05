@@ -4,8 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { recordBuyerInterest } from "@/services/domain/matching-flow";
 import { canDealerReveal } from "@/services/commercial/reveal-usage";
 import { toBuyerMatchView } from "@/lib/privacy-views";
-import { requestCandidateInformation } from "@/services/matching/information-request";
 import type { MatchExplanation } from "@/lib/schemas/ai";
+
+/** Buyer Visibility Gate — only Qualified Candidates reach the buyer. */
+const BUYER_VISIBLE_WHERE = {
+  status: "VALIDATED" as const,
+  resolutionState: "RESOLVED" as const,
+  scoreBand: { in: ["STRONG" as const, "GOOD" as const, "ALTERNATIVE" as const] },
+};
 
 export async function GET() {
   const session = await auth();
@@ -16,29 +22,12 @@ export async function GET() {
   const matches = await prisma.candidateMatch.findMany({
     where: {
       demand: { dealerId: session.user.dealerId },
-      OR: [
-        {
-          status: { in: ["VALIDATED", "PENDING_VALIDATION"] },
-          scoreBand: { in: ["STRONG", "GOOD", "ALTERNATIVE"] },
-          resolutionState: "RESOLVED",
-        },
-        {
-          resolutionState: "NEEDS_INFORMATION",
-          status: { in: ["CANDIDATE", "PENDING_VALIDATION"] },
-        },
-      ],
+      ...BUYER_VISIBLE_WHERE,
     },
     include: {
       vehicle: true,
       buyerInterests: {
         where: { dealerId: session.user.dealerId },
-      },
-      informationRequests: {
-        where: {
-          requesterDealerId: session.user.dealerId,
-          status: "OPEN",
-        },
-        take: 1,
       },
       sellerOpportunities: {
         include: {
@@ -58,9 +47,6 @@ export async function GET() {
   });
 
   const safe = matches.map((m) => {
-    const blocking = Array.isArray(m.decisionBlockingUnknowns)
-      ? (m.decisionBlockingUnknowns as string[])
-      : [];
     const revealId =
       m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
       null;
@@ -68,13 +54,9 @@ export async function GET() {
       id: m.id,
       status: m.status,
       scoreBand: m.scoreBand,
-      resolutionState: m.resolutionState,
-      decisionBlockingUnknowns: blocking,
       explanation: m.explanationJson as MatchExplanation,
       vehicle: toBuyerMatchView(m.vehicle),
       interest: m.buyerInterests[0] ?? null,
-      infoRequestOpen: Boolean(m.informationRequests[0]),
-      potential: m.resolutionState === "NEEDS_INFORMATION",
       revealId,
     };
   });
@@ -96,20 +78,13 @@ export async function POST(req: Request) {
   };
 
   if (action === "request_info") {
-    const result = await requestCandidateInformation({
-      requesterDealerId: session.user.dealerId,
-      candidateMatchId: matchId,
-    });
-    if (!result.ok) {
-      return NextResponse.json(result, { status: 400 });
-    }
-    return NextResponse.json({
-      ok: true,
-      created: result.created,
-      message: result.message,
-      // Never return seller identity
-      informationRequestId: result.request.id,
-    });
+    return NextResponse.json(
+      {
+        error: "buyer_initiated_enrichment_disabled",
+        message: "השלמת פרטים מתבצעת על ידי המערכת מול בעל הרכב.",
+      },
+      { status: 410 }
+    );
   }
 
   const status =
@@ -129,13 +104,25 @@ export async function POST(req: Request) {
     }
   }
 
-  const result = await recordBuyerInterest({
-    candidateMatchId: matchId,
-    dealerId: session.user.dealerId,
-    userId: session.user.id,
-    status,
-    rejectReason,
-  });
-
-  return NextResponse.json(result);
+  try {
+    const result = await recordBuyerInterest({
+      candidateMatchId: matchId,
+      dealerId: session.user.dealerId,
+      userId: session.user.id,
+      status,
+      rejectReason,
+    });
+    return NextResponse.json(result);
+  } catch (e) {
+    if (e instanceof Error && e.message === "NOT_FOUND") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (e instanceof Error && e.message === "VEHICLE_UNAVAILABLE") {
+      return NextResponse.json(
+        { error: "vehicle_unavailable" },
+        { status: 409 }
+      );
+    }
+    throw e;
+  }
 }

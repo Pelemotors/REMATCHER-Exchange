@@ -24,10 +24,7 @@ export interface MatchCardV2Props {
     ownershipHand?: number | null;
   };
   band?: "STRONG" | "GOOD" | "ALTERNATIVE" | null;
-  potential?: boolean;
-  infoRequestOpen?: boolean;
   onInterested?: () => void;
-  onRequestInfo?: () => void;
   onReject?: () => void;
   loading?: boolean;
   showActions?: boolean;
@@ -55,10 +52,7 @@ export function MatchCardV2({
   gaps,
   vehicle,
   band,
-  potential,
-  infoRequestOpen,
   onInterested,
-  onRequestInfo,
   onReject,
   loading,
   showActions = true,
@@ -67,9 +61,7 @@ export function MatchCardV2({
   revealHref,
 }: MatchCardV2Props) {
   const isStrong = band === "STRONG";
-  const displayHeadline = potential
-    ? "התאמה אפשרית — חסרים כמה פרטים"
-    : headline || COPY.matchPossible;
+  const displayHeadline = headline || COPY.matchPossible;
 
   return (
     <Surface
@@ -78,10 +70,9 @@ export function MatchCardV2({
       className={cn(
         styles.card,
         isStrong && styles.cardStrong,
-        loading && styles.loadingOverlay,
+        loading && styles.loadingOverlay
       )}
     >
-      {/* Vehicle first — primary hierarchy */}
       <div className={styles.header}>
         <div className={styles.vehicleBlock}>
           <h3 className={styles.vehicleTitle}>
@@ -91,19 +82,15 @@ export function MatchCardV2({
             {vehicleMetaLine(vehicle)}
           </p>
           <div className={cn(styles.metaRow, "mt-2")}>
-            {potential ? (
-              <BadgeV2 variant="warning">חסרים פרטים</BadgeV2>
-            ) : (
-              <StatusBadgeV2 band={band} />
-            )}
-            {!isStrong && !potential && displayHeadline !== COPY.matchPossible && (
+            <StatusBadgeV2 band={band} />
+            {!isStrong && displayHeadline !== COPY.matchPossible && (
               <BadgeV2 variant="neutral">{displayHeadline}</BadgeV2>
             )}
             {gaps.length > 0 && band !== "STRONG" && (
               <BadgeV2 variant="warning">פערים</BadgeV2>
             )}
           </div>
-          {!potential && !waiting && !connected && showActions && (
+          {!waiting && !connected && showActions && (
             <p className="mt-2 text-sm font-medium text-v2-text-primary">
               {COPY.proceedQuestionBuyer}
             </p>
@@ -160,29 +147,14 @@ export function MatchCardV2({
         </p>
       ) : showActions ? (
         <div className={styles.actions}>
-          {potential ? (
-            <button
-              className="v2-btn-signal flex-1"
-              onClick={onRequestInfo}
-              disabled={loading || infoRequestOpen}
-              aria-busy={loading}
-            >
-              {loading
-                ? "שולח..."
-                : infoRequestOpen
-                  ? "פרטים כבר התבקשו"
-                  : "מעניין אותי — בקשו פרטים"}
-            </button>
-          ) : (
-            <button
-              className="v2-btn-signal flex-1"
-              onClick={onInterested}
-              disabled={loading}
-              aria-busy={loading}
-            >
-              {loading ? "שולח..." : COPY.interested}
-            </button>
-          )}
+          <button
+            className="v2-btn-signal flex-1"
+            onClick={onInterested}
+            disabled={loading}
+            aria-busy={loading}
+          >
+            {loading ? "שולח..." : COPY.interested}
+          </button>
           <button
             className="v2-btn-secondary flex-1"
             onClick={onReject}

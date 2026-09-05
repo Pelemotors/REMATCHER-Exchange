@@ -205,8 +205,11 @@ export async function executeReadTool(
     case "getMyAuthorizedMatches": {
       const where = {
         demand: { dealerId },
-        status: { in: ["VALIDATED" as const, "PENDING_VALIDATION" as const] },
-        scoreBand: { in: ["STRONG" as const, "ALTERNATIVE" as const] },
+        status: "VALIDATED" as const,
+        resolutionState: "RESOLVED" as const,
+        scoreBand: {
+          in: ["STRONG" as const, "GOOD" as const, "ALTERNATIVE" as const],
+        },
       };
       const [totalCount, matches] = await Promise.all([
         prisma.candidateMatch.count({ where }),

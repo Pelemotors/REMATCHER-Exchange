@@ -180,29 +180,31 @@ describe("Mass 2.5 Partial Match", () => {
     expect(hash(["price", "fuel"])).toBe(hash(["fuel", "price", "price"]));
   });
 
-  it("6–8. CTA path is InformationRequest not BuyerInterest (source)", () => {
+  it("6–8. Exchange-initiated enrichment — buyer request_info disabled", () => {
     const api = readFileSync(
       join(process.cwd(), "src/app/api/matches/route.ts"),
       "utf8"
     );
-    expect(api).toContain('action === "request_info"');
-    expect(api).toContain("requestCandidateInformation");
+    expect(api).toContain("buyer_initiated_enrichment_disabled");
+    expect(api).not.toContain("requestCandidateInformation");
     const svc = readFileSync(
       join(process.cwd(), "src/services/matching/information-request.ts"),
       "utf8"
     );
     expect(svc).toContain("MORE_INFO_REQUESTED");
+    expect(svc).toContain("ensureExchangeInitiatedEnrichment");
     expect(svc).not.toContain("buyerInterest.create");
     expect(svc).toContain("ENRICHMENT_NOTIFY_COOLDOWN");
   });
 
-  it("7. no CTA → matching flow does not push enrichment on potential", () => {
+  it("7. Potential → Exchange auto enrichment (no buyer CTA)", () => {
     const flow = readFileSync(
       join(process.cwd(), "src/services/domain/matching-flow.ts"),
       "utf8"
     );
     expect(flow).toContain("POTENTIAL_MATCH_IDENTIFIED");
-    expect(flow).toContain("No seller push until explicit buyer CTA");
+    expect(flow).toContain("ensureExchangeInitiatedEnrichment");
+    expect(flow).not.toContain("No seller push until explicit buyer CTA");
   });
 
   it("9–12. enrichment + re-eval hooks exist", () => {
@@ -285,34 +287,7 @@ describe("Mass 2.5 InformationRequest domain", () => {
     vi.clearAllMocks();
   });
 
-  it("8. duplicate CTA returns existing OPEN request", async () => {
-    const { prisma } = await import("@/lib/prisma");
-    const findFirst = prisma.candidateMatch.findFirst as ReturnType<typeof vi.fn>;
-    const findUnique = prisma.informationRequest.findUnique as ReturnType<
-      typeof vi.fn
-    >;
-    const create = prisma.informationRequest.create as ReturnType<typeof vi.fn>;
-
-    findFirst.mockResolvedValue({
-      id: "m1",
-      vehicleId: "v1",
-      demandId: "d1",
-      searchIntentVersionId: "si1",
-      decisionBlockingUnknowns: ["price"],
-      vehicle: {
-        dealerId: "seller",
-        status: "ACTIVE",
-        make: "Hyundai",
-        model: "Tucson",
-        year: 2022,
-      },
-      demand: { status: "ACTIVE" },
-    });
-    findUnique.mockResolvedValue({
-      id: "r1",
-      status: "OPEN",
-    });
-
+  it("8. buyer-initiated enrichment is disabled", async () => {
     const { requestCandidateInformation } = await import(
       "@/services/matching/information-request"
     );
@@ -320,10 +295,58 @@ describe("Mass 2.5 InformationRequest domain", () => {
       requesterDealerId: "buyer",
       candidateMatchId: "m1",
     });
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error).toBe("buyer_initiated_enrichment_disabled");
+    }
+  });
+
+  it("8b. exchange-initiated enrichment upserts OPEN request", async () => {
+    const { prisma } = await import("@/lib/prisma");
+    const findUniqueMatch = prisma.candidateMatch.findUnique as ReturnType<
+      typeof vi.fn
+    >;
+    const findUniqueReq = prisma.informationRequest.findUnique as ReturnType<
+      typeof vi.fn
+    >;
+    const create = prisma.informationRequest.create as ReturnType<typeof vi.fn>;
+    const findMany = prisma.informationRequest.findMany as ReturnType<typeof vi.fn>;
+    const notif = prisma.notification.findFirst as ReturnType<typeof vi.fn>;
+    const count = prisma.informationRequest.count as ReturnType<typeof vi.fn>;
+
+    findUniqueMatch.mockResolvedValue({
+      id: "m1",
+      vehicleId: "v1",
+      demandId: "d1",
+      searchIntentVersionId: "si1",
+      decisionBlockingUnknowns: ["price", "mileage"],
+      vehicle: {
+        dealerId: "seller",
+        status: "ACTIVE",
+        make: "Hyundai",
+        model: "Tucson",
+        year: 2022,
+      },
+      demand: { status: "ACTIVE", dealerId: "buyer" },
+    });
+    findUniqueReq.mockResolvedValue(null);
+    create.mockResolvedValue({ id: "r1", status: "OPEN" });
+    findMany.mockResolvedValue([
+      { requestedFields: ["price", "mileage"], updatedAt: new Date(), createdAt: new Date() },
+    ]);
+    notif.mockResolvedValue(null);
+    count.mockResolvedValue(1);
+
+    const { ensureExchangeInitiatedEnrichment } = await import(
+      "@/services/matching/information-request"
+    );
+    const out = await ensureExchangeInitiatedEnrichment({
+      candidateMatchId: "m1",
+    });
     expect(out.ok).toBe(true);
     if (out.ok) {
-      expect(out.created).toBe(false);
+      expect(out.created).toBe(true);
     }
-    expect(create).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalled();
   });
 });

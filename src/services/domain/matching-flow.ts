@@ -248,7 +248,17 @@ export async function runMatchingForDemand(demandId: string) {
         },
         idempotencyKey: `potential-match:${demandId}:${vehicle.id}:${intentVersion?.id ?? "legacy"}`,
       });
-      // No seller push until explicit buyer CTA
+      // Exchange-initiated seller enrichment — buyer never sees Potential
+      try {
+        const { ensureExchangeInitiatedEnrichment } = await import(
+          "@/services/matching/information-request"
+        );
+        await ensureExchangeInitiatedEnrichment({
+          candidateMatchId: match.id,
+        });
+      } catch {
+        // non-blocking — Candidate remains hidden from buyer
+      }
     } else {
       await emitExchangeEvent({
         eventType: "MATCH_CREATED",
@@ -316,7 +326,7 @@ export async function runMatchingForDemand(demandId: string) {
     }
 
     if (isPotential) {
-      // Buyer can see potential in matches API — no BUYER_MATCH push for unresolved
+      // Hidden from buyer until Qualified — enrichment already requested above
       results.push(match);
       continue;
     }
@@ -356,38 +366,17 @@ export async function runMatchingForDemand(demandId: string) {
         });
       }
     } else if (needsB2bPrice && status === "PENDING_VALIDATION") {
-      const existing = await prisma.validationEvent.findFirst({
-        where: {
+      // Missing private matching price — Exchange-initiated enrichment; not buyer-visible
+      try {
+        const { ensureExchangeInitiatedEnrichment } = await import(
+          "@/services/matching/information-request"
+        );
+        await ensureExchangeInitiatedEnrichment({
           candidateMatchId: match.id,
-          type: "B2B_PRICE",
-          status: "PENDING",
-        },
-      });
-      if (!existing) {
-        await prisma.validationEvent.create({
-          data: {
-            type: "B2B_PRICE",
-            vehicleId: vehicle.id,
-            dealerId: vehicle.dealerId,
-            candidateMatchId: match.id,
-            status: "PENDING",
-          },
+          fieldsOverride: ["price"],
         });
-        await notifyDealerUsers(vehicle.dealerId, {
-          type: "VALIDATION_REQUEST",
-          title: COPY.partialDemandTitle,
-          body: COPY.partialDemandBody,
-          link: `/validations?focus=${match.id}`,
-          entityType: "validation",
-          entityId: match.id,
-        });
-        await logAppEvent({
-          eventType: "validation_requested",
-          entityType: "ValidationEvent",
-          entityId: match.id,
-          dealerId: vehicle.dealerId,
-          metadata: { type: "B2B_PRICE", ux: "partial_enrichment" },
-        });
+      } catch {
+        // non-blocking
       }
     }
 
@@ -500,15 +489,17 @@ export async function confirmAvailabilityValidation(
 
     if (!validation.vehicle.b2bPrice) {
       newStatus = "PENDING_VALIDATION";
-      await prisma.validationEvent.create({
-        data: {
-          type: "B2B_PRICE",
-          vehicleId: validation.vehicleId,
-          dealerId,
+      try {
+        const { ensureExchangeInitiatedEnrichment } = await import(
+          "@/services/matching/information-request"
+        );
+        await ensureExchangeInitiatedEnrichment({
           candidateMatchId: match.id,
-          status: "PENDING",
-        },
-      });
+          fieldsOverride: ["price"],
+        });
+      } catch {
+        // non-blocking
+      }
     } else {
       await prisma.candidateMatch.update({
         where: { id: match.id },
@@ -559,6 +550,8 @@ export async function recordBuyerInterest(params: {
       id: params.candidateMatchId,
       demand: { dealerId: params.dealerId },
       status: "VALIDATED",
+      resolutionState: "RESOLVED",
+      scoreBand: { in: ["STRONG", "GOOD", "ALTERNATIVE"] },
     },
     include: { demand: true, vehicle: true },
   });

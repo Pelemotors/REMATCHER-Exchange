@@ -1,5 +1,6 @@
 /**
- * Mass 2.5 — Information Request (interest-driven enrichment).
+ * Mass 2.5 — Information Request / Seller Enrichment.
+ * Exchange-initiated when Candidate is Potential (NEEDS_INFORMATION).
  * Not BuyerInterest / MutualInterest / Reveal.
  */
 import "server-only";
@@ -21,7 +22,7 @@ export function hashRequestedFields(fields: string[]): string {
 
 export function fieldLabelHe(field: string): string {
   const map: Record<string, string> = {
-    price: "מחיר סוחר",
+    price: "מחיר",
     fuel: "סוג דלק",
     mileage: "קילומטראז׳",
     year: "שנתון",
@@ -31,29 +32,27 @@ export function fieldLabelHe(field: string): string {
     drivetrain: "הנעה",
     hand: "יד",
     region: "אזור",
+    seats: "מושבים",
     vehicleIdentity: "זהות רכב",
   };
   return map[field] ?? field;
 }
 
-export async function requestCandidateInformation(params: {
-  requesterDealerId: string;
+/**
+ * Exchange-initiated enrichment for Potential / missing decision-blocking fields.
+ * Reuses InformationRequest; requesterDealerId = Demand owner for audit only.
+ * Does NOT create Interest / Opportunity / Reveal.
+ */
+export async function ensureExchangeInitiatedEnrichment(params: {
   candidateMatchId: string;
+  /** Override when engine fields unavailable (e.g. legacy price gate) */
+  fieldsOverride?: string[];
 }) {
-  const match = await prisma.candidateMatch.findFirst({
-    where: {
-      id: params.candidateMatchId,
-      demand: { dealerId: params.requesterDealerId },
-      resolutionState: "NEEDS_INFORMATION",
-    },
-    include: {
-      vehicle: true,
-      demand: true,
-    },
+  const match = await prisma.candidateMatch.findUnique({
+    where: { id: params.candidateMatchId },
+    include: { vehicle: true, demand: true },
   });
-  if (!match) {
-    return { ok: false as const, error: "not_found_or_not_potential" as const };
-  }
+  if (!match) return { ok: false as const, error: "not_found" as const };
   if (match.vehicle.status !== "ACTIVE") {
     return { ok: false as const, error: "vehicle_unavailable" as const };
   }
@@ -61,18 +60,59 @@ export async function requestCandidateInformation(params: {
     return { ok: false as const, error: "demand_inactive" as const };
   }
 
-  const fields = Array.isArray(match.decisionBlockingUnknowns)
-    ? (match.decisionBlockingUnknowns as string[])
-    : [];
+  const fields =
+    params.fieldsOverride ??
+    (Array.isArray(match.decisionBlockingUnknowns)
+      ? (match.decisionBlockingUnknowns as string[])
+      : []);
   if (fields.length === 0) {
     return { ok: false as const, error: "no_blocking_fields" as const };
   }
 
+  const result = await upsertOpenEnrichmentRequest({
+    requesterDealerId: match.demand.dealerId,
+    match,
+    fields,
+  });
+
+  await notifySellerEnrichmentAggregated({
+    vehicleId: match.vehicleId,
+    sellerDealerId: match.vehicle.dealerId,
+    vehicleTitle:
+      `${match.vehicle.make ?? ""} ${match.vehicle.model ?? ""} ${match.vehicle.year ?? ""}`.trim(),
+  });
+
+  return result;
+}
+
+/** Buyer-initiated enrichment disabled — Exchange initiates automatically. */
+export async function requestCandidateInformation(_params: {
+  requesterDealerId: string;
+  candidateMatchId: string;
+}) {
+  return {
+    ok: false as const,
+    error: "buyer_initiated_enrichment_disabled" as const,
+  };
+}
+
+async function upsertOpenEnrichmentRequest(params: {
+  requesterDealerId: string;
+  match: {
+    id: string;
+    vehicleId: string;
+    demandId: string;
+    searchIntentVersionId: string | null;
+    vehicle: { dealerId: string };
+  };
+  fields: string[];
+}) {
+  const { requesterDealerId, match, fields } = params;
   const fieldsHash = hashRequestedFields(fields);
   const existing = await prisma.informationRequest.findUnique({
     where: {
       requesterDealerId_candidateMatchId_fieldsHash: {
-        requesterDealerId: params.requesterDealerId,
+        requesterDealerId,
         candidateMatchId: match.id,
         fieldsHash,
       },
@@ -83,7 +123,6 @@ export async function requestCandidateInformation(params: {
       ok: true as const,
       request: existing,
       created: false as const,
-      message: "הבקשה כבר פתוחה — בעל הרכב כבר קיבל עדכון.",
     };
   }
 
@@ -99,7 +138,7 @@ export async function requestCandidateInformation(params: {
       })
     : await prisma.informationRequest.create({
         data: {
-          requesterDealerId: params.requesterDealerId,
+          requesterDealerId,
           vehicleId: match.vehicleId,
           demandId: match.demandId,
           searchIntentVersionId: match.searchIntentVersionId,
@@ -112,13 +151,17 @@ export async function requestCandidateInformation(params: {
 
   await emitExchangeEvent({
     eventType: "MORE_INFO_REQUESTED",
-    dealerId: params.requesterDealerId,
+    dealerId: requesterDealerId,
     vehicleId: match.vehicleId,
     demandId: match.demandId,
     candidateMatchId: match.id,
     evidenceType: "SYSTEM_OBSERVED",
     privacyClass: "DEALER_SCOPED",
-    eventData: { requestedFields: fields, informationRequestId: request.id },
+    eventData: {
+      requestedFields: fields,
+      informationRequestId: request.id,
+      initiatedBy: "exchange",
+    },
     idempotencyKey: `more-info:${request.id}:open`,
   });
 
@@ -132,21 +175,15 @@ export async function requestCandidateInformation(params: {
     eventData: {
       requestedFields: fields,
       openRequestCount: await countOpenRequests(match.vehicleId),
+      initiatedBy: "exchange",
     },
     idempotencyKey: `enrich-req:${match.vehicleId}:${fieldsHash}:${request.id}`,
-  });
-
-  await notifySellerEnrichmentAggregated({
-    vehicleId: match.vehicleId,
-    sellerDealerId: match.vehicle.dealerId,
-    vehicleTitle: `${match.vehicle.make ?? ""} ${match.vehicle.model ?? ""} ${match.vehicle.year ?? ""}`.trim(),
   });
 
   return {
     ok: true as const,
     request,
-    created: !existing || existing.status !== "OPEN",
-    message: "ביקשנו את הפרטים החסרים מבעל הרכב — בלי לחשוף את זהותך.",
+    created: true as const,
   };
 }
 
@@ -374,7 +411,7 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
     reevaluated.push(demandId);
   }
 
-  // Notify buyers whose requests were fulfilled and now have resolved matches
+  // Notify Demand owner only when Candidate is now buyer-visible (Qualified)
   for (const req of open) {
     if (!demandIds.has(req.demandId)) continue;
     const updatedMatch = await prisma.candidateMatch.findUnique({
@@ -382,14 +419,15 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
     });
     if (
       updatedMatch &&
+      updatedMatch.status === "VALIDATED" &&
       updatedMatch.resolutionState === "RESOLVED" &&
-      updatedMatch.matchBandV2 &&
-      ["STRONG", "GOOD", "ALTERNATIVE"].includes(updatedMatch.matchBandV2)
+      updatedMatch.scoreBand &&
+      ["STRONG", "GOOD", "ALTERNATIVE"].includes(updatedMatch.scoreBand)
     ) {
       await notifyDealerUsers(req.requesterDealerId, {
         type: "BUYER_MATCH",
-        title: "הרכב שביקשת עליו פרטים הושלם — ויש התאמה",
-        body: COPY.matchPossible,
+        title: "נמצאה התאמה רלוונטית לחיפוש שלך",
+        body: "רוצה להתקדם עם הרכב הזה?",
         link: `/matches?focus=${updatedMatch.id}`,
         entityType: "match",
         entityId: updatedMatch.id,
@@ -414,7 +452,8 @@ function remainingBlockingFields(
   const remaining: string[] = [];
   for (const f of requested) {
     if (f === "price") {
-      if (vehicle.b2bPrice == null && vehicle.retailPrice == null) remaining.push(f);
+      // Private matching price only — do not treat retailPrice as substitute
+      if (vehicle.b2bPrice == null) remaining.push(f);
       continue;
     }
     if (f === "mileage" && vehicle.mileage == null) {

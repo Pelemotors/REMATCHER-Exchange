@@ -98,7 +98,7 @@ export function vehiclePrimaryState(input: {
   if (input.missingB2b) {
     return {
       primary: "missing_info",
-      secondary: "חסר מחיר לעסקת סוחר",
+      secondary: "חסר מחיר",
     };
   }
   return { primary: "available" };

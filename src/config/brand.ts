@@ -33,8 +33,7 @@ export const COPY = {
   partialEnrichScreen:
     "יש ביקוש שעשוי להתאים לרכב הזה. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית.",
   enrichAndRecheck: "עדכן ובדוק התאמה",
-  privateMatchingPricePrompt:
-    "מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?",
+  privateMatchingPricePrompt: "באיזה מחיר תרצה להציע את הרכב?",
   mutualInterest: "יש התאמה הדדית",
   mutualPushBody: "שניכם רוצים להתקדם — לחץ לפרטי הקשר",
   reveal: "נוצר חיבור",
@@ -51,8 +50,7 @@ export const COPY = {
   outcomeBillingNote:
     "הדיווח לא משפיע על החיוב ועוזר ל-REMATCHER Exchange לשפר את ההתאמות הבאות.",
   validationAvailability: "הרכב עדיין זמין?",
-  validationB2bPrice:
-    "מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?",
+  validationB2bPrice: "באיזה מחיר תרצה להציע את הרכב?",
   validationContext: "יש ביקוש רלוונטי לרכב שלך",
   validationContextPartial: "יש ביקוש שעשוי להיות רלוונטי לרכב שלך",
   verifiedDealer: "סוחר מאומת",

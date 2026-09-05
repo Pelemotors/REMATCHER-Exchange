@@ -24,10 +24,6 @@ import styles from "./matches.module.css";
 interface MatchItem {
   id: string;
   scoreBand: string | null;
-  resolutionState?: string;
-  potential?: boolean;
-  infoRequestOpen?: boolean;
-  decisionBlockingUnknowns?: string[];
   explanation: MatchExplanation;
   vehicle: Record<string, unknown>;
   interest: { status: string } | null;
@@ -260,19 +256,14 @@ function MatchesPageContent() {
                   gaps={m.explanation?.gaps ?? []}
                   vehicle={m.vehicle as MatchItem["vehicle"]}
                   band={
-                    m.potential
-                      ? null
-                      : (m.scoreBand as "STRONG" | "GOOD" | "ALTERNATIVE" | null)
+                    m.scoreBand as "STRONG" | "GOOD" | "ALTERNATIVE" | null
                   }
-                  potential={Boolean(m.potential)}
-                  infoRequestOpen={Boolean(m.infoRequestOpen)}
                   loading={actionLoading === m.id}
                   showActions={showActions}
                   waiting={waiting}
                   connected={connected}
                   revealHref={m.revealId ? `/reveals/${m.revealId}` : undefined}
                   onInterested={() => handleAction(m.id, "interested")}
-                  onRequestInfo={() => handleAction(m.id, "request_info")}
                   onReject={() => handleAction(m.id, "reject")}
                 />
               </div>

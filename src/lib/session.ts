@@ -55,7 +55,9 @@ export async function assertBuyerMatchAccess(
     where: {
       id: candidateMatchId,
       demand: { dealerId },
-      status: { in: ["VALIDATED", "PENDING_VALIDATION"] },
+      status: "VALIDATED",
+      resolutionState: "RESOLVED",
+      scoreBand: { in: ["STRONG", "GOOD", "ALTERNATIVE"] },
     },
     include: { demand: true, vehicle: true },
   });
