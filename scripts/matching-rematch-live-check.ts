@@ -62,7 +62,7 @@ async function getMatches(buyerCookies: string) {
 async function main() {
   const health = await (await fetch(`${BASE}/api/health`)).json();
   console.log("HEALTH", health.commit);
-  if (!String(health.commit).startsWith("2adaa98")) {
+  if (!String(health.commit).startsWith("d0a04d7")) {
     throw new Error(`unexpected commit ${health.commit}`);
   }
 

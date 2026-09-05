@@ -115,7 +115,7 @@ async function smokePages(cookies: string) {
 async function main() {
   const health = (await (await fetch(`${BASE}/api/health`)).json()) as Json;
   console.log(`HEALTH ${JSON.stringify(health)}`);
-  const expectedCommits = ["5543f35", "2adaa98"];
+  const expectedCommits = ["5543f35", "2adaa98", "d0a04d7"];
   if (
     health.status === "ok" &&
     expectedCommits.some((c) => String(health.commit).startsWith(c))
