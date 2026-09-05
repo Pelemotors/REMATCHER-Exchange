@@ -99,12 +99,14 @@ describe("Demand Parser Fallback", () => {
 });
 
 describe("Privacy — Buyer Match View", () => {
-  it("does not expose dealerId in buyer view", () => {
+  it("does not expose dealerId or seller b2bPrice in buyer view", () => {
     const view = toBuyerMatchView({
       ...baseVehicle,
       dealerId: "secret-dealer-id",
     });
     expect(view).not.toHaveProperty("dealerId");
+    expect(view).not.toHaveProperty("b2bPrice");
     expect(JSON.stringify(view)).not.toContain("secret-dealer-id");
+    expect(JSON.stringify(view)).not.toContain(String(baseVehicle.b2bPrice));
   });
 });

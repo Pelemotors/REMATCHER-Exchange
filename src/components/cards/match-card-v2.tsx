@@ -1,8 +1,7 @@
-import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { COPY } from "@/config/brand";
 import {
   BadgeV2,
-  DataValue,
   StatusBadgeV2,
   Surface,
 } from "@/components/ui/brand-v2";
@@ -23,7 +22,6 @@ export interface MatchCardV2Props {
     color?: string | null;
     region?: string | null;
     ownershipHand?: number | null;
-    b2bPrice?: number | null;
   };
   band?: "STRONG" | "GOOD" | "ALTERNATIVE" | null;
   potential?: boolean;
@@ -33,6 +31,9 @@ export interface MatchCardV2Props {
   onReject?: () => void;
   loading?: boolean;
   showActions?: boolean;
+  waiting?: boolean;
+  connected?: boolean;
+  revealHref?: string;
 }
 
 function vehicleMetaLine(vehicle: MatchCardV2Props["vehicle"]) {
@@ -61,6 +62,9 @@ export function MatchCardV2({
   onReject,
   loading,
   showActions = true,
+  waiting,
+  connected,
+  revealHref,
 }: MatchCardV2Props) {
   const isStrong = band === "STRONG";
   const displayHeadline = potential
@@ -99,11 +103,11 @@ export function MatchCardV2({
               <BadgeV2 variant="warning">פערים</BadgeV2>
             )}
           </div>
-        </div>
-        <div className={styles.commercial}>
-          <DataValue size="sm" label="לסוחר">
-            {formatCurrency(vehicle.b2bPrice)}
-          </DataValue>
+          {!potential && !waiting && !connected && showActions && (
+            <p className="mt-2 text-sm font-medium text-v2-text-primary">
+              {COPY.proceedQuestionBuyer}
+            </p>
+          )}
         </div>
       </div>
 
@@ -144,7 +148,17 @@ export function MatchCardV2({
         </span>
       </div>
 
-      {showActions && (
+      {connected && revealHref ? (
+        <div className={styles.actions}>
+          <a href={revealHref} className="v2-btn-signal flex-1 text-center">
+            {COPY.contactDetailsCta}
+          </a>
+        </div>
+      ) : waiting ? (
+        <p className="rounded-sm bg-v2-surface-secondary px-3 py-2 text-sm text-v2-text-secondary">
+          {COPY.waitingOtherSide}
+        </p>
+      ) : showActions ? (
         <div className={styles.actions}>
           {potential ? (
             <button
@@ -177,7 +191,7 @@ export function MatchCardV2({
             {COPY.notRelevant}
           </button>
         </div>
-      )}
+      ) : null}
     </Surface>
   );
 }

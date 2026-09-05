@@ -144,10 +144,10 @@ function buildActionItems(
   if (oppCount > 0) {
     const firstOpp = opportunities.items[0];
     items.push({
-      text: "יש עניין חדש ברכב שלך שכדאי לבדוק.",
+      text: "יש ביקוש רלוונטי לרכב הזה. רוצה להתקדם?",
       card: {
         type: "pending_action",
-        title: "יש עניין ברכב שלך",
+        title: "הזדמנות לרכב שלך",
         href:
           firstOpp?.href ??
           (firstOpp?.id
@@ -163,12 +163,17 @@ function buildActionItems(
   if (validations.items.length) {
     for (const v of validations.items) {
       const name = displayShortName(v.title);
+      const isPrice =
+        /מחיר|price|b2b|partial|פרטים/i.test(v.title) ||
+        /מחיר|פרטים/i.test(String(v.href ?? ""));
       items.push({
-        text: `צריך לאשר שה${name} עדיין במלאי.`,
+        text: isPrice
+          ? "יש ביקוש שעשוי להתאים. חסרים כמה פרטים כדי לבדוק."
+          : `צריך לאשר שה${name} עדיין במלאי.`,
         card: {
           type: "pending_action",
           title: v.title,
-          body: "נדרש אישור זמינות",
+          body: isPrice ? "השלמת פרטים" : "נדרש אישור זמינות",
           href: v.href ?? `/validations?focus=${v.id}`,
         },
         listItem: { id: v.id, title: v.title, type: "validation" },
@@ -184,7 +189,7 @@ function buildActionItems(
   if (matchCount > 0 && !items.some((i) => i.text.includes("התאמה"))) {
     const firstMatch = authorizedMatches.items[0];
     items.push({
-      text: "נמצאה התאמה שכדאי לבדוק.",
+      text: "מצאתי התאמה רלוונטית. רוצה להתקדם?",
       card: {
         type: "pending_action",
         title: "התאמות לבדיקה",

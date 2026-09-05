@@ -53,14 +53,14 @@ export async function createRevealFromMutualInterest(params: {
         phone: sellerDealer?.phone,
       }),
       matchSummaryJson: match
-        ? toPrismaJson({
-            make: match.vehicle.make,
-            model: match.vehicle.model,
-            year: match.vehicle.year,
-            b2bPrice: match.vehicle.b2bPrice,
-            scoreBand: match.scoreBand,
-            explanation: match.explanationText,
-          })
+        ? toPrismaJson(
+            buildPublicMatchSummary({
+              make: match.vehicle.make,
+              model: match.vehicle.model,
+              year: match.vehicle.year,
+              explanation: match.explanationText,
+            })
+          )
         : undefined,
     },
   });
@@ -74,7 +74,7 @@ export async function createRevealFromMutualInterest(params: {
   const notifyPayload = {
     type: "MUTUAL_INTEREST" as const,
     title: COPY.mutualInterest,
-    body: `${COPY.reveal} — ${COPY.revealSub}`,
+    body: COPY.mutualPushBody,
     link: `/reveals/${reveal.id}`,
     entityType: "reveal",
     entityId: reveal.id,
@@ -290,8 +290,56 @@ export async function getRevealForDealer(revealId: string, dealerId: string) {
     revealedAt: reveal.revealedAt,
     isBuyer,
     counterparty,
-    matchSummary: reveal.matchSummaryJson,
-    outcome: reveal.outcome,
+    // Sanitize on read — legacy rows may still store private commercial fields
+    matchSummary: sanitizeMatchSummaryForClient(reveal.matchSummaryJson),
+    outcome: reveal.outcome
+      ? { status: reveal.outcome.status, reportedAt: reveal.outcome.reportedAt }
+      : null,
     hasUsageRecorded: reveal.usages.some((u) => u.dealerId === dealerId),
   };
+}
+
+/** Public vehicle context only — no private commercial matching data (I-10, I-20). */
+export function buildPublicMatchSummary(input: {
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  explanation?: string | null;
+}) {
+  return {
+    make: input.make ?? undefined,
+    model: input.model ?? undefined,
+    year: input.year ?? undefined,
+    explanation: input.explanation ?? undefined,
+  };
+}
+
+const PRIVATE_MATCH_SUMMARY_KEYS = [
+  "b2bPrice",
+  "sellerFloor",
+  "sellerFlexibility",
+  "budgetMax",
+  "budgetHardMax",
+  "buyerBudget",
+  "buyerHardMax",
+  "buyerStretch",
+  "scoreBand",
+  "score",
+  "margin",
+  "willingness",
+] as const;
+
+export function sanitizeMatchSummaryForClient(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const src = raw as Record<string, unknown>;
+  const out = buildPublicMatchSummary({
+    make: typeof src.make === "string" ? src.make : null,
+    model: typeof src.model === "string" ? src.model : null,
+    year: typeof src.year === "number" ? src.year : null,
+    explanation: typeof src.explanation === "string" ? src.explanation : null,
+  });
+  for (const key of PRIVATE_MATCH_SUMMARY_KEYS) {
+    if (key in out) delete (out as Record<string, unknown>)[key];
+  }
+  return out;
 }

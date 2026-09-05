@@ -375,8 +375,8 @@ export async function runMatchingForDemand(demandId: string) {
         });
         await notifyDealerUsers(vehicle.dealerId, {
           type: "VALIDATION_REQUEST",
-          title: COPY.validationContext,
-          body: "נדרש מחיר B2B להמשך התאמה",
+          title: COPY.partialDemandTitle,
+          body: COPY.partialDemandBody,
           link: `/validations?focus=${match.id}`,
           entityType: "validation",
           entityId: match.id,
@@ -386,7 +386,7 @@ export async function runMatchingForDemand(demandId: string) {
           entityType: "ValidationEvent",
           entityId: match.id,
           dealerId: vehicle.dealerId,
-          metadata: { type: "B2B_PRICE" },
+          metadata: { type: "B2B_PRICE", ux: "partial_enrichment" },
         });
       }
     }
@@ -396,9 +396,9 @@ export async function runMatchingForDemand(demandId: string) {
         type: "BUYER_MATCH",
         title:
           evaluation.overallBand === "STRONG" || evaluation.overallBand === "GOOD"
-            ? "נמצאה התאמה גבוהה לחיפוש שלך"
+            ? "נמצאה התאמה רלוונטית לחיפוש שלך"
             : COPY.matchPossible,
-        body: explanation.summary,
+        body: "רוצה להתקדם עם הרכב הזה?",
         link: `/matches?focus=${match.id}`,
         entityType: "match",
         entityId: match.id,
@@ -671,7 +671,7 @@ export async function recordBuyerInterest(params: {
       await notifyDealerUsers(match.vehicle.dealerId, {
         type: "SELLER_OPPORTUNITY",
         title: COPY.opportunity,
-        body: "סוחר מאומת ברשת הביע עניין ברכב שלך",
+        body: COPY.opportunityPushBody,
         link: `/opportunities?focus=${opp.id}`,
         entityType: "opportunity",
         entityId: opp.id,
@@ -758,13 +758,69 @@ export async function recordSellerInterest(params: {
     entityType: "SellerInterest",
     entityId: sellerInterest.id,
     dealerId: params.dealerId,
+    metadata: params.rejectReason
+      ? { rejectReason: params.rejectReason }
+      : undefined,
   });
+
+  // Seller decline — SOLD uses canonical path only
+  if (
+    params.status === "REJECTED" &&
+    isSellerDeclineSold(params.rejectReason)
+  ) {
+    const { markVehicleSoldForDealer } = await import(
+      "@/services/inventory/mark-sold"
+    );
+    await markVehicleSoldForDealer({
+      dealerId: params.dealerId,
+      vehicleId: opp.vehicleId,
+      source: "seller_opportunity_decline",
+    });
+    return { sellerInterest, vehicleSold: true };
+  }
 
   // Mutual Interest → Reveal (deterministic gate §39-40)
   if (
     params.status === "INTERESTED" &&
     opp.buyerInterest.status === "INTERESTED"
   ) {
+    // Live eligibility — stale Push must not create invalid Mutual
+    const [liveVehicle, liveDemand, liveCandidate] = await Promise.all([
+      prisma.vehicle.findUnique({
+        where: { id: opp.vehicleId },
+        select: { status: true },
+      }),
+      prisma.demand.findUnique({
+        where: { id: opp.buyerInterest.demandId },
+        select: { status: true },
+      }),
+      prisma.candidateMatch.findUnique({
+        where: { id: opp.candidateMatchId },
+        select: { status: true },
+      }),
+    ]);
+
+    const demandOk = liveDemand?.status === "ACTIVE";
+    const vehicleEligible =
+      liveVehicle != null &&
+      liveVehicle.status !== "SOLD" &&
+      liveVehicle.status !== "ARCHIVED";
+    const candidateOk =
+      liveCandidate?.status === "VALIDATED" ||
+      liveCandidate?.status === "PENDING_VALIDATION";
+
+    if (!demandOk || !vehicleEligible || !candidateOk) {
+      return {
+        sellerInterest,
+        error: "stale_opportunity",
+        reason: !demandOk
+          ? "demand_ineligible"
+          : !vehicleEligible
+            ? "vehicle_unavailable"
+            : "candidate_invalidated",
+      };
+    }
+
     try {
       const { emitExchangeEvent } = await import("@/services/exchange/events");
       await emitExchangeEvent({
@@ -783,27 +839,34 @@ export async function recordSellerInterest(params: {
       where: { sellerInterestId: sellerInterest.id },
     });
     if (!mutual) {
-      mutual = await prisma.mutualInterest.create({
-        data: { sellerInterestId: sellerInterest.id },
-      });
-      await logAppEvent({
-        eventType: "mutual_interest_created",
-        entityType: "MutualInterest",
-        entityId: mutual.id,
-      });
-      void recordActivationMilestone({
-        dealerId: opp.buyerInterest.dealerId,
-        milestone: "FIRST_MUTUAL_INTEREST",
-        entityType: "MutualInterest",
-        entityId: mutual.id,
-      }).catch(() => undefined);
-      void recordActivationMilestone({
-        dealerId: params.dealerId,
-        milestone: "FIRST_MUTUAL_INTEREST",
-        userId: params.userId,
-        entityType: "MutualInterest",
-        entityId: mutual.id,
-      }).catch(() => undefined);
+      try {
+        mutual = await prisma.mutualInterest.create({
+          data: { sellerInterestId: sellerInterest.id },
+        });
+        await logAppEvent({
+          eventType: "mutual_interest_created",
+          entityType: "MutualInterest",
+          entityId: mutual.id,
+        });
+        void recordActivationMilestone({
+          dealerId: opp.buyerInterest.dealerId,
+          milestone: "FIRST_MUTUAL_INTEREST",
+          entityType: "MutualInterest",
+          entityId: mutual.id,
+        }).catch(() => undefined);
+        void recordActivationMilestone({
+          dealerId: params.dealerId,
+          milestone: "FIRST_MUTUAL_INTEREST",
+          userId: params.userId,
+          entityType: "MutualInterest",
+          entityId: mutual.id,
+        }).catch(() => undefined);
+      } catch {
+        mutual = await prisma.mutualInterest.findUnique({
+          where: { sellerInterestId: sellerInterest.id },
+        });
+        if (!mutual) throw new Error("MUTUAL_CREATE_FAILED");
+      }
     }
 
     const reveal = await createRevealFromMutualInterest({
@@ -818,6 +881,11 @@ export async function recordSellerInterest(params: {
   }
 
   return { sellerInterest };
+}
+
+function isSellerDeclineSold(reason?: string) {
+  if (!reason) return false;
+  return /sold|נמכר|already_sold|vehicle_sold/i.test(reason);
 }
 
 export function computeDemandExpiry() {

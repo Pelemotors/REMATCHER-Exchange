@@ -175,7 +175,6 @@ async function notifySellerEnrichmentAggregated(params: {
     for (const f of arr) fieldSet.add(f);
   }
   const fields = [...fieldSet];
-  const labels = fields.map(fieldLabelHe).join(", ");
   const count = open.length;
 
   // Anti-spam: skip if recent enrichment notification exists
@@ -190,19 +189,10 @@ async function notifySellerEnrichmentAggregated(params: {
   });
   if (recent) return;
 
-  const title =
-    count > 1
-      ? `${count} סוחרים גילו עניין ברכב שלך`
-      : "יש עניין ברכב שלך";
-  const body =
-    count > 1
-      ? `סוחרים אחרים מחפשים רכב שמתאים לפרטים הידועים של ${params.vehicleTitle || "הרכב"}. חסר: ${labels} — כדי לבדוק התאמה.`
-      : `סוחר אחר מחפש רכב שמתאים לפרטים הידועים של ${params.vehicleTitle || "הרכב"}. חסר ${labels} כדי לבדוק אם קיימת התאמה.`;
-
   await notifyDealerUsers(params.sellerDealerId, {
     type: "INVENTORY_ENRICHMENT",
-    title,
-    body,
+    title: COPY.partialDemandTitle,
+    body: COPY.partialDemandBody,
     link: `/inventory?focus=${params.vehicleId}&enrich=1`,
     entityType: "vehicle",
     entityId: params.vehicleId,

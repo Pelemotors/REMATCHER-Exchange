@@ -31,6 +31,7 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
   const [duplicate, setDuplicate] = useState<DuplicateCheckResult | null>(null);
   const [editing, setEditing] = useState<EditField>(null);
   const [immediateMatchCount, setImmediateMatchCount] = useState(0);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   async function handleParse(e: React.FormEvent) {
     e.preventDefault();
@@ -81,16 +82,30 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
 
   async function handleConfirm() {
     setLoading(true);
-    const res = await fetch("/api/demands/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ demandId, confirmed }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    setImmediateMatchCount(data.immediateMatchCount ?? 0);
-    setStep("done");
-    onCreated?.();
+    setConfirmError(null);
+    try {
+      const res = await fetch("/api/demands/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ demandId, confirmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setConfirmError(
+          typeof data.error === "string"
+            ? data.error
+            : "לא הצלחנו להפעיל את החיפוש. נסה שוב."
+        );
+        return;
+      }
+      setImmediateMatchCount(data.immediateMatchCount ?? 0);
+      setStep("done");
+      onCreated?.();
+    } catch {
+      setConfirmError("לא הצלחנו להפעיל את החיפוש. נסה שוב.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (step === "done") {
@@ -354,6 +369,9 @@ export function CreateDemandFlow({ onCreated, onCancel }: Props) {
         <p className="text-sm text-v2-text-secondary">
           החיפוש יופעל רק לאחר אישורך.
         </p>
+        {confirmError && (
+          <p className="text-sm text-error">{confirmError}</p>
+        )}
       </Surface>
 
       <div className="flex gap-3">

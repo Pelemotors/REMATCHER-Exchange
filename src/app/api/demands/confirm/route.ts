@@ -95,19 +95,15 @@ export async function POST(req: Request) {
     entityId: demandId,
   }).catch(() => undefined);
 
-  await runMatchingForDemand(demandId);
-
-  const immediateMatchCount = await prisma.candidateMatch.count({
-    where: {
-      demandId,
-      status: "VALIDATED",
-      buyerInterests: { none: { dealerId: session.user.dealerId } },
-    },
+  // Durable ACTIVE is enough to unblock UX — matching continues asynchronously
+  void runMatchingForDemand(demandId).catch((err) => {
+    console.error("[demands/confirm] matching failed", demandId, err);
   });
 
   return NextResponse.json({
     ...updated,
-    immediateMatchCount,
-    hasImmediateMatch: immediateMatchCount > 0,
+    immediateMatchCount: 0,
+    hasImmediateMatch: false,
+    matchingStarted: true,
   });
 }

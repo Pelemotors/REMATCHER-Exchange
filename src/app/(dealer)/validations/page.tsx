@@ -47,9 +47,9 @@ function whyNow(v: Validation): string {
   }
 
   if (demandName) {
-    return `יש התאמה פוטנציאלית ל-${vehicleName || "רכב"} שלך מול ביקוש ל-${demandName}. מה מחיר ה-B2B העדכני?`;
+    return `יש ביקוש שעשוי להתאים ל-${vehicleName || "רכב"} שלך${demandName ? ` (${demandName})` : ""}. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית. מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?`;
   }
-  return `יש התאמה פוטנציאלית ל-${vehicleName || "רכב"} שלך. מה מחיר ה-B2B העדכני?`;
+  return `יש ביקוש שעשוי להתאים ל-${vehicleName || "רכב"} שלך. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית. מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?`;
 }
 
 function ValidationsContent() {
@@ -115,8 +115,8 @@ function ValidationsContent() {
     return (
       <div>
         <PageHeaderV2
-          title="דורש אימות"
-          subtitle="אימות זמינות או מחיר — לא עניין ולא חיוב"
+          title="פרטים חסרים"
+          subtitle="השלמת פרטים לבדיקת התאמה — לא עניין ולא חיוב"
         />
         <SkeletonBlockV2 lines={4} />
       </div>
@@ -126,8 +126,8 @@ function ValidationsContent() {
   return (
     <div>
       <PageHeaderV2
-        title="דורש אימות"
-        subtitle="אימות זמינות או מחיר — לא עניין ולא חיוב"
+        title="פרטים חסרים"
+        subtitle="השלמת פרטים לבדיקת התאמה — לא עניין ולא חיוב"
       />
       {staleFocus && (
         <Surface depth="secondary" className="mb-4 px-4 py-3">
@@ -197,7 +197,7 @@ function ValidationsContent() {
                     disabled={submitting === v.id}
                     onClick={() => submitPrice(v.id)}
                   >
-                    שמור מחיר
+                    עדכן ובדוק התאמה
                   </ButtonV2>
                 </div>
               )}

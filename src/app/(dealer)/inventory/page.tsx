@@ -280,7 +280,7 @@ function InventoryPageContent() {
         if (v.pendingValidationCount > 0 || v.freshnessState !== "FRESH") {
           body = "צריך לאמת זמינות";
         } else if (v.b2bPrice == null) {
-          body = "חסר מחיר B2B";
+          body = "חסר מחיר לעסקת סוחר";
           badge = "מידע חסר";
         }
         return {

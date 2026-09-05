@@ -1,4 +1,4 @@
-const CACHE_NAME = "rematcher-exchange-v4";
+const CACHE_NAME = "rematcher-exchange-v5";
 const APP_NAME = "REMATCHER Exchange";
 const OFFLINE_URL = "/offline";
 
@@ -77,8 +77,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const link = event.notification.data?.link ?? "/activity";
+  const rawLink = event.notification.data?.link ?? "/activity";
   const deliveryId = event.notification.data?.deliveryId ?? null;
+  const targetUrl = new URL(rawLink, self.location.origin).href;
 
   event.waitUntil(
     (async () => {
@@ -87,15 +88,34 @@ self.addEventListener("notificationclick", (event) => {
         type: "window",
         includeUncontrolled: true,
       });
-      for (const client of clients) {
+
+      // Prefer focusing an existing same-origin PWA / app window
+      const sameOrigin = clients.filter((c) => {
+        try {
+          return new URL(c.url).origin === self.location.origin;
+        } catch {
+          return false;
+        }
+      });
+
+      for (const client of sameOrigin) {
         if ("focus" in client) {
-          await client.navigate(link);
           await client.focus();
+          if ("navigate" in client) {
+            try {
+              await client.navigate(targetUrl);
+            } catch {
+              client.postMessage({ type: "REMATCHER_NAVIGATE", url: rawLink });
+            }
+          } else {
+            client.postMessage({ type: "REMATCHER_NAVIGATE", url: rawLink });
+          }
           await reportTelemetry(deliveryId, "destination_opened");
           return;
         }
       }
-      const newClient = await self.clients.openWindow(link);
+
+      const newClient = await self.clients.openWindow(targetUrl);
       if (newClient) {
         await reportTelemetry(deliveryId, "destination_opened");
       }

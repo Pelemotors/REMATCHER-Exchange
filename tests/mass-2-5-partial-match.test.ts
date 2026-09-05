@@ -254,9 +254,11 @@ describe("Mass 2.5 Partial Match", () => {
       join(process.cwd(), "src/services/matching/information-request.ts"),
       "utf8"
     );
-    expect(svc).toContain("סוחר אחר");
+    expect(svc).toContain("COPY.partialDemandTitle");
     expect(svc).toContain("requesterIdentity: null");
     expect(svc).not.toMatch(/businessName|contactName|phone/);
+    // Push must not name counterpart identity
+    expect(svc).not.toMatch(/סוחר אחר מחפש|סוחרים אחרים מחפשים/);
   });
 
   it("16. enrichment tool scopes to own vehicle", () => {

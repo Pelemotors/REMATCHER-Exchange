@@ -32,7 +32,6 @@ interface RevealData {
     make?: string;
     model?: string;
     year?: number;
-    b2bPrice?: number;
     explanation?: string;
   };
   outcome: { status: string } | null;

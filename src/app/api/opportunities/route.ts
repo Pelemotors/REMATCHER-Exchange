@@ -16,7 +16,13 @@ export async function GET() {
     include: {
       candidateMatch: { include: { demand: true } },
       vehicle: true,
-      sellerInterest: true,
+      sellerInterest: {
+        include: {
+          mutualInterest: {
+            include: { reveal: { select: { id: true } } },
+          },
+        },
+      },
       buyerInterest: true,
     },
     orderBy: { createdAt: "desc" },
@@ -26,16 +32,24 @@ export async function GET() {
     id: o.id,
     status: o.status,
     vehicle: {
+      make: o.vehicle.make,
+      model: o.vehicle.model,
       year: o.vehicle.year,
       trim: o.vehicle.trim,
-      b2bPrice: o.vehicle.b2bPrice,
+      // Own vehicle commercial fields stay on Inventory — not needed for Opportunity decision UX
     },
     ...toSellerOpportunityView(
       o.candidateMatch.demand,
       o.candidateMatch.evaluationJson
     ),
     explanation: o.candidateMatch.explanationJson,
-    sellerInterest: o.sellerInterest,
+    sellerInterest: o.sellerInterest
+      ? {
+          status: o.sellerInterest.status,
+          rejectReason: o.sellerInterest.rejectReason,
+        }
+      : null,
+    revealId: o.sellerInterest?.mutualInterest?.reveal?.id ?? null,
   }));
 
   return NextResponse.json(safe);
@@ -74,13 +88,34 @@ export async function POST(req: Request) {
     }
   }
 
-  const result = await recordSellerInterest({
-    opportunityId,
-    dealerId: session.user.dealerId,
-    userId: session.user.id,
-    status,
-    rejectReason,
-  });
+  try {
+    const result = await recordSellerInterest({
+      opportunityId,
+      dealerId: session.user.dealerId,
+      userId: session.user.id,
+      status,
+      rejectReason,
+    });
 
-  return NextResponse.json(result);
+    if (
+      result &&
+      "error" in result &&
+      result.error === "stale_opportunity"
+    ) {
+      return NextResponse.json(result, { status: 409 });
+    }
+
+    return NextResponse.json(result);
+  } catch (e) {
+    if (e instanceof Error && e.message === "VEHICLE_UNAVAILABLE") {
+      return NextResponse.json(
+        { error: "vehicle_unavailable" },
+        { status: 409 }
+      );
+    }
+    if (e instanceof Error && e.message === "NOT_FOUND") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    throw e;
+  }
 }

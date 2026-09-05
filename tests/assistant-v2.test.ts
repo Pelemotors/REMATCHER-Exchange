@@ -157,8 +157,8 @@ describe("Agent 2.3 Golden Conversations — Phase A", () => {
       },
       "יש משהו חם?"
     );
-    expect(response.message).toContain("עניין");
-    expect(response.message).toContain("ברכב שלך");
+    expect(response.message).toContain("ביקוש רלוונטי");
+    expect(response.message).toContain("רוצה להתקדם");
   });
 
   it("G-31: something hot without activity", () => {

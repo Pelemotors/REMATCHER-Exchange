@@ -96,7 +96,10 @@ export function vehiclePrimaryState(input: {
     return { primary: "has_matches" };
   }
   if (input.missingB2b) {
-    return { primary: "missing_info", secondary: "חסר מחיר B2B" };
+    return {
+      primary: "missing_info",
+      secondary: "חסר מחיר לעסקת סוחר",
+    };
   }
   return { primary: "available" };
 }
@@ -115,8 +118,10 @@ export function matchLaneLabel(
 }
 
 export function interestLane(
-  status: string | null | undefined
+  status: string | null | undefined,
+  revealId?: string | null
 ): "action" | "waiting" | "history" {
+  if (revealId) return "history";
   if (!status || status === "NO_RESPONSE") return "action";
   if (status === "INTERESTED") return "waiting";
   return "history";

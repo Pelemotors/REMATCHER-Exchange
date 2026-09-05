@@ -31,6 +31,7 @@ interface MatchItem {
   explanation: MatchExplanation;
   vehicle: Record<string, unknown>;
   interest: { status: string } | null;
+  revealId?: string | null;
 }
 
 type TabId = "action" | "waiting" | "history";
@@ -70,7 +71,7 @@ function MatchesPageContent() {
         setStaleFocus(true);
       } else {
         setStaleFocus(false);
-        const lane = interestLane(found.interest?.status);
+        const lane = interestLane(found.interest?.status, found.revealId);
         if (lane === "action" || lane === "waiting" || lane === "history") {
           setTab(lane);
         }
@@ -118,7 +119,7 @@ function MatchesPageContent() {
     const waiting: MatchItem[] = [];
     const history: MatchItem[] = [];
     for (const m of matches) {
-      const lane = interestLane(m.interest?.status);
+      const lane = interestLane(m.interest?.status, m.revealId);
       if (lane === "action") action.push(m);
       else if (lane === "waiting") waiting.push(m);
       else history.push(m);
@@ -232,15 +233,22 @@ function MatchesPageContent() {
       ) : (
         <div className={styles.list}>
           {list.map((m) => {
-            const lane = interestLane(m.interest?.status);
-            const showActions = lane === "action";
+            const connected = Boolean(m.revealId);
+            const lane = interestLane(m.interest?.status, m.revealId);
+            const waiting = lane === "waiting";
+            const showActions = lane === "action" && !connected;
             return (
               <div
                 key={m.id}
                 id={`match-${m.id}`}
                 className={`space-y-2 ${focusId === m.id ? "ring-2 ring-v2-signal rounded-lg" : ""}`}
               >
-                {lane === "waiting" && (
+                {connected && (
+                  <Surface depth="secondary" className="px-3 py-2">
+                    <BadgeV2 variant="signal">החיבור נפתח</BadgeV2>
+                  </Surface>
+                )}
+                {waiting && !connected && (
                   <Surface depth="secondary" className="px-3 py-2">
                     <BadgeV2 variant="warning">ממתין לצד השני</BadgeV2>
                   </Surface>
@@ -250,9 +258,7 @@ function MatchesPageContent() {
                   summary={m.explanation?.summary ?? ""}
                   fits={m.explanation?.fits ?? []}
                   gaps={m.explanation?.gaps ?? []}
-                  vehicle={
-                    m.vehicle as MatchItem["vehicle"] & { b2bPrice?: number }
-                  }
+                  vehicle={m.vehicle as MatchItem["vehicle"]}
                   band={
                     m.potential
                       ? null
@@ -262,6 +268,9 @@ function MatchesPageContent() {
                   infoRequestOpen={Boolean(m.infoRequestOpen)}
                   loading={actionLoading === m.id}
                   showActions={showActions}
+                  waiting={waiting}
+                  connected={connected}
+                  revealHref={m.revealId ? `/reveals/${m.revealId}` : undefined}
                   onInterested={() => handleAction(m.id, "interested")}
                   onRequestInfo={() => handleAction(m.id, "request_info")}
                   onReject={() => handleAction(m.id, "reject")}

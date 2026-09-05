@@ -1,4 +1,4 @@
-/** Privacy-safe DTOs — no dealer identity before Reveal */
+/** Privacy-safe DTOs — no dealer identity / private commercial data before Reveal */
 
 export function toBuyerMatchView(vehicle: {
   make: string | null;
@@ -8,7 +8,7 @@ export function toBuyerMatchView(vehicle: {
   mileage: number | null;
   color: string | null;
   region: string | null;
-  b2bPrice: number | null;
+  b2bPrice?: number | null;
   ownershipHand: number | null;
   dealerId: string;
 }) {
@@ -20,9 +20,9 @@ export function toBuyerMatchView(vehicle: {
     mileage: vehicle.mileage,
     color: vehicle.color,
     region: vehicle.region,
-    b2bPrice: vehicle.b2bPrice,
     ownershipHand: vehicle.ownershipHand,
     verifiedDealer: true,
+    // Explicitly omit: b2bPrice, sellerFloor, dealerId, commercial internals
   };
 }
 
@@ -36,10 +36,10 @@ export function toSellerOpportunityView(
       make: json.make,
       model: json.model,
       yearMin: json.yearMin,
-      budgetMax: json.budgetMax,
       trimPreference: json.trimPreference,
+      // Never expose buyer budget / hard max / stretch to Seller
     },
-    budgetRelationship: json.budgetMax ? "relationship_only" : null,
+    budgetRelationship: json.budgetMax != null ? "relationship_only" : null,
     evaluation,
     buyerIdentity: null,
   };

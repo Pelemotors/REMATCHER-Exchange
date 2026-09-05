@@ -19,23 +19,46 @@ export const COPY = {
   matchStrong: "התאמה גבוהה",
   matchPossible: "התאמה אפשרית",
   matchWithGap: "התאמה טובה עם פער",
-  interested: "מעניין אותי",
-  notRelevant: "לא רלוונטי",
-  opportunity: "יש עניין ברכב שלך",
-  mutualInterest: "יש עניין הדדי",
+  /** Qualified Buyer / Seller primary CTA */
+  interested: "כן, רוצה להתקדם",
+  notRelevant: "לא מתאים לי",
+  proceedQuestionBuyer: "רוצה להתקדם עם הרכב הזה?",
+  proceedQuestionSeller: "רוצה להתקדם עם ההזדמנות הזו?",
+  /** Qualified Seller Push */
+  opportunity: "יש ביקוש רלוונטי לרכב שלך",
+  opportunityPushBody: "לחץ כדי לקדם את העסקה",
+  /** Partial / Potential Seller Push — not yet Qualified */
+  partialDemandTitle: "יש ביקוש שעשוי להיות רלוונטי לרכב שלך",
+  partialDemandBody: "לחץ כאן לעדכן פרטים חסרים",
+  partialEnrichScreen:
+    "יש ביקוש שעשוי להתאים לרכב הזה. חסרים לנו כמה פרטים כדי לבדוק אם זו התאמה אמיתית.",
+  enrichAndRecheck: "עדכן ובדוק התאמה",
+  privateMatchingPricePrompt:
+    "מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?",
+  mutualInterest: "יש התאמה הדדית",
+  mutualPushBody: "שניכם רוצים להתקדם — לחץ לפרטי הקשר",
   reveal: "נוצר חיבור",
-  revealHeadline: "יש חיבור",
-  revealSub: "שני הצדדים הביעו עניין. עכשיו אפשר לדבר.",
+  revealHeadline: "נוצר חיבור",
+  revealSub: "שניכם רוצים להתקדם. עכשיו אפשר לדבר ישירות.",
+  connectionOpened: "החיבור נפתח",
+  contactDetailsCta: "לפרטי הקשר",
+  waitingOtherSide:
+    "הבעת עניין. נעדכן אותך אם גם הצד השני ירצה להתקדם.",
+  sellerDeclineNotNow: "לא כרגע",
+  sellerDeclineCurrentBuyer: "יש כרגע קונה רלוונטי על הרכב",
+  sellerDeclineSold: "הרכב כבר נמכר",
   outcome: "מה קרה עם החיבור?",
   outcomeBillingNote:
     "הדיווח לא משפיע על החיוב ועוזר ל-REMATCHER Exchange לשפר את ההתאמות הבאות.",
   validationAvailability: "הרכב עדיין זמין?",
-  validationB2bPrice: "באיזה מחיר תהיה מוכן להציע אותו לסוחר?",
+  validationB2bPrice:
+    "מה המחיר שבו הרכב רלוונטי מבחינתך לעסקת סוחר?",
   validationContext: "יש ביקוש רלוונטי לרכב שלך",
+  validationContextPartial: "יש ביקוש שעשוי להיות רלוונטי לרכב שלך",
   verifiedDealer: "סוחר מאומת",
   privacyNote: "הפרטים ייחשפו לאחר עניין הדדי.",
   interestNonBinding:
-    "מעוניין = בקשה להיחשף לצד השני במקרה של עניין הדדי. לא התחייבות לעסקה.",
+    "התקדמות = בקשה להיחשף לצד השני במקרה של עניין הדדי. לא התחייבות לעסקה.",
   connectionsRemaining: (used: number, total: number) =>
     total <= 5
       ? `נשארו לך ${total - used} מתוך ${total} החיבורים הראשונים ללא עלות`
@@ -48,8 +71,8 @@ export const COPY = {
       "REMATCHER ממשיך לבדוק את המלאי ברשת מול החיפוש שלך.",
   },
   emptyOpportunities: {
-    title: "אין כרגע עניין שמחכה לתגובה",
-    description: "כשסוחר אחר יתעניין ברכב שלך, זה יופיע כאן.",
+    title: "אין כרגע הזדמנות שמחכה לתגובה",
+    description: "כשיופיע ביקוש רלוונטי לרכב שלך, זה יופיע כאן.",
   },
 } as const;
 

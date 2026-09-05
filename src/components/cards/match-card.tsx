@@ -1,8 +1,7 @@
-import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { COPY } from "@/config/brand";
 import {
   BadgeV2,
-  DataValue,
   StatusBadgeV2,
   Surface,
 } from "@/components/ui/brand-v2";
@@ -22,7 +21,6 @@ interface MatchCardProps {
     color?: string | null;
     region?: string | null;
     ownershipHand?: number | null;
-    b2bPrice?: number | null;
   };
   band?: "STRONG" | "ALTERNATIVE" | null;
   onInterested?: () => void;
@@ -80,11 +78,9 @@ export function MatchCard({
             {[vehicle.make, vehicle.model].filter(Boolean).join(" ") || "רכב"}
           </h3>
           <p className="vehicle-meta mt-1 text-v2-text-secondary">{vehicleMetaLine(vehicle)}</p>
-        </div>
-        <div className="shrink-0 text-left">
-          <DataValue size="sm" label="לסוחר">
-            {formatCurrency(vehicle.b2bPrice)}
-          </DataValue>
+          <p className="mt-2 text-sm font-medium text-v2-text-primary">
+            {COPY.proceedQuestionBuyer}
+          </p>
         </div>
       </div>
 
@@ -151,6 +147,9 @@ export function OpportunityCard({
   onInterested,
   onReject,
   loading,
+  waiting,
+  connected,
+  revealHref,
 }: {
   headline: string;
   summary: string;
@@ -160,6 +159,9 @@ export function OpportunityCard({
   onInterested?: () => void;
   onReject?: () => void;
   loading?: boolean;
+  waiting?: boolean;
+  connected?: boolean;
+  revealHref?: string;
 }) {
   return (
     <Surface
@@ -170,7 +172,7 @@ export function OpportunityCard({
         loading && "pointer-events-none opacity-65"
       )}
     >
-      <BadgeV2 variant="signal">{headline || "יש עניין ברכב שלך"}</BadgeV2>
+      <BadgeV2 variant="signal">{headline || COPY.opportunity}</BadgeV2>
       <div>
         <p className="text-label text-v2-text-muted">הרכב שלך</p>
         <h3 className="text-h3 font-bold text-v2-warm">
@@ -178,7 +180,7 @@ export function OpportunityCard({
           {vehicleSummary.year ? String(vehicleSummary.year) : ""}
         </h3>
         <p className="mt-1 text-sm text-v2-text-secondary">
-          הביקוש מתאים לרכב שלך
+          {COPY.proceedQuestionSeller}
         </p>
       </div>
 
@@ -212,22 +214,36 @@ export function OpportunityCard({
         {COPY.verifiedDealer} — {COPY.privacyNote}
       </div>
 
-      <div className="flex gap-3">
-        <button
-          className="v2-btn-signal flex-1"
-          onClick={onInterested}
-          disabled={loading}
-        >
-          {COPY.interested}
-        </button>
-        <button
-          className="v2-btn-secondary flex-1"
-          onClick={onReject}
-          disabled={loading}
-        >
-          {COPY.notRelevant}
-        </button>
-      </div>
+      {connected && revealHref ? (
+        <a href={revealHref} className="v2-btn-signal flex w-full justify-center">
+          {COPY.contactDetailsCta}
+        </a>
+      ) : waiting ? (
+        <p className="rounded-sm bg-v2-surface-secondary px-3 py-2 text-sm text-v2-text-secondary">
+          {COPY.waitingOtherSide}
+        </p>
+      ) : onInterested || onReject ? (
+        <div className="flex gap-3">
+          {onInterested && (
+            <button
+              className="v2-btn-signal flex-1"
+              onClick={onInterested}
+              disabled={loading}
+            >
+              {COPY.interested}
+            </button>
+          )}
+          {onReject && (
+            <button
+              className="v2-btn-secondary flex-1"
+              onClick={onReject}
+              disabled={loading}
+            >
+              {COPY.sellerDeclineNotNow}
+            </button>
+          )}
+        </div>
+      ) : null}
     </Surface>
   );
 }

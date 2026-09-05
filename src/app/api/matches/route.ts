@@ -40,6 +40,18 @@ export async function GET() {
         },
         take: 1,
       },
+      sellerOpportunities: {
+        include: {
+          sellerInterest: {
+            include: {
+              mutualInterest: {
+                include: { reveal: { select: { id: true } } },
+              },
+            },
+          },
+        },
+        take: 1,
+      },
     },
     orderBy: { score: "desc" },
     take: 12,
@@ -49,6 +61,9 @@ export async function GET() {
     const blocking = Array.isArray(m.decisionBlockingUnknowns)
       ? (m.decisionBlockingUnknowns as string[])
       : [];
+    const revealId =
+      m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
+      null;
     return {
       id: m.id,
       status: m.status,
@@ -60,6 +75,7 @@ export async function GET() {
       interest: m.buyerInterests[0] ?? null,
       infoRequestOpen: Boolean(m.informationRequests[0]),
       potential: m.resolutionState === "NEEDS_INFORMATION",
+      revealId,
     };
   });
 
