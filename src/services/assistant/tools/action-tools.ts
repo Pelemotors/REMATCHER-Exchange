@@ -301,7 +301,7 @@ export async function createInventoryDraftFromText(
       const note = !idOk
         ? "חסר זיהוי"
         : !readyForConfirmation(d)
-          ? `חסר לי ${nextGapToAsk(d) === "dealer_price" ? "מחיר לסוחר" : nextGapToAsk(d) === "mileage" ? "קילומטראז׳" : "פרטים"}`
+          ? `חסר לי ${nextGapToAsk(d) === "dealer_price" ? "מחיר" : nextGapToAsk(d) === "mileage" ? "קילומטראז׳" : "פרטים"}`
           : "מוכן";
       return `${mark} ${buildCompactSummary(d)} — ${note}`;
     });

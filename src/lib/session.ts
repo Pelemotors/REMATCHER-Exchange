@@ -51,13 +51,14 @@ export async function assertBuyerMatchAccess(
   dealerId: string,
   candidateMatchId: string
 ) {
+  const { BUYER_VISIBLE_MATCH_WHERE } = await import(
+    "@/services/domain/candidate-policy"
+  );
   const match = await prisma.candidateMatch.findFirst({
     where: {
       id: candidateMatchId,
       demand: { dealerId },
-      status: "VALIDATED",
-      resolutionState: "RESOLVED",
-      scoreBand: { in: ["STRONG", "GOOD", "ALTERNATIVE"] },
+      ...BUYER_VISIBLE_MATCH_WHERE,
     },
     include: { demand: true, vehicle: true },
   });

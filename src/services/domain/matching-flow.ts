@@ -545,17 +545,29 @@ export async function recordBuyerInterest(params: {
   if (params.status === "INTERESTED" && isKillSwitchOn("interest_new")) {
     throw new Error("INTEREST_DISABLED");
   }
+  const { BUYER_VISIBLE_MATCH_WHERE, canPresentCandidateToBuyer } = await import(
+    "@/services/domain/candidate-policy"
+  );
   const match = await prisma.candidateMatch.findFirst({
     where: {
       id: params.candidateMatchId,
       demand: { dealerId: params.dealerId },
-      status: "VALIDATED",
-      resolutionState: "RESOLVED",
-      scoreBand: { in: ["STRONG", "GOOD", "ALTERNATIVE"] },
+      ...BUYER_VISIBLE_MATCH_WHERE,
     },
     include: { demand: true, vehicle: true },
   });
   if (!match) throw new Error("NOT_FOUND");
+  if (
+    !canPresentCandidateToBuyer({
+      status: match.status,
+      resolutionState: match.resolutionState,
+      scoreBand: match.scoreBand,
+      demandStatus: match.demand.status,
+      vehicleStatus: match.vehicle.status,
+    })
+  ) {
+    throw new Error("NOT_FOUND");
+  }
   if (match.vehicle.status === "SOLD" || match.vehicle.status === "ARCHIVED") {
     throw new Error("VEHICLE_UNAVAILABLE");
   }

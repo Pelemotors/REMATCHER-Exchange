@@ -203,7 +203,7 @@ describe("B. handleInventoryIngestTurn — CONTEXT_QUESTION at WAITING_CONFIRMAT
     expect(result).not.toBeNull();
     // Should contain Q7 info or "מספיק" — NOT just repeat "לשמור במלאי?"
     const msg = result!.message;
-    expect(msg).not.toBe("מעולה.\nAudi Q7 2012\n157,000 ק״מ\nפרטית\nמחיר לסוחר 46,000 ₪\nאם תרצה, אפשר להשלים אחר כך גם רמת גימור וצבע.\n\nלשמור במלאי?");
+    expect(msg).not.toBe("מעולה.\nAudi Q7 2012\n157,000 ק״מ\nפרטית\nמחיר 46,000 ₪\nאם תרצה, אפשר להשלים אחר כך גם רמת גימור וצבע.\n\nלשמור במלאי?");
     // Should contain some substantive answer
     expect(msg.length).toBeGreaterThan(20);
     // Draft must be preserved

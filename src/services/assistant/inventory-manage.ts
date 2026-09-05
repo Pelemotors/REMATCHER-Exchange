@@ -605,7 +605,7 @@ async function startUpdateFlow(params: {
     return {
       intent: "UPDATE_INVENTORY",
       message:
-        "לא הבנתי מה לעדכן. לדוגמה: תעדכן את הקורולה ל-79 אלף ק״מ, או מחיר לסוחר 132",
+        "לא הבנתי מה לעדכן. לדוגמה: תעדכן את הקורולה ל-79 אלף ק״מ, או מחיר 132",
       meta: params.meta,
     };
   }

@@ -100,10 +100,19 @@ describe("Buyer Visibility Gate — server source", () => {
       join(process.cwd(), "src/app/api/matches/route.ts"),
       "utf8"
     );
-    expect(api).toContain('status: "VALIDATED"');
-    expect(api).toContain('resolutionState: "RESOLVED"');
+    expect(api).toContain("BUYER_VISIBLE_MATCH_WHERE");
     expect(api).not.toContain("NEEDS_INFORMATION");
     expect(api).not.toContain("PENDING_VALIDATION");
+
+    const policy = readFileSync(
+      join(process.cwd(), "src/services/domain/candidate-policy.ts"),
+      "utf8"
+    );
+    expect(policy).toContain('status: "VALIDATED"');
+    expect(policy).toContain('resolutionState: "RESOLVED"');
+    expect(policy).toContain("STRONG");
+    expect(policy).toContain("GOOD");
+    expect(policy).toContain("ALTERNATIVE");
   });
 
   it("CASE 2: missing mileage + HARD fuel → exact blocking fields", () => {
@@ -172,8 +181,8 @@ describe("Buyer Visibility Gate — server source", () => {
       join(process.cwd(), "src/services/domain/matching-flow.ts"),
       "utf8"
     );
-    expect(flow).toContain('resolutionState: "RESOLVED"');
-    expect(flow).toMatch(/scoreBand: \{ in: \["STRONG", "GOOD", "ALTERNATIVE"\]/);
+    expect(flow).toContain("BUYER_VISIBLE_MATCH_WHERE");
+    expect(flow).toContain("canPresentCandidateToBuyer");
   });
 });
 

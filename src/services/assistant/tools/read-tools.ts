@@ -203,13 +203,12 @@ export async function executeReadTool(
       };
     }
     case "getMyAuthorizedMatches": {
+      const { BUYER_VISIBLE_MATCH_WHERE } = await import(
+        "@/services/domain/candidate-policy"
+      );
       const where = {
         demand: { dealerId },
-        status: "VALIDATED" as const,
-        resolutionState: "RESOLVED" as const,
-        scoreBand: {
-          in: ["STRONG" as const, "GOOD" as const, "ALTERNATIVE" as const],
-        },
+        ...BUYER_VISIBLE_MATCH_WHERE,
       };
       const [totalCount, matches] = await Promise.all([
         prisma.candidateMatch.count({ where }),

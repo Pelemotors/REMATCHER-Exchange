@@ -5,13 +5,7 @@ import { recordBuyerInterest } from "@/services/domain/matching-flow";
 import { canDealerReveal } from "@/services/commercial/reveal-usage";
 import { toBuyerMatchView } from "@/lib/privacy-views";
 import type { MatchExplanation } from "@/lib/schemas/ai";
-
-/** Buyer Visibility Gate — only Qualified Candidates reach the buyer. */
-const BUYER_VISIBLE_WHERE = {
-  status: "VALIDATED" as const,
-  resolutionState: "RESOLVED" as const,
-  scoreBand: { in: ["STRONG" as const, "GOOD" as const, "ALTERNATIVE" as const] },
-};
+import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
 
 export async function GET() {
   const session = await auth();
@@ -22,7 +16,7 @@ export async function GET() {
   const matches = await prisma.candidateMatch.findMany({
     where: {
       demand: { dealerId: session.user.dealerId },
-      ...BUYER_VISIBLE_WHERE,
+      ...BUYER_VISIBLE_MATCH_WHERE,
     },
     include: {
       vehicle: true,

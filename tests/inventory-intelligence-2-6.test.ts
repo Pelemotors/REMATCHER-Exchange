@@ -202,7 +202,7 @@ describe("clarification / commercial completeness", () => {
     });
   });
 
-  it("summary prefers מחיר לסוחר", () => {
+  it("summary prefers מחיר (not B2B jargon)", () => {
     const s = buildStructuredSummary(
       baseDraft({
         fields: {
@@ -212,8 +212,9 @@ describe("clarification / commercial completeness", () => {
         },
       })
     );
-    expect(s).toContain("מחיר לסוחר");
+    expect(s).toContain("מחיר");
     expect(s).not.toContain("B2B");
+    expect(s).not.toContain("מחיר לסוחר");
   });
 });
 

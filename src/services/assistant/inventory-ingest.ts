@@ -207,7 +207,7 @@ function promoteQueued(
 
 const GAP_LABELS: Record<string, string> = {
   mileage: "קילומטראז׳",
-  dealer_price: "מחיר לסוחר",
+  dealer_price: "מחיר",
   ownership: "מקור הרכב (פרטי/ליסינג/חברה)",
   trim: "רמת גימור",
   color: "צבע",
@@ -287,7 +287,7 @@ function answerInventoryContextQuestion(
       if (f.model) known.push(`דגם: ${f.model}`);
       if (f.year) known.push(`שנה: ${f.year}`);
       if (f.mileage != null) known.push(`ק״מ: ${f.mileage.toLocaleString()}`);
-      if (f.b2bPrice != null) known.push(`מחיר לסוחר: ${f.b2bPrice.toLocaleString()} ₪`);
+      if (f.b2bPrice != null) known.push(`מחיר: ${f.b2bPrice.toLocaleString()} ₪`);
       if (f.retailPrice != null) known.push(`מחיר לקוח: ${f.retailPrice.toLocaleString()} ₪`);
       if (f.color) known.push(`צבע: ${f.color}`);
       if (f.trim) known.push(`גימור: ${f.trim}`);
@@ -310,7 +310,7 @@ function answerInventoryContextQuestion(
 
     case "WHY_NEEDED": {
       message =
-        "מחיר לסוחר ומקור הרכב עוזרים לנו לדייק את ההתאמות — Exchange מציג הרכב לקונים שמחפשים בטווח המחיר הנכון.";
+        "מחיר ומקור הרכב עוזרים לנו לדייק את ההתאמות — Exchange מציג הרכב לקונים שמחפשים בטווח המחיר הנכון.";
       break;
     }
 
@@ -382,24 +382,24 @@ function answerInventoryAdvisoryQuestion(
         "טויוטה קורולה | 2022 | 62 אלף ק״מ | יד 1 פרטית | 134 אלף לסוחר\n" +
         "מאזדה CX-5 | 2021 | 80 אלף ק״מ | יד 2 | 118 אלף לסוחר\n" +
         "קיה ספורטאז׳ | 2023 | 40 אלף ק״מ | יד 1 | 145 אלף לסוחר\n\n" +
-        "לא חייב למלא הכול — הכי חשוב דגם, שנה, ק״מ ומחיר לסוחר. אם חסר משהו, אשאל.";
+        "לא חייב למלא הכול — הכי חשוב דגם, שנה, ק״מ ומחיר. אם חסר משהו, אשאל.";
       break;
     case "LISTING_GUIDANCE":
     case "GENERAL_ADVISORY":
       message =
-        "הכי חשוב שיהיה לי דגם ושנה מדויקים, ק״מ ומחיר לסוחר.\nגם רמת גימור, בעלות וצבע יכולים לעזור לדייק התאמות.";
+        "הכי חשוב שיהיה לי דגם ושנה מדויקים, ק״מ ומחיר.\nגם רמת גימור, בעלות וצבע יכולים לעזור לדייק התאמות.";
       break;
     case "MATCHING_TIPS":
       message =
-        "פרטים שמשפרים התאמות: דגם+שנה מדויקים, קילומטראז׳, מחיר לסוחר, מקור הרכב (פרטי/ליסינג), ורמת גימור כשיש.";
+        "פרטים שמשפרים התאמות: דגם+שנה מדויקים, קילומטראז׳, מחיר, מקור הרכב (פרטי/ליסינג), ורמת גימור כשיש.";
       break;
     case "WHY_NEEDED":
       message =
-        "מחיר לסוחר עוזר להציג את הרכב לקונים בטווח הנכון. קילומטראז׳ ומקור הרכב מדייקים את סינון ההתאמות.";
+        "מחיר עוזר להציג את הרכב לקונים בטווח הנכון. קילומטראז׳ ומקור הרכב מדייקים את סינון ההתאמות.";
       break;
     default:
       message =
-        "הכי חשוב: דגם, שנה, ק״מ ומחיר לסוחר. שאר הפרטים משפרים את איכות ההתאמות.";
+        "הכי חשוב: דגם, שנה, ק״מ ומחיר. שאר הפרטים משפרים את איכות ההתאמות.";
   }
 
   message += draftContinuationHint(draft);
@@ -652,7 +652,7 @@ export async function handleInventoryIngestTurn(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message:
-            "מה לתקן? לדוגמה: ק״מ 62000, מחיר לסוחר 134000, יד 1, צבע לבן",
+            "מה לתקן? לדוגמה: ק״מ 62000, מחיר 134000, יד 1, צבע לבן",
           conversation: withTurnMemory(
             {
               ...baseConversation,

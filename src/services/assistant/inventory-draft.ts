@@ -173,7 +173,7 @@ export function gapQuestion(gap: InventoryGapId, fields?: InventoryDraftFields):
     case "mileage":
       return "חסר לי קילומטראז׳. כמה יש על הרכב?";
     case "dealer_price":
-      return "חסר לי מחיר לסוחר. רוצה להוסיף, או להמשיך בלי?";
+      return "באיזה מחיר תרצה להציע את הרכב? אפשר גם להמשיך בלי כרגע.";
     case "ownership":
       return "מה המקור של הרכב — פרטי, ליסינג, השכרה או חברה? ואם יש — איזו יד?";
     case "trim":
@@ -380,7 +380,7 @@ export function buildStructuredSummary(draft: PendingInventoryDraft): string {
   if (f.mileage != null) lines.push(`${fmtNum(f.mileage)} ק״מ`);
   const own = ownershipLabel(f);
   if (own) lines.push(own);
-  if (f.b2bPrice != null) lines.push(`מחיר לסוחר ${fmtNum(f.b2bPrice)} ₪`);
+  if (f.b2bPrice != null) lines.push(`מחיר ${fmtNum(f.b2bPrice)} ₪`);
   else if (f.retailPrice != null) lines.push(`מחיר לקוח ${fmtNum(f.retailPrice)} ₪`);
   if (f.color) lines.push(`צבע ${f.color}`);
   return lines.join("\n");
@@ -393,7 +393,7 @@ export function buildCompactSummary(draft: PendingInventoryDraft): string {
   const year = f.year != null ? String(f.year) : "";
   const bits = [`${name} ${year}`.trim()];
   if (f.mileage != null) bits.push(`${fmtNum(f.mileage)} ק״מ`);
-  if (f.b2bPrice != null) bits.push(`מחיר לסוחר ${fmtNum(f.b2bPrice)}`);
+  if (f.b2bPrice != null) bits.push(`מחיר ${fmtNum(f.b2bPrice)}`);
   return bits.join(" · ");
 }
 
@@ -486,7 +486,7 @@ export function identityPartialMessage(fields: InventoryDraftFields): string {
   if (fields.year) known.push(String(fields.year));
   if (fields.mileage != null) known.push(`עם ${fmtNum(fields.mileage)} ק״מ`);
   if (fields.b2bPrice != null) {
-    known.push(`מחיר לסוחר ${fmtNum(fields.b2bPrice)} ₪`);
+    known.push(`מחיר ${fmtNum(fields.b2bPrice)} ₪`);
   } else if (fields.retailPrice != null) {
     known.push(`מחיר ${fmtNum(fields.retailPrice)} ₪`);
   }

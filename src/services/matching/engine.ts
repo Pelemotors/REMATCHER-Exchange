@@ -245,7 +245,7 @@ export function evaluateMatch(
       field: "budget",
       result: "UNKNOWN",
       label: "מחיר",
-      detail: "מחיר B2B חסר",
+      detail: "מחיר חסר",
     });
   }
 

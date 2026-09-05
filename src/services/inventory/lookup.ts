@@ -27,7 +27,7 @@ export function vehicleSummaryLine(v: InventoryCandidate): string {
   const parts = [vehicleTitle(v)];
   if (v.mileage != null) parts.push(`${formatNumber(v.mileage)} ק״מ`);
   if (v.b2bPrice != null) {
-    parts.push(`${formatCurrency(v.b2bPrice)} מחיר לסוחר`);
+    parts.push(`${formatCurrency(v.b2bPrice)} מחיר`);
   }
   return parts.join(" · ");
 }
@@ -247,7 +247,7 @@ export function describeProposedChanges(changes: ProposedVehicleChanges): string
     parts.push(`קילומטראז׳ ${formatNumber(changes.mileage)}`);
   }
   if (changes.b2bPrice != null) {
-    parts.push(`מחיר לסוחר ${formatCurrency(changes.b2bPrice)}`);
+    parts.push(`מחיר ${formatCurrency(changes.b2bPrice)}`);
   }
   if (changes.retailPrice != null) {
     parts.push(`מחיר לקוח ${formatCurrency(changes.retailPrice)}`);

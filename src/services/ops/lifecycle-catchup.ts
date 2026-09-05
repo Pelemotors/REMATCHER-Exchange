@@ -14,6 +14,9 @@ export async function runLifecycleCatchUp(params?: {
   expiredDemands: number;
   remindersSent: number;
   overdueDemandsFound: number;
+  cancelledEnrichmentOnSold: number;
+  revealsRecovered: number;
+  closedStaleOpportunities: number;
 }> {
   const now = new Date();
   const overdueDemandsFound = await prisma.demand.count({
@@ -24,6 +27,11 @@ export async function runLifecycleCatchUp(params?: {
   const expiredDemands = await expireStaleDemands();
   const { sent: remindersSent } = await runSmartReminders();
 
+  const { reconcilePilotInconsistencies } = await import(
+    "@/services/ops/pilot-reconciliation"
+  );
+  const reconciliation = await reconcilePilotInconsistencies();
+
   await logEvent({
     eventType: "lifecycle_catchup_completed",
     entityType: "System",
@@ -33,11 +41,17 @@ export async function runLifecycleCatchUp(params?: {
       expiredDemands,
       remindersSent,
       overdueDemandsFound,
+      ...reconciliation,
       at: now.toISOString(),
     },
   });
 
-  return { expiredDemands, remindersSent, overdueDemandsFound };
+  return {
+    expiredDemands,
+    remindersSent,
+    overdueDemandsFound,
+    ...reconciliation,
+  };
 }
 
 export async function getLastLifecycleCatchUp(): Promise<{
