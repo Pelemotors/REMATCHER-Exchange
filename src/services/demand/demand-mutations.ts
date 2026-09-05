@@ -107,9 +107,8 @@ export async function updateDemandForDealer(params: {
     },
   });
 
-  const parsed = demand.parsedJson as ParsedDemand | null;
-  await rebuildDemandConstraints(params.demandId, parsed);
-
+  // Preserve the confirmed hard/soft/exclusion constraints on edit. Rebuilding
+  // them from stale parsedJson would be just as dangerous as deleting them.
   await logAppEvent({
     eventType: "demand_updated",
     entityType: "Demand",
