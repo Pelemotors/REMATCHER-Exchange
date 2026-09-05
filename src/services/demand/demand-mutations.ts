@@ -76,7 +76,27 @@ export async function updateDemandForDealer(params: {
     metadata: { fields: Object.keys(params.confirmed ?? {}) },
   });
 
-  if (updated.status === "ACTIVE" || updated.status === "PENDING_CONFIRMATION") {
+  if (updated.status === "ACTIVE") {
+    // An ACTIVE demand must never rematch against a stale SearchIntentVersion.
+    // Rebuild the canonical intent from the newly confirmed fields first, then
+    // run the matcher across the current active inventory.
+    const { legacyToSearchIntent } = await import(
+      "@/services/matching/legacy-search-intent-adapter"
+    );
+    const { createAndActivateSearchIntent } = await import(
+      "@/services/matching/search-intent-service"
+    );
+    const constraints = await prisma.demandConstraint.findMany({
+      where: { demandId: params.demandId },
+    });
+    const adapted = legacyToSearchIntent(params.confirmed, constraints);
+    await createAndActivateSearchIntent({
+      demandId: params.demandId,
+      structuredIntent: adapted.structuredIntent,
+      naturalLanguageSummary: adapted.naturalLanguageSummary,
+      source: "demand_update",
+      confirm: true,
+    });
     await runMatchingForDemand(params.demandId);
   }
 
