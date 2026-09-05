@@ -18,16 +18,71 @@ export type DemandUxStatus =
   | "EXPIRED"
   | "CLOSED";
 
+const UNKNOWN_TEXT_VALUES = new Set([
+  "unknown",
+  "undefined",
+  "null",
+  "none",
+  "n/a",
+  "na",
+  "לא ידוע",
+  "לא יודע",
+  "—",
+  "-",
+]);
+
+function cleanString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    if (value == null) return null;
+    return String(value);
+  }
+  const trimmed = value.trim();
+  if (!trimmed || UNKNOWN_TEXT_VALUES.has(trimmed.toLowerCase())) return null;
+  return trimmed;
+}
+
+function cleanInteger(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.trunc(value) : null;
+  }
+  const text = cleanString(value);
+  if (!text) return null;
+  const digits = text.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const n = Number.parseInt(digits, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function cleanYear(value: unknown): number | null {
+  const n = cleanInteger(value);
+  if (n == null) return null;
+  const normalized = n >= 0 && n < 100 ? 2000 + n : n;
+  return normalized >= 1980 && normalized <= 2100 ? normalized : null;
+}
+
+/**
+ * Dealer shorthand is common: "220", "220k", "220 אלף" all mean ₪220,000.
+ * This is a normalization boundary for confirmed demand data, not an AI guess.
+ */
+function cleanBudget(value: unknown): number | null {
+  const n = cleanInteger(value);
+  if (n == null || n <= 0) return null;
+  return n < 1000 ? n * 1000 : n;
+}
+
 export function confirmedFromJson(json: unknown): DemandConfirmed {
   const c = (json ?? {}) as Record<string, unknown>;
+  const colors = Array.isArray(c.colorExclusions)
+    ? c.colorExclusions.map(cleanString).filter((v): v is string => Boolean(v))
+    : [];
   return {
-    make: (c.make as string) ?? null,
-    model: (c.model as string) ?? null,
-    yearMin: (c.yearMin as number) ?? null,
-    yearMax: (c.yearMax as number) ?? null,
-    budgetMax: (c.budgetMax as number) ?? null,
-    trimPreference: (c.trimPreference as string) ?? null,
-    colorExclusions: (c.colorExclusions as string[]) ?? [],
+    make: cleanString(c.make),
+    model: cleanString(c.model),
+    yearMin: cleanYear(c.yearMin),
+    yearMax: cleanYear(c.yearMax),
+    budgetMax: cleanBudget(c.budgetMax),
+    trimPreference: cleanString(c.trimPreference),
+    colorExclusions: colors,
   };
 }
 
@@ -189,8 +244,7 @@ export function demandReflectionText(
     : `אתה מחפש ${title}.`;
 
   const tags = demandTags(confirmed);
-  const tagPart =
-    tags.length > 0 ? ` ${tags.join(" · ")}.` : "";
+  const tagPart = tags.length > 0 ? ` ${tags.join(" · ")}.` : "";
 
   let statusPart = "";
   if (uxStatus === "ACTIVE" && daysLeft != null) {
