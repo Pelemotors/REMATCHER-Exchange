@@ -94,18 +94,35 @@ async function runRead(params: {
   const ref =
     params.plan.action.targetReference ??
     params.plan.understanding.targetReference;
-  if (Array.isArray(results.getMyAuthorizedMatches) && ref) {
+  const matchBag = results.getMyAuthorizedMatches;
+  const matchItems = Array.isArray(matchBag)
+    ? matchBag
+    : matchBag &&
+        typeof matchBag === "object" &&
+        Array.isArray((matchBag as { items?: unknown[] }).items)
+      ? ((matchBag as { items: unknown[] }).items as Array<{
+          demandTitle?: string;
+          vehicle?: { make?: string; model?: string };
+        }>)
+      : null;
+  if (matchItems && ref) {
     const needle = ref.toLowerCase();
-    const filtered = (
-      results.getMyAuthorizedMatches as Array<{
-        demandTitle?: string;
-        vehicle?: { make?: string; model?: string };
-      }>
-    ).filter((m) => {
+    const filtered = matchItems.filter((m) => {
       const hay = `${m.demandTitle ?? ""} ${m.vehicle?.make ?? ""} ${m.vehicle?.model ?? ""}`.toLowerCase();
-      return hay.includes(needle) || needle.includes((m.vehicle?.model ?? "").toLowerCase());
+      return (
+        hay.includes(needle) ||
+        needle.includes((m.vehicle?.model ?? "").toLowerCase())
+      );
     });
-    results.getMyAuthorizedMatches = filtered;
+    if (Array.isArray(matchBag)) {
+      results.getMyAuthorizedMatches = filtered;
+    } else {
+      results.getMyAuthorizedMatches = {
+        ...(matchBag as object),
+        items: filtered,
+        returnedCount: filtered.length,
+      };
+    }
   }
 
   const synth = await synthesizeResponse({
@@ -144,9 +161,14 @@ async function runRead(params: {
         activeDemandTitles: demands.length
           ? demands.map((d) => d.title)
           : synth.response.lastList.filter((i) => i.type === "demand").map((i) => i.title),
-        matchCount: Array.isArray(results.getMyAuthorizedMatches)
-          ? (results.getMyAuthorizedMatches as unknown[]).length
-          : params.conversation?.lastAuthorizedSnapshot?.matchCount,
+        matchCount: (() => {
+          const raw = results.getMyAuthorizedMatches;
+          if (Array.isArray(raw)) return raw.length;
+          if (raw && typeof raw === "object" && "totalCount" in raw) {
+            return Number((raw as { totalCount?: number }).totalCount ?? 0);
+          }
+          return params.conversation?.lastAuthorizedSnapshot?.matchCount;
+        })(),
       },
       pendingInventoryDraft: params.conversation?.pendingInventoryDraft,
       pendingSearchDraft: params.conversation?.pendingSearchDraft,

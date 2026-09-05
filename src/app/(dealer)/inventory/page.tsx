@@ -44,7 +44,7 @@ interface Vehicle {
   pendingValidationCount: number;
 }
 
-type FilterId = "all" | "attention" | "interest" | "active" | "sold";
+type FilterId = "all" | "attention" | "interest" | "active" | "sold" | "missing_price";
 
 function vehicleName(v: Vehicle) {
   return [v.make, v.model, v.year].filter(Boolean).join(" ") || "רכב";
@@ -60,17 +60,30 @@ export default function InventoryPage() {
 
 function InventoryPageContent() {
   const searchParams = useSearchParams();
-  const initialFilter = (searchParams.get("filter") as FilterId) || "all";
+  const initialFilter = (searchParams.get("filter") as FilterId) || "active";
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [snapshot, setSnapshot] = useState({
     total: 0,
+    sold: 0,
+    all: 0,
     needsAttention: 0,
     withInterest: 0,
     pendingValidation: 0,
+    missingPrivatePrice: 0,
+  });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 50,
+    totalCount: 0,
+    hasMore: false,
   });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterId>(
-    initialFilter === "attention" ? "attention" : "active"
+    ["all", "attention", "interest", "active", "sold", "missing_price"].includes(
+      initialFilter
+    )
+      ? initialFilter
+      : "active"
   );
   const [query, setQuery] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -85,18 +98,46 @@ function InventoryPageContent() {
   useSetAgentPageContext({ surface: "inventory", route: "/inventory" }, []);
 
 
-  async function load() {
-    const res = await fetch("/api/inventory");
+  async function load(opts?: { page?: number; filter?: FilterId; q?: string }) {
+    const page = opts?.page ?? pagination.page;
+    const f = opts?.filter ?? filter;
+    const q = opts?.q ?? query;
+    const qs = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pagination.pageSize),
+      filter: f,
+    });
+    if (q.trim()) qs.set("q", q.trim());
+    const res = await fetch(`/api/inventory?${qs.toString()}`);
     const data = await res.json();
     const list = Array.isArray(data) ? data : data.vehicles ?? [];
-    setVehicles(list);
-    if (data.snapshot) setSnapshot(data.snapshot);
+    setVehicles((prev) => (page > 1 ? [...prev, ...list] : list));
+    if (data.snapshot) setSnapshot((s) => ({ ...s, ...data.snapshot }));
+    if (data.pagination) {
+      setPagination((p) => ({
+        ...p,
+        page: data.pagination.page,
+        totalCount: data.pagination.totalCount,
+        hasMore: data.pagination.hasMore,
+      }));
+    }
     setLoading(false);
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    setLoading(true);
+    void load({ page: 1, filter, q: query });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setLoading(true);
+      void load({ page: 1, filter, q: query });
+    }, 280);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   useEffect(() => {
     function onOpenWorkspace(e: Event) {
@@ -249,7 +290,7 @@ function InventoryPageContent() {
           href:
             v.pendingValidationCount > 0 || v.freshnessState !== "FRESH"
               ? "/validations"
-              : "#",
+              : `/inventory?focus=${v.id}&enrich=1&filter=active`,
           badge,
           urgent: true,
         };
@@ -257,45 +298,13 @@ function InventoryPageContent() {
   }, [vehicles]);
 
   const filtered = useMemo(() => {
+    // Server already filtered; keep light client search debounce for typing
     let list = [...vehicles];
-    if (filter === "attention") {
-      list = list.filter((v) => attentionItems.some((a) => a.id === v.id));
-    } else if (filter === "interest") {
-      list = list.filter((v) => v.openInterestCount > 0);
-    } else if (filter === "active") {
-      list = list.filter((v) => v.status === "ACTIVE");
-    } else if (filter === "sold") {
-      list = list.filter((v) => v.status === "SOLD");
-    } else {
-      list = list.filter((v) => v.status === "ACTIVE");
+    if (filter === "all") {
+      // server returns ACTIVE+SOLD — keep all
     }
-
-    const q = query.trim().toLowerCase();
-    if (q) {
-      list = list.filter((v) =>
-        [v.make, v.model, String(v.year ?? "")]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
-      );
-    }
-
-    list.sort((a, b) => {
-      const score = (v: Vehicle) => {
-        if (v.pendingValidationCount > 0 || v.freshnessState !== "FRESH")
-          return 0;
-        if (v.openInterestCount > 0) return 1;
-        if (v.b2bPrice == null) return 2;
-        return 3;
-      };
-      const d = score(a) - score(b);
-      if (d !== 0) return d;
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
-
     return list;
-  }, [vehicles, filter, query, attentionItems]);
+  }, [vehicles, filter]);
 
   if (loading) {
     return (
@@ -398,11 +407,16 @@ function InventoryPageContent() {
           { id: "active", label: "פעיל" },
           { id: "attention", label: "דורש טיפול" },
           { id: "interest", label: "עם עניין" },
+          { id: "missing_price", label: "חסר מחיר" },
           { id: "sold", label: "נמכר" },
           { id: "all", label: "הכל" },
         ]}
       />
 
+      <p className="mb-2 text-xs text-v2-text-muted">
+        מציג {filtered.length} מתוך {pagination.totalCount || snapshot.total} ·
+        פעילים במלאי: {snapshot.total}
+      </p>
       {editVehicle && (
         <Surface depth="raised" className="mb-4 space-y-3 p-4">
           <h3 className="font-semibold text-v2-text-primary">
@@ -523,9 +537,8 @@ function InventoryPageContent() {
                 missingB2b: v.b2bPrice == null,
               });
               return (
-                <div id={`vehicle-${v.id}`}>
+                <div key={v.id} id={`vehicle-${v.id}`}>
                 <Surface
-                  key={v.id}
                   depth="raised"
                   className={`${styles.card} ${
                     highlightId === v.id ? "ring-2 ring-v2-signal" : ""
@@ -626,6 +639,18 @@ function InventoryPageContent() {
                 </div>
               );
             })}
+          </div>
+        )}
+        {pagination.hasMore && filtered.length > 0 && (
+          <div className="mt-4 flex justify-center">
+            <ButtonV2
+              variant="secondary"
+              onClick={() =>
+                void load({ page: pagination.page + 1, filter, q: query })
+              }
+            >
+              טען עוד
+            </ButtonV2>
           </div>
         )}
       </WorkspaceSection>

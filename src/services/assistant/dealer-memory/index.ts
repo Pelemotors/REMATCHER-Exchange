@@ -409,6 +409,16 @@ export async function retrieveRelevantMemories(params: {
   limit?: number;
 }): Promise<{ items: MemoryItemView[]; latencyMs: number }> {
   const started = Date.now();
+  const { isDealerMemoryRuntimeEnabled } = await import(
+    "@/config/kill-switches"
+  );
+  if (!isDealerMemoryRuntimeEnabled()) {
+    return { items: [], latencyMs: Date.now() - started };
+  }
+  const { mayPersistDealerMemory } = await import("@/services/privacy/policy");
+  if (!(await mayPersistDealerMemory(params.dealerId))) {
+    return { items: [], latencyMs: Date.now() - started };
+  }
   await expireDueMemories(params.dealerId);
   await cleanupStaleMemoryRows(params.dealerId);
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { logAppEvent } from "@/services/notifications";
+import { emitExchangeEvent } from "@/services/exchange/events";
 import type {
   InventoryDbClient,
   InventoryMutationSource,
@@ -18,21 +19,22 @@ export type VehicleUpdateFields = {
   retailPrice?: number | null;
   b2bPrice?: number | null;
   region?: string | null;
-  status?: "ACTIVE" | "SOLD" | "ARCHIVED";
+  /** ARCHIVED only — SOLD must use markVehicleSoldForDealer; ACTIVE reactivation uses reactivateVehicleForDealer */
+  status?: "ARCHIVED";
   rawInput?: string | null;
   lastAvailabilityConfirmedAt?: Date | null;
 };
 
 /**
- * Canonical vehicle update for Dealer — ownership scoped.
- * Used by API, Agent, and Import. Never invent values; only apply provided keys.
+ * Canonical vehicle fact update — ownership scoped.
+ * Does NOT set SOLD or reactivate SOLD→ACTIVE (use dedicated commands).
+ * Edited now ≠ availability confirmed (freshness only bumps when explicitly confirmed).
  */
 export async function updateVehicleForDealer(input: {
   dealerId: string;
   vehicleId: string;
   fields: VehicleUpdateFields;
   source?: InventoryMutationSource | string;
-  /** Batch import: avoid N× vehicle_updated AppEvents (summary logged at import level) */
   skipEventLog?: boolean;
   db?: InventoryDbClient;
 }) {
@@ -46,9 +48,24 @@ export async function updateVehicleForDealer(input: {
     return { ok: false as const, error: "not_found" as const };
   }
 
+  if (vehicle.status === "SOLD" || vehicle.status === "ARCHIVED") {
+    // Fact edits on terminal inventory require reactivation first
+    const onlyMeta =
+      Object.keys(input.fields).length > 0 &&
+      Object.keys(input.fields).every((k) =>
+        ["rawInput"].includes(k)
+      );
+    if (!onlyMeta && input.fields.status !== "ARCHIVED") {
+      return {
+        ok: false as const,
+        error: "terminal_status" as const,
+        message: "רכב שנמכר דורש הפעלה מחדש מפורשת לפני עדכון.",
+      };
+    }
+  }
+
   const data: Record<string, unknown> = {
     lastInventoryUpdate: new Date(),
-    freshnessState: "FRESH",
   };
 
   const f = input.fields;
@@ -64,19 +81,16 @@ export async function updateVehicleForDealer(input: {
   if ("b2bPrice" in f) data.b2bPrice = f.b2bPrice;
   if ("region" in f) data.region = f.region;
   if ("rawInput" in f) data.rawInput = f.rawInput;
-  if ("lastAvailabilityConfirmedAt" in f) {
+
+  // Availability confirmation is explicit — not implied by generic edits
+  if ("lastAvailabilityConfirmedAt" in f && f.lastAvailabilityConfirmedAt) {
     data.lastAvailabilityConfirmedAt = f.lastAvailabilityConfirmedAt;
+    data.freshnessState = "FRESH";
   }
 
-  if (f.status === "SOLD") {
-    data.status = "SOLD";
-    data.archivedAt = new Date();
-  } else if (f.status === "ARCHIVED") {
+  if (f.status === "ARCHIVED") {
     data.status = "ARCHIVED";
     data.archivedAt = new Date();
-  } else if (f.status === "ACTIVE") {
-    data.status = "ACTIVE";
-    data.archivedAt = null;
   }
 
   const b2bNewlySet =
@@ -110,25 +124,9 @@ export async function updateVehicleForDealer(input: {
         fields: Object.keys(f),
       },
     });
-  }
 
-  try {
-    const { emitExchangeEvent } = await import("@/services/exchange/events");
-    if (f.status === "SOLD" && vehicle.status !== "SOLD") {
-      await emitExchangeEvent({
-        eventType: "VEHICLE_SOLD",
-        dealerId: input.dealerId,
-        vehicleId: updated.id,
-        evidenceType: "SYSTEM_OBSERVED",
-        privacyClass: "DEALER_SCOPED",
-        eventData: { source: input.source ?? "domain" },
-        idempotencyKey: `vehicle-sold:${updated.id}`,
-      });
-      const { cancelOpenRequestsForVehicle } = await import(
-        "@/services/matching/information-request"
-      );
-      await cancelOpenRequestsForVehicle(updated.id);
-    } else if (f.status === "ARCHIVED" && vehicle.status !== "ARCHIVED") {
+    // Durable exchange events — failure fails the mutation path for caller retry
+    if (f.status === "ARCHIVED" && vehicle.status !== "ARCHIVED") {
       await emitExchangeEvent({
         eventType: "INVENTORY_REMOVED",
         dealerId: input.dealerId,
@@ -142,18 +140,11 @@ export async function updateVehicleForDealer(input: {
         "@/services/matching/information-request"
       );
       await cancelOpenRequestsForVehicle(updated.id);
-    } else if (f.status === "ACTIVE" && vehicle.status !== "ACTIVE") {
-      await emitExchangeEvent({
-        eventType: "INVENTORY_REACTIVATED",
-        dealerId: input.dealerId,
-        vehicleId: updated.id,
-        evidenceType: "SYSTEM_OBSERVED",
-        privacyClass: "DEALER_SCOPED",
-        idempotencyKey: `inventory-reactivated:${updated.id}:${Date.now()}`,
-      });
     } else if (
       Object.keys(f).some((k) =>
-        ["make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color"].includes(k)
+        ["make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color"].includes(
+          k
+        )
       )
     ) {
       await emitExchangeEvent({
@@ -177,9 +168,62 @@ export async function updateVehicleForDealer(input: {
         updatedFields,
       });
     }
-  } catch {
-    // non-blocking
   }
 
   return { ok: true as const, vehicle: updated };
+}
+
+/** Explicit reactivation — never via generic update side-effect. */
+export async function reactivateVehicleForDealer(input: {
+  dealerId: string;
+  vehicleId: string;
+  source?: InventoryMutationSource | string;
+}) {
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: input.vehicleId, dealerId: input.dealerId },
+  });
+  if (!vehicle) {
+    return { ok: false as const, error: "not_found" as const };
+  }
+  if (vehicle.status === "ACTIVE") {
+    return { ok: true as const, vehicle, alreadyActive: true as const };
+  }
+  if (vehicle.status !== "SOLD" && vehicle.status !== "ARCHIVED") {
+    return { ok: false as const, error: "invalid_status" as const };
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.vehicle.update({
+      where: { id: vehicle.id },
+      data: {
+        status: "ACTIVE",
+        archivedAt: null,
+        lastInventoryUpdate: new Date(),
+        freshnessState: "UNKNOWN",
+      },
+    });
+    await emitExchangeEvent(
+      {
+        eventType: "INVENTORY_REACTIVATED",
+        dealerId: input.dealerId,
+        vehicleId: row.id,
+        evidenceType: "SYSTEM_OBSERVED",
+        privacyClass: "DEALER_SCOPED",
+        eventData: { source: input.source ?? "domain", from: vehicle.status },
+        idempotencyKey: `inventory-reactivated:${row.id}:${vehicle.status}`,
+      },
+      tx
+    );
+    return row;
+  });
+
+  await logAppEvent({
+    eventType: "vehicle_reactivated",
+    entityType: "Vehicle",
+    entityId: updated.id,
+    dealerId: input.dealerId,
+    metadata: { source: input.source ?? "domain", from: vehicle.status },
+  });
+
+  return { ok: true as const, vehicle: updated, alreadyActive: false as const };
 }

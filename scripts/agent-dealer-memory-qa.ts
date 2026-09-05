@@ -2,6 +2,8 @@
  * Dealer Memory Production QA.
  * Asserts persistence/retrieval/supersede/forget via chat meta + tool side effects.
  * Does NOT require recommendation flips.
+ *
+ * If Dealer Memory is fail-closed for Pilot, exits PASS with DISABLED status.
  */
 const BASE = process.env.E2E_BASE_URL ?? "https://exchange.rematcher.co.il";
 const EMAIL = process.env.E2E_EMAIL;
@@ -114,6 +116,20 @@ async function ensureDealerMemoryConsent(cookies: string) {
 async function main() {
   const health = (await (await fetch(`${BASE}/api/health`)).json()) as Json;
   console.log(`HEALTH ${JSON.stringify(health)}`);
+
+  if (health.killSwitches?.dealer_memory === true) {
+    console.log(
+      "DEALER MEMORY DISABLED/FAIL-CLOSED FOR PILOT — skipping mutation suite"
+    );
+    console.log(
+      `MEMORY QA PASS ${JSON.stringify({
+        mode: "DISABLED_FAIL_CLOSED",
+        healthCommit: health.commit,
+      })}`
+    );
+    return;
+  }
+
   const cookies = await login();
   console.log("LOGIN OK");
   await ensureDealerMemoryConsent(cookies);

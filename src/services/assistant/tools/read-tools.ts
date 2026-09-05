@@ -100,24 +100,31 @@ export async function executeReadTool(
       };
     }
     case "getMyInventory": {
-      const vehicles = await prisma.vehicle.findMany({
-        where: { dealerId, status: "ACTIVE" },
-        select: {
-          id: true,
-          make: true,
-          model: true,
-          year: true,
-          mileage: true,
-          b2bPrice: true,
-          retailPrice: true,
-          freshnessState: true,
-          ownershipHand: true,
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 20,
-      });
+      const LIST_TAKE = 20;
+      const [activeCount, vehicles] = await Promise.all([
+        prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
+        prisma.vehicle.findMany({
+          where: { dealerId, status: "ACTIVE" },
+          select: {
+            id: true,
+            make: true,
+            model: true,
+            year: true,
+            mileage: true,
+            b2bPrice: true,
+            retailPrice: true,
+            freshnessState: true,
+            ownershipHand: true,
+          },
+          orderBy: { updatedAt: "desc" },
+          take: LIST_TAKE,
+        }),
+      ]);
       return {
-        activeCount: vehicles.length,
+        activeCount,
+        totalCount: activeCount,
+        returnedCount: vehicles.length,
+        hasMore: activeCount > vehicles.length,
         vehicles: vehicles.map((v) => agentVehicleView(v)),
       };
     }
@@ -141,67 +148,97 @@ export async function executeReadTool(
     case "getMyPendingActions":
       return getPendingActionsForDealer(dealerId);
     case "getMyPendingValidations": {
-      const events = await prisma.validationEvent.findMany({
-        where: { dealerId, status: "PENDING" },
-        include: {
-          vehicle: { select: { make: true, model: true, year: true } },
-        },
-        orderBy: { requestedAt: "desc" },
-        take: 10,
-      });
-      return events.map((e) => ({
-        id: e.id,
-        title: `${e.vehicle.make ?? ""} ${e.vehicle.model ?? ""} ${e.vehicle.year ?? ""}`.trim(),
-        href: `/validations?focus=${e.id}`,
-      }));
+      const where = { dealerId, status: "PENDING" as const };
+      const [totalCount, events] = await Promise.all([
+        prisma.validationEvent.count({ where }),
+        prisma.validationEvent.findMany({
+          where,
+          include: {
+            vehicle: { select: { make: true, model: true, year: true } },
+          },
+          orderBy: { requestedAt: "desc" },
+          take: 10,
+        }),
+      ]);
+      return {
+        totalCount,
+        returnedCount: events.length,
+        hasMore: totalCount > events.length,
+        items: events.map((e) => ({
+          id: e.id,
+          title: `${e.vehicle.make ?? ""} ${e.vehicle.model ?? ""} ${e.vehicle.year ?? ""}`.trim(),
+          href: `/validations?focus=${e.id}`,
+        })),
+      };
     }
     case "getMyCommercialStatus":
       return getDealerUsageSummary(dealerId);
     case "getMyOpportunities": {
-      const opps = await prisma.sellerOpportunity.findMany({
-        where: { vehicle: { dealerId }, status: "OPEN" },
-        include: {
-          vehicle: { select: { id: true, make: true, model: true, year: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 8,
-      });
-      return opps.map((o) => ({
-        id: o.id,
-        href: `/opportunities?focus=${o.id}`,
-        vehicleTitle:
-          `${o.vehicle.make ?? ""} ${o.vehicle.model ?? ""} ${o.vehicle.year ?? ""}`.trim(),
-        note: "סוחר מאומת ברשת הביע עניין",
-      }));
+      const where = { vehicle: { dealerId }, status: "OPEN" as const };
+      const [totalCount, opps] = await Promise.all([
+        prisma.sellerOpportunity.count({ where }),
+        prisma.sellerOpportunity.findMany({
+          where,
+          include: {
+            vehicle: {
+              select: { id: true, make: true, model: true, year: true },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 8,
+        }),
+      ]);
+      return {
+        totalCount,
+        returnedCount: opps.length,
+        hasMore: totalCount > opps.length,
+        count: totalCount,
+        items: opps.map((o) => ({
+          id: o.id,
+          href: `/opportunities?focus=${o.id}`,
+          vehicleTitle:
+            `${o.vehicle.make ?? ""} ${o.vehicle.model ?? ""} ${o.vehicle.year ?? ""}`.trim(),
+          note: "סוחר מאומת ברשת הביע עניין",
+        })),
+      };
     }
     case "getMyAuthorizedMatches": {
-      const matches = await prisma.candidateMatch.findMany({
-        where: {
-          demand: { dealerId },
-          status: { in: ["VALIDATED", "PENDING_VALIDATION"] },
-          scoreBand: { in: ["STRONG", "ALTERNATIVE"] },
-        },
-        include: {
-          vehicle: true,
-          demand: { select: { id: true, confirmedJson: true } },
-        },
-        orderBy: { score: "desc" },
-        take: 8,
-      });
+      const where = {
+        demand: { dealerId },
+        status: { in: ["VALIDATED" as const, "PENDING_VALIDATION" as const] },
+        scoreBand: { in: ["STRONG" as const, "ALTERNATIVE" as const] },
+      };
+      const [totalCount, matches] = await Promise.all([
+        prisma.candidateMatch.count({ where }),
+        prisma.candidateMatch.findMany({
+          where,
+          include: {
+            vehicle: true,
+            demand: { select: { id: true, confirmedJson: true } },
+          },
+          orderBy: { score: "desc" },
+          take: 8,
+        }),
+      ]);
       const { toBuyerMatchView } = await import("@/lib/privacy-views");
       const { demandTitle, confirmedFromJson } = await import(
         "@/lib/demand-display"
       );
-      return matches.map((m) => ({
-        id: m.id,
-        href: `/matches?focus=${m.id}`,
-        status: m.status,
-        scoreBand: m.scoreBand,
-        explanation: m.explanationText,
-        demandTitle: demandTitle(confirmedFromJson(m.demand.confirmedJson)),
-        demandId: m.demand.id,
-        vehicle: toBuyerMatchView(m.vehicle),
-      }));
+      return {
+        totalCount,
+        returnedCount: matches.length,
+        hasMore: totalCount > matches.length,
+        items: matches.map((m) => ({
+          id: m.id,
+          href: `/matches?focus=${m.id}`,
+          status: m.status,
+          scoreBand: m.scoreBand,
+          explanation: m.explanationText,
+          demandTitle: demandTitle(confirmedFromJson(m.demand.confirmedJson)),
+          demandId: m.demand.id,
+          vehicle: toBuyerMatchView(m.vehicle),
+        })),
+      };
     }
     case "getMyInventoryRequiringAttention": {
       const vehicles = await prisma.vehicle.findMany({

@@ -66,6 +66,10 @@ export async function hasCompletedPrivacyAiV1(params: {
 }
 
 export async function mayPersistDealerMemory(dealerId: string): Promise<boolean> {
+  const { isDealerMemoryRuntimeEnabled } = await import(
+    "@/config/kill-switches"
+  );
+  if (!isDealerMemoryRuntimeEnabled()) return false;
   const s = await getConsentState(dealerId);
   return s.DEALER_MEMORY === true;
 }

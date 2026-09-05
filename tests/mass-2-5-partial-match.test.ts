@@ -233,10 +233,15 @@ describe("Mass 2.5 Partial Match", () => {
 
   it("13–14. demand/vehicle terminal states cancel requests", () => {
     const sold = readFileSync(
-      join(process.cwd(), "src/services/inventory/mark-sold.ts"),
+      join(process.cwd(), "src/services/inventory/sold-lifecycle.ts"),
       "utf8"
     );
     expect(sold).toContain("cancelOpenRequestsForVehicle");
+    const mark = readFileSync(
+      join(process.cwd(), "src/services/inventory/mark-sold.ts"),
+      "utf8"
+    );
+    expect(mark).toContain("applyVehicleSoldLifecycle");
     const close = readFileSync(
       join(process.cwd(), "src/services/assistant/tools/action-tools.ts"),
       "utf8"

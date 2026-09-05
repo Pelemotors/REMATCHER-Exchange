@@ -37,13 +37,35 @@ type ActionItem = {
   listItem?: ConversationListItem;
 };
 
-function authorizedMatchCount(toolResults: Record<string, unknown>): number {
-  const raw = toolResults.getMyAuthorizedMatches;
-  if (Array.isArray(raw)) return raw.length;
-  if (raw && typeof raw === "object" && "count" in raw) {
-    return Number((raw as { count?: number }).count ?? 0);
+function asToolList<T>(raw: unknown): { items: T[]; totalCount: number } {
+  if (Array.isArray(raw)) {
+    return { items: raw as T[], totalCount: raw.length };
   }
-  return 0;
+  if (raw && typeof raw === "object") {
+    const o = raw as {
+      items?: T[];
+      totalCount?: number;
+      count?: number;
+      activeCount?: number;
+    };
+    if (Array.isArray(o.items)) {
+      return {
+        items: o.items,
+        totalCount: Number(o.totalCount ?? o.count ?? o.activeCount ?? o.items.length),
+      };
+    }
+    if (typeof o.totalCount === "number" || typeof o.count === "number") {
+      return {
+        items: [],
+        totalCount: Number(o.totalCount ?? o.count ?? 0),
+      };
+    }
+  }
+  return { items: [], totalCount: 0 };
+}
+
+function authorizedMatchCount(toolResults: Record<string, unknown>): number {
+  return asToolList(toolResults.getMyAuthorizedMatches).totalCount;
 }
 
 const METRIC_DUMP_PATTERNS = [
@@ -111,18 +133,16 @@ function buildActionItems(
 ): ActionItem[] {
   const items: ActionItem[] = [];
 
-  const opportunities = toolResults.getMyOpportunities as
-    | Array<{ id: string; href?: string }>
-    | { count: number; href?: string }
-    | undefined;
+  const opportunities = asToolList<{ id: string; href?: string }>(
+    toolResults.getMyOpportunities
+  );
   const state = toolResults.getMyExchangeState as
     | { openOpportunities?: number; authorizedMatches?: number }
     | undefined;
-  const oppCount = Array.isArray(opportunities)
-    ? opportunities.length
-    : opportunities?.count ?? state?.openOpportunities ?? 0;
+  const oppCount =
+    opportunities.totalCount || state?.openOpportunities || 0;
   if (oppCount > 0) {
-    const firstOpp = Array.isArray(opportunities) ? opportunities[0] : null;
+    const firstOpp = opportunities.items[0];
     items.push({
       text: "יש עניין חדש ברכב שלך שכדאי לבדוק.",
       card: {
@@ -137,11 +157,11 @@ function buildActionItems(
     });
   }
 
-  const validations = toolResults.getMyPendingValidations as
-    | Array<{ id: string; title: string; href?: string }>
-    | undefined;
-  if (validations?.length) {
-    for (const v of validations) {
+  const validations = asToolList<{ id: string; title: string; href?: string }>(
+    toolResults.getMyPendingValidations
+  );
+  if (validations.items.length) {
+    for (const v of validations.items) {
       const name = displayShortName(v.title);
       items.push({
         text: `צריך לאשר שה${name} עדיין במלאי.`,
@@ -156,13 +176,13 @@ function buildActionItems(
     }
   }
 
-  const authorizedMatches = toolResults.getMyAuthorizedMatches as
-    | Array<{ id: string; href?: string }>
-    | undefined;
+  const authorizedMatches = asToolList<{ id: string; href?: string }>(
+    toolResults.getMyAuthorizedMatches
+  );
   const matchCount =
     authorizedMatchCount(toolResults) || state?.authorizedMatches || 0;
   if (matchCount > 0 && !items.some((i) => i.text.includes("התאמה"))) {
-    const firstMatch = authorizedMatches?.[0];
+    const firstMatch = authorizedMatches.items[0];
     items.push({
       text: "נמצאה התאמה שכדאי לבדוק.",
       card: {
@@ -386,18 +406,26 @@ function buildDeterministicResponse(
         lastList: [],
       };
     }
-    const listed = toolResults.getMyAuthorizedMatches;
-    if (Array.isArray(listed) && listed.length) {
-      const lines = listed.slice(0, 8).map((m: { demandTitle?: string; scoreBand?: string }, i: number) => {
+    const listed = asToolList<{
+      id?: string;
+      demandTitle?: string;
+      scoreBand?: string;
+    }>(toolResults.getMyAuthorizedMatches);
+    if (listed.items.length) {
+      const lines = listed.items.slice(0, 8).map((m, i) => {
         const title = m.demandTitle ?? "התאמה";
         const band = m.scoreBand ? ` · ${m.scoreBand}` : "";
         return `${i + 1}. ${title}${band}`;
       });
       return {
-        message: `יש לך ${listed.length} התאמות מאושרות:\n${lines.join("\n")}`,
+        message: `יש לך ${listed.totalCount} התאמות מאושרות${
+          listed.totalCount > listed.items.length
+            ? ` (מציג ${listed.items.length})`
+            : ""
+        }:\n${lines.join("\n")}`,
         suggestions: [{ label: "התאמות", href: "/matches" }],
         cards: [],
-        lastList: listed.slice(0, 8).map((m: { id?: string; demandTitle?: string }) => ({
+        lastList: listed.items.slice(0, 8).map((m) => ({
           id: String(m.id ?? ""),
           title: m.demandTitle ?? "התאמה",
           type: "match" as const,

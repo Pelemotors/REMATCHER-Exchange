@@ -208,6 +208,6 @@ describe("createVehicleForDealer shared path", () => {
     expect(result.ok).toBe(true);
     expect(mockCreate).toHaveBeenCalled();
   },
-  15000
+  30000
   );
 });

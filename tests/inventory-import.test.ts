@@ -202,8 +202,8 @@ describe("import confirm uses shared domain mutation path", () => {
         source: "import",
         skipEventLog: true,
         fields: expect.objectContaining({
-          status: "ACTIVE",
           b2bPrice: 129000,
+          make: "Toyota",
         }),
       })
     );

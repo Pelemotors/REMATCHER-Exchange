@@ -32,9 +32,17 @@ export type EmitExchangeEventInput = {
   operational?: boolean;
 };
 
-export async function emitExchangeEvent(input: EmitExchangeEventInput) {
+export async function emitExchangeEvent(
+  input: EmitExchangeEventInput,
+  db: {
+    exchangeEvent: {
+      findUnique: typeof prisma.exchangeEvent.findUnique;
+      create: typeof prisma.exchangeEvent.create;
+    };
+  } = prisma
+) {
   if (input.idempotencyKey) {
-    const existing = await prisma.exchangeEvent.findUnique({
+    const existing = await db.exchangeEvent.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
     });
     if (existing) return existing;
@@ -48,7 +56,7 @@ export async function emitExchangeEvent(input: EmitExchangeEventInput) {
     : null;
 
   try {
-    return await prisma.exchangeEvent.create({
+    return await db.exchangeEvent.create({
       data: {
         eventType: input.eventType,
         occurredAt: input.occurredAt ?? new Date(),
@@ -75,7 +83,7 @@ export async function emitExchangeEvent(input: EmitExchangeEventInput) {
       "code" in err &&
       (err as { code?: string }).code === "P2002"
     ) {
-      return prisma.exchangeEvent.findUnique({
+      return db.exchangeEvent.findUnique({
         where: { idempotencyKey: input.idempotencyKey },
       });
     }
@@ -121,7 +129,7 @@ export async function reportDealerBusinessEvent(params: {
     reason: params.reason ?? null,
     eventData: params.eventData ?? null,
     privacyClass: "DEALER_SCOPED",
-    idempotencyKey: `dealer-report:${params.dealerId}:${params.eventType}:${params.vehicleId ?? ""}:${params.candidateMatchId ?? ""}:${Date.now()}`,
+    idempotencyKey: `dealer-report:${params.dealerId}:${params.eventType}:${params.vehicleId ?? ""}:${params.demandId ?? ""}:${params.candidateMatchId ?? ""}`,
   });
   return { blocked: false as const, event };
 }

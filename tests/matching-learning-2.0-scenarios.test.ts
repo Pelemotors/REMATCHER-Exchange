@@ -109,13 +109,18 @@ describe("ML2.0 scenario contracts", () => {
   });
 
   it("SCENARIO 7: archive path emits INVENTORY_REMOVED not VEHICLE_SOLD", () => {
-    const src = readFileSync(
+    const updateSrc = readFileSync(
       join(process.cwd(), "src/services/inventory/update-vehicle.ts"),
       "utf8"
     );
-    expect(src).toContain('eventType: "INVENTORY_REMOVED"');
-    expect(src).toContain("archived_not_sold");
-    expect(src).toContain('eventType: "VEHICLE_SOLD"');
+    const soldSrc = readFileSync(
+      join(process.cwd(), "src/services/inventory/mark-sold.ts"),
+      "utf8"
+    );
+    expect(updateSrc).toContain('eventType: "INVENTORY_REMOVED"');
+    expect(updateSrc).toContain("archived_not_sold");
+    expect(updateSrc).not.toContain('eventType: "VEHICLE_SOLD"');
+    expect(soldSrc).toContain('eventType: "VEHICLE_SOLD"');
   });
 
   it("SCENARIO 9/10: dual outcome axes exist in case service", () => {

@@ -1,35 +1,92 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createVehicleForDealer } from "@/services/inventory/create-vehicle";
 
-export async function GET() {
+const patchSchema = z
+  .object({
+    vehicleId: z.string().min(1).max(80),
+    status: z.enum(["SOLD"]).optional(),
+    fields: z
+      .object({
+        make: z.string().nullable().optional(),
+        model: z.string().nullable().optional(),
+        trim: z.string().nullable().optional(),
+        year: z.number().int().min(1980).max(2100).nullable().optional(),
+        mileage: z.number().int().min(0).max(2_000_000).nullable().optional(),
+        color: z.string().nullable().optional(),
+        ownershipHand: z.number().int().min(0).max(20).nullable().optional(),
+        retailPrice: z.number().int().min(0).nullable().optional(),
+        b2bPrice: z.number().int().min(0).nullable().optional(),
+        region: z.string().nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    reactivate: z.boolean().optional(),
+  })
+  .strict();
+
+const listQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  filter: z
+    .enum(["all", "active", "sold", "attention", "interest", "missing_price"])
+    .default("active"),
+  q: z.string().max(120).optional(),
+});
+
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.dealerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const dealerId = session.user.dealerId;
+  const url = new URL(req.url);
+  const parsed = listQuerySchema.safeParse({
+    page: url.searchParams.get("page") ?? undefined,
+    pageSize: url.searchParams.get("pageSize") ?? undefined,
+    filter: url.searchParams.get("filter") ?? undefined,
+    q: url.searchParams.get("q") ?? undefined,
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid query" }, { status: 400 });
+  }
+  const { page, pageSize, filter, q } = parsed.data;
 
-  const [vehicles, openOpps, pendingValidations] = await Promise.all([
-    prisma.vehicle.findMany({
-      where: { dealerId, status: { not: "ARCHIVED" } },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        make: true,
-        model: true,
-        year: true,
-        mileage: true,
-        b2bPrice: true,
-        retailPrice: true,
-        trim: true,
-        color: true,
-        status: true,
-        freshnessState: true,
-        updatedAt: true,
-        createdAt: true,
+  const [
+    activeCount,
+    soldCount,
+    allCount,
+    missingPriceCount,
+    attentionBase,
+    openOpps,
+    pendingValidations,
+  ] = await Promise.all([
+    prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
+    prisma.vehicle.count({ where: { dealerId, status: "SOLD" } }),
+    prisma.vehicle.count({
+      where: { dealerId, status: { in: ["ACTIVE", "SOLD"] } },
+    }),
+    prisma.vehicle.count({
+      where: {
+        dealerId,
+        status: "ACTIVE",
+        b2bPrice: null,
+        retailPrice: null,
       },
+    }),
+    prisma.vehicle.findMany({
+      where: {
+        dealerId,
+        status: "ACTIVE",
+        OR: [
+          { freshnessState: { in: ["STALE", "VALIDATION_REQUIRED", "UNKNOWN"] } },
+          { b2bPrice: null, retailPrice: null },
+        ],
+      },
+      select: { id: true },
     }),
     prisma.sellerOpportunity.groupBy({
       by: ["vehicleId"],
@@ -50,6 +107,70 @@ export async function GET() {
     pendingValidations.map((v) => [v.vehicleId, v._count._all])
   );
 
+  const pendingValIds = new Set(
+    pendingValidations.map((v) => v.vehicleId)
+  );
+  const attentionIds = new Set([
+    ...attentionBase.map((v) => v.id),
+    ...pendingValIds,
+  ]);
+
+  const where: Record<string, unknown> = {
+    dealerId,
+    status: { not: "ARCHIVED" },
+  };
+  if (filter === "active") where.status = "ACTIVE";
+  else if (filter === "sold") where.status = "SOLD";
+  else if (filter === "all") where.status = { in: ["ACTIVE", "SOLD"] };
+  else if (filter === "missing_price") {
+    where.status = "ACTIVE";
+    where.b2bPrice = null;
+    where.retailPrice = null;
+  } else if (filter === "attention") {
+    where.id = { in: [...attentionIds] };
+  } else if (filter === "interest") {
+    where.id = { in: openOpps.map((o) => o.vehicleId) };
+  }
+
+  if (q?.trim()) {
+    const term = q.trim();
+    where.AND = [
+      {
+        OR: [
+          { make: { contains: term, mode: "insensitive" } },
+          { model: { contains: term, mode: "insensitive" } },
+          { color: { contains: term, mode: "insensitive" } },
+        ],
+      },
+    ];
+  }
+
+  const totalMatching = await prisma.vehicle.count({
+    where: where as never,
+  });
+
+  const vehicles = await prisma.vehicle.findMany({
+    where: where as never,
+    orderBy: { updatedAt: "desc" },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+    select: {
+      id: true,
+      make: true,
+      model: true,
+      year: true,
+      mileage: true,
+      b2bPrice: true,
+      retailPrice: true,
+      trim: true,
+      color: true,
+      status: true,
+      freshnessState: true,
+      updatedAt: true,
+      createdAt: true,
+    },
+  });
+
   const enriched = vehicles.map((v) => ({
     ...v,
     openInterestCount: oppByVehicle.get(v.id) ?? 0,
@@ -57,21 +178,29 @@ export async function GET() {
   }));
 
   const snapshot = {
-    total: enriched.filter((v) => v.status === "ACTIVE").length,
-    needsAttention: enriched.filter(
-      (v) =>
-        v.status === "ACTIVE" &&
-        (v.freshnessState === "STALE" ||
-          v.freshnessState === "VALIDATION_REQUIRED" ||
-          v.pendingValidationCount > 0 ||
-          (v.b2bPrice == null && v.retailPrice == null))
-    ).length,
-    withInterest: enriched.filter((v) => v.openInterestCount > 0).length,
-    pendingValidation: enriched.filter((v) => v.pendingValidationCount > 0)
-      .length,
+    total: activeCount,
+    sold: soldCount,
+    all: allCount,
+    needsAttention: attentionIds.size,
+    withInterest: openOpps.length,
+    pendingValidation: pendingValidations.reduce(
+      (n, v) => n + v._count._all,
+      0
+    ),
+    missingPrivatePrice: missingPriceCount,
   };
 
-  return NextResponse.json({ vehicles: enriched, snapshot });
+  return NextResponse.json({
+    vehicles: enriched,
+    snapshot,
+    pagination: {
+      page,
+      pageSize,
+      totalCount: totalMatching,
+      returnedCount: enriched.length,
+      hasMore: page * pageSize < totalMatching,
+    },
+  });
 }
 
 export async function POST(req: Request) {
@@ -120,16 +249,22 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { vehicleId, status, fields } = body as {
-    vehicleId?: string;
-    status?: string;
-    fields?: Record<string, unknown>;
-  };
-
-  if (!vehicleId) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const parsed = patchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request", details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const { vehicleId, status, fields, reactivate } = parsed.data;
 
   if (status === "SOLD") {
     const { markVehicleSoldForDealer } = await import(
@@ -139,37 +274,54 @@ export async function PATCH(req: Request) {
       dealerId: session.user.dealerId,
       vehicleId,
       source: "inventory_api",
+      userId: session.user.id,
     });
     if (!result.ok) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    return NextResponse.json({
+      ok: true,
+      vehicle: result.vehicle,
+      alreadySold: result.alreadySold,
+    });
+  }
+
+  if (reactivate) {
+    const { reactivateVehicleForDealer } = await import(
+      "@/services/inventory/update-vehicle"
+    );
+    const result = await reactivateVehicleForDealer({
+      dealerId: session.user.dealerId,
+      vehicleId,
+      source: "inventory_api",
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.error === "not_found" ? 404 : 400 }
+      );
+    }
     return NextResponse.json({ ok: true, vehicle: result.vehicle });
   }
 
-  if (fields && typeof fields === "object") {
+  if (fields) {
     const { updateVehicleForDealer } = await import(
       "@/services/inventory/update-vehicle"
     );
     const result = await updateVehicleForDealer({
       dealerId: session.user.dealerId,
       vehicleId,
-      fields: {
-        make: fields.make as string | null | undefined,
-        model: fields.model as string | null | undefined,
-        trim: fields.trim as string | null | undefined,
-        year: fields.year as number | null | undefined,
-        mileage: fields.mileage as number | null | undefined,
-        color: fields.color as string | null | undefined,
-        ownershipHand: fields.ownershipHand as number | null | undefined,
-        retailPrice: fields.retailPrice as number | null | undefined,
-        b2bPrice: fields.b2bPrice as number | null | undefined,
-        region: fields.region as string | null | undefined,
-        status: fields.status as "ACTIVE" | "SOLD" | undefined,
-      },
+      fields,
       source: "inventory_api",
     });
     if (!result.ok) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: result.error,
+          message: "message" in result ? result.message : undefined,
+        },
+        { status: result.error === "not_found" ? 404 : 400 }
+      );
     }
     return NextResponse.json({ ok: true, vehicle: result.vehicle });
   }

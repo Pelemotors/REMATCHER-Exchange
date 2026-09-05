@@ -462,16 +462,13 @@ export async function confirmAvailabilityValidation(
   });
 
   if (!available) {
-    await prisma.vehicle.update({
-      where: { id: validation.vehicleId },
-      data: { status: "SOLD" },
-    });
-    await logAppEvent({
-      eventType: "vehicle_marked_sold",
-      entityType: "Vehicle",
-      entityId: validation.vehicleId,
+    const { markVehicleSoldForDealer } = await import(
+      "@/services/inventory/mark-sold"
+    );
+    await markVehicleSoldForDealer({
       dealerId,
-      metadata: { source: "availability_validation" },
+      vehicleId: validation.vehicleId,
+      source: "availability_validation",
     });
     if (validation.candidateMatchId) {
       await prisma.candidateMatch.update({
@@ -566,6 +563,9 @@ export async function recordBuyerInterest(params: {
     include: { demand: true, vehicle: true },
   });
   if (!match) throw new Error("NOT_FOUND");
+  if (match.vehicle.status === "SOLD" || match.vehicle.status === "ARCHIVED") {
+    throw new Error("VEHICLE_UNAVAILABLE");
+  }
 
   const interest = await prisma.buyerInterest.upsert({
     where: {
@@ -717,6 +717,9 @@ export async function recordSellerInterest(params: {
     },
   });
   if (!opp) throw new Error("NOT_FOUND");
+  if (opp.vehicle.status === "SOLD" || opp.vehicle.status === "ARCHIVED") {
+    throw new Error("VEHICLE_UNAVAILABLE");
+  }
 
   const sellerInterest = await prisma.sellerInterest.upsert({
     where: { opportunityId: params.opportunityId },

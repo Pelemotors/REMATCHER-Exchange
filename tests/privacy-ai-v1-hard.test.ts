@@ -194,8 +194,11 @@ describe("Enforcement gates", () => {
   });
 
   it("5–6. Memory OFF blocks; ON permits", async () => {
+    const prev = process.env.ENABLE_DEALER_MEMORY;
+    delete process.env.ENABLE_DEALER_MEMORY;
     vi.mocked(prisma.privacyConsentDecision.findFirst).mockResolvedValue(null);
     expect(await mayPersistDealerMemory("d1")).toBe(false);
+    process.env.ENABLE_DEALER_MEMORY = "1";
     vi.mocked(prisma.privacyConsentDecision.findFirst).mockImplementation(
       (async (args?: { where?: { consentType?: string } }) =>
         args?.where?.consentType === "DEALER_MEMORY"
@@ -203,6 +206,8 @@ describe("Enforcement gates", () => {
           : null) as never
     );
     expect(await mayPersistDealerMemory("d1")).toBe(true);
+    if (prev === undefined) delete process.env.ENABLE_DEALER_MEMORY;
+    else process.env.ENABLE_DEALER_MEMORY = prev;
   });
 
   it("9–10,27. Agent→Exchange / External consent gates", async () => {

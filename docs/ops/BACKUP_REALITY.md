@@ -24,9 +24,21 @@
 * Supabase project Owner/Admin via Dashboard restore UI (or support)
 * Application redeploy cannot by itself restore lost rows
 
-## Operator action required
+## Backup / PITR — Operator verification required
 
-1. Open Supabase Dashboard for **REMATCHER Exchange**
-2. Record: backup schedule, retention days, PITR on/off
-3. Store the result in the private ops vault (not in git with secrets)
-4. If PITR is off and Pilot data must be durable — upgrade/enable per Supabase pricing (manual purchase; not automated by this codebase)
+**Project:** `qammtrqpnapmeerskhns` (REMATCHER Exchange)  
+**API-verified:** ACTIVE_HEALTHY, Postgres 17, region `eu-central-1`  
+**PITR / retention:** **Not available via MCP/API in this environment.**
+
+### Manual action for Gal (Dashboard)
+
+1. Open [Supabase Dashboard](https://supabase.com/dashboard/project/qammtrqpnapmeerskhns/settings/database) → Database → Backups  
+2. Record exactly:
+   - Daily backups: on/off + retention days  
+   - Point-in-Time Recovery: enabled/disabled  
+   - Plan tier (Free / Pro / Team)  
+3. Store the note in the private ops vault (not in git with secrets)
+
+Until recorded: treat **PITR as unverified**. Restore path remains Dashboard Owner/Admin (see `RESTORE_RUNBOOK.md`).  
+Pilot may proceed with this limitation documented (Section 49).
+

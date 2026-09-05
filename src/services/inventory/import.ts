@@ -295,18 +295,39 @@ export async function confirmImport(params: {
       row.duplicateOfVehicleId &&
       row.duplicateConfidence !== "low"
     ) {
-      const result = await updateVehicleForDealer({
+      let result = await updateVehicleForDealer({
         dealerId: params.dealerId,
         vehicleId: row.duplicateOfVehicleId,
         source: "import",
         skipEventLog: true,
         fields: {
           ...fields,
-          status: "ACTIVE",
           rawInput: tag || null,
           lastAvailabilityConfirmedAt: now,
         },
       });
+      if (!result.ok && result.error === "terminal_status") {
+        const { reactivateVehicleForDealer } = await import(
+          "@/services/inventory/update-vehicle"
+        );
+        const re = await reactivateVehicleForDealer({
+          dealerId: params.dealerId,
+          vehicleId: row.duplicateOfVehicleId,
+          source: "import",
+        });
+        if (!re.ok) continue;
+        result = await updateVehicleForDealer({
+          dealerId: params.dealerId,
+          vehicleId: row.duplicateOfVehicleId,
+          source: "import",
+          skipEventLog: true,
+          fields: {
+            ...fields,
+            rawInput: tag || null,
+            lastAvailabilityConfirmedAt: now,
+          },
+        });
+      }
       if (!result.ok) {
         // Ownership / stale id — skip row; do not mutate foreign inventory
         continue;
