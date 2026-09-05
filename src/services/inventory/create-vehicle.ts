@@ -59,6 +59,8 @@ export async function createVehicleForDealer(input: {
   requireIdentity?: boolean;
   /** Import sets availability confirmation on ingest */
   lastAvailabilityConfirmedAt?: Date | null;
+  /** Import batches can defer discovery and rematch once at the end. */
+  skipRematch?: boolean;
   db?: InventoryDbClient;
 }) {
   const db = input.db ?? prisma;
@@ -172,6 +174,16 @@ export async function createVehicleForDealer(input: {
       entityType: "Vehicle",
       entityId: vehicle.id,
     }).catch(() => undefined);
+  }
+
+  if (!input.skipRematch) {
+    const { rematchAfterInventoryMutation } = await import(
+      "@/services/matching/inventory-rematch"
+    );
+    await rematchAfterInventoryMutation({
+      vehicleId: vehicle.id,
+      sellerDealerId: input.dealerId,
+    });
   }
 
   return { ok: true as const, vehicle, source: input.source ?? "domain" };
