@@ -83,6 +83,50 @@ export async function runMatchingForDemand(demandId: string) {
       evaluationV2.resolutionState === "RESOLVED" &&
       evaluationV2.band === "NO_MATCH"
     ) {
+      // Invalidate any previously visible candidate (e.g. price changed after enrichment)
+      const existing = await prisma.candidateMatch.findUnique({
+        where: {
+          demandId_vehicleId: { demandId, vehicleId: vehicle.id },
+        },
+      });
+      if (existing) {
+        await prisma.candidateMatch.update({
+          where: { id: existing.id },
+          data: {
+            status: "HIDDEN",
+            scoreBand: "NO_MATCH",
+            matchBandV2: "NO_MATCH",
+            resolutionState: "RESOLVED",
+            hardPassed: false,
+            score: evaluationV2.score,
+            engineVersion: MATCH_ENGINE_VERSION,
+            evaluationV2Json: toPrismaJson(evaluationV2),
+            decisionBlockingUnknowns: toPrismaJson([]),
+            explanationText: "אין התאמה מסחרית לאחר עדכון הפרטים",
+          },
+        });
+        await emitExchangeEvent({
+          eventType: "MATCH_INVALIDATED",
+          dealerId: demand.dealerId,
+          demandId,
+          vehicleId: vehicle.id,
+          candidateMatchId: existing.id,
+          evidenceType: "SYSTEM_OBSERVED",
+          privacyClass: "DEALER_SCOPED",
+          eventData: {
+            reason: "no_match_after_reeval",
+            engineVersion: MATCH_ENGINE_VERSION,
+          },
+          idempotencyKey: `match-invalidated:${demandId}:${vehicle.id}:${vehicle.updatedAt.toISOString()}`,
+        });
+        const { cancelOpenRequestsForVehicleDemand } = await import(
+          "@/services/matching/information-request"
+        );
+        await cancelOpenRequestsForVehicleDemand({
+          vehicleId: vehicle.id,
+          demandId,
+        });
+      }
       continue;
     }
 

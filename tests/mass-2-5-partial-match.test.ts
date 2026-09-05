@@ -218,6 +218,13 @@ describe("Mass 2.5 Partial Match", () => {
     expect(svc).toContain("INVENTORY_ENRICHED");
     expect(svc).toContain("runMatchingForDemand");
     expect(svc).toContain("BUYER_MATCH");
+    expect(svc).toContain("reevaluateDemandsForVehicle");
+    const flow = readFileSync(
+      join(process.cwd(), "src/services/domain/matching-flow.ts"),
+      "utf8"
+    );
+    expect(flow).toContain("MATCH_INVALIDATED");
+    expect(flow).toContain("no_match_after_reeval");
   });
 
   it("13–14. demand/vehicle terminal states cancel requests", () => {

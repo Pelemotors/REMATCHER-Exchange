@@ -269,6 +269,37 @@ export async function cancelOpenRequestsForVehicle(vehicleId: string) {
   });
 }
 
+export async function cancelOpenRequestsForVehicleDemand(params: {
+  vehicleId: string;
+  demandId: string;
+}) {
+  await prisma.informationRequest.updateMany({
+    where: {
+      vehicleId: params.vehicleId,
+      demandId: params.demandId,
+      status: "OPEN",
+    },
+    data: { status: "CANCELLED", cancelledAt: new Date() },
+  });
+}
+
+/** Re-run Matching for active demands that already have a candidate on this vehicle. */
+export async function reevaluateDemandsForVehicle(vehicleId: string) {
+  const rows = await prisma.candidateMatch.findMany({
+    where: { vehicleId, demand: { status: "ACTIVE" } },
+    select: { demandId: true },
+  });
+  const demandIds = [...new Set(rows.map((r) => r.demandId))];
+  if (demandIds.length === 0) return [] as string[];
+  const { runMatchingForDemand } = await import(
+    "@/services/domain/matching-flow"
+  );
+  for (const demandId of demandIds) {
+    await runMatchingForDemand(demandId);
+  }
+  return demandIds;
+}
+
 export async function fulfillRequestsAfterVehicleUpdate(params: {
   vehicleId: string;
   sellerDealerId: string;
@@ -335,6 +366,13 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
       });
     }
   }
+
+  // Always re-evaluate related active demands (covers post-fulfillment price changes)
+  const related = await prisma.candidateMatch.findMany({
+    where: { vehicleId: params.vehicleId, demand: { status: "ACTIVE" } },
+    select: { demandId: true },
+  });
+  for (const row of related) demandIds.add(row.demandId);
 
   const { runMatchingForDemand } = await import(
     "@/services/domain/matching-flow"
