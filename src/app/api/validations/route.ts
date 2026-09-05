@@ -33,7 +33,7 @@ export async function GET() {
     },
     include: {
       vehicle: {
-        select: { make: true, model: true, year: true },
+        select: { id: true, make: true, model: true, year: true },
       },
       candidateMatch: {
         include: {
