@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
@@ -21,10 +20,7 @@ export function NavItemV2({
   onClick?: () => void;
   compact?: boolean;
 }) {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [, startTransition] = useTransition();
-
   const showPending = pending || active;
 
   return (
@@ -37,13 +33,10 @@ export function NavItemV2({
           return;
         }
         if (active) return;
+        // Link already prefetches eligible routes before the click. Keep only
+        // immediate visual feedback here; a click-time prefetch cannot speed the
+        // navigation already in progress and adds router work to the hot path.
         setPending(true);
-        // Immediate visual feedback; Link still handles navigation.
-        // Soften perceived latency without blocking.
-        startTransition(() => {
-          router.prefetch(href);
-        });
-        // Clear pending if navigation is slow/cancelled (route change unmounts usually)
         window.setTimeout(() => setPending(false), 1200);
       }}
       className={cn(
