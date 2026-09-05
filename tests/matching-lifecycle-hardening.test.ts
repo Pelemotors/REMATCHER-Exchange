@@ -31,10 +31,10 @@ describe("matching lifecycle hardening", () => {
     expect(code).toContain("vehicleIds: [...touchedIds]");
   });
 
-  it("renews expired demand TTL and rebuilds constraints before rematching", () => {
+  it("renews expired demand TTL and preserves confirmed constraints before rematching", () => {
     const code = source("src/services/demand/demand-mutations.ts");
-    expect(code).toContain("rebuildDemandConstraints");
     expect(code).toContain("expiresAt: computeDemandExpiry()");
+    expect(code).toContain("Preserve the confirmed hard/soft/exclusion constraints on edit");
     expect(code).toContain("legacyToSearchIntent(params.confirmed, constraints)");
   });
 
