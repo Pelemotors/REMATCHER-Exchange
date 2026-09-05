@@ -70,11 +70,53 @@ async function chat(cookies: string, message: string, conversation: Json = {}) {
   return { status: response.status, body, elapsedMs: Date.now() - started };
 }
 
+async function ensureDealerMemoryConsent(cookies: string) {
+  // Privacy & AI v1: optional DEALER_MEMORY defaults false — enable for this suite.
+  const status = await fetch(`${BASE}/api/privacy/status`, {
+    headers: { Cookie: cookies },
+  });
+  requireQa(status.ok, `privacy status ${status.status}`);
+  const statusBody = (await status.json()) as Json;
+  if (!statusBody.hasCompletedPrivacyAiV1) {
+    const complete = await fetch(`${BASE}/api/privacy/onboarding/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookies },
+      body: JSON.stringify({
+        consents: {
+          DEALER_MEMORY: true,
+          AGENT_TO_EXCHANGE_LEARNING: false,
+          EXCHANGE_ACTIVITY_LEARNING: false,
+          EXTERNAL_ACTIVITY_LEARNING: false,
+        },
+      }),
+    });
+    requireQa(complete.ok, `privacy onboarding ${complete.status}`);
+    console.log("PRIVACY onboarding completed (DEALER_MEMORY=true for memory QA)");
+    return;
+  }
+  if (statusBody.consents?.DEALER_MEMORY !== true) {
+    const patch = await fetch(`${BASE}/api/privacy/consents`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: cookies },
+      body: JSON.stringify({
+        consentType: "DEALER_MEMORY",
+        value: true,
+        source: "dealer_memory_qa",
+      }),
+    });
+    requireQa(patch.ok, `enable DEALER_MEMORY ${patch.status}`);
+    console.log("DEALER_MEMORY consent enabled for memory QA");
+  } else {
+    console.log("DEALER_MEMORY consent already ON");
+  }
+}
+
 async function main() {
   const health = (await (await fetch(`${BASE}/api/health`)).json()) as Json;
   console.log(`HEALTH ${JSON.stringify(health)}`);
   const cookies = await login();
   console.log("LOGIN OK");
+  await ensureDealerMemoryConsent(cookies);
 
   let conversation: Json = {};
 

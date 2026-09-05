@@ -13,8 +13,12 @@ on:
       - 'scripts/agent-hard-safety-qa.ts'
       - 'scripts/agent-judgment-eval.ts'
       - 'scripts/agent-dealer-memory-qa.ts'
+      - 'scripts/privacy-ai-v1-production-qa.ts'
       - 'scripts/agent-commercial-production-qa.ts'
       - 'scripts/agent-v2-smoke.ts'
+      - 'src/services/privacy/**'
+      - 'src/config/legal/**'
+      - 'content/legal/**'
   workflow_dispatch:
 
 jobs:
@@ -64,6 +68,8 @@ jobs:
           NODE
       - name: Hard Safety Production QA
         run: npx tsx scripts/agent-hard-safety-qa.ts
+      - name: Privacy & AI v1 Production QA
+        run: npx tsx scripts/privacy-ai-v1-production-qa.ts
       - name: Dealer Memory Production QA
         run: npx tsx scripts/agent-dealer-memory-qa.ts
       - name: Judgment evaluation (non-blocking)
