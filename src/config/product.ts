@@ -90,7 +90,7 @@ export const AI_PROMPT_VERSIONS = {
   turnInterpreter: "turn-interpreter-v1",
   turnPlanner: "turn-planner-v1.1",
   agentLoop:
-    "agent-loop-v5.2.0-constitution-2.1-privacy-ai-v1-he",
+    "agent-loop-v5.2.1-mobile-response-policy-constitution-2.1-privacy-ai-v1-he",
   matchExplainer: "match-explainer-v1",
 } as const;
 
