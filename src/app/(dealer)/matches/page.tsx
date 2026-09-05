@@ -1,15 +1,14 @@
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { MatchesPageClient } from "@/components/matches/matches-page-client";
+import { ActionCardLoadingSkeleton } from "@/components/ui/brand-v2";
 import { listBuyerMatches } from "@/services/matching/list-buyer-matches";
 
 const TABS = ["action", "waiting", "history"] as const;
 type TabId = (typeof TABS)[number];
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default async function MatchesPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+async function MatchesContent({ searchParams }: { searchParams: SearchParams }) {
   const session = await auth();
   const dealerId = session!.user!.dealerId!;
   const params = await searchParams;
@@ -27,5 +26,13 @@ export default async function MatchesPage({
       initialTab={initialTab}
       initialFocusId={focusId ?? null}
     />
+  );
+}
+
+export default function MatchesPage({ searchParams }: { searchParams: SearchParams }) {
+  return (
+    <Suspense fallback={<ActionCardLoadingSkeleton />}>
+      <MatchesContent searchParams={searchParams} />
+    </Suspense>
   );
 }
