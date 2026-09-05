@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { recordBuyerInterest } from "@/services/domain/matching-flow";
 import { canDealerReveal } from "@/services/commercial/reveal-usage";
-import { toBuyerMatchView } from "@/lib/privacy-views";
-import type { MatchExplanation } from "@/lib/schemas/ai";
-import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
+import { listBuyerMatches } from "@/services/matching/list-buyer-matches";
 
 export async function GET() {
   const session = await auth();
@@ -13,49 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const matches = await prisma.candidateMatch.findMany({
-    where: {
-      demand: { dealerId: session.user.dealerId },
-      ...BUYER_VISIBLE_MATCH_WHERE,
-    },
-    include: {
-      vehicle: true,
-      buyerInterests: {
-        where: { dealerId: session.user.dealerId },
-      },
-      sellerOpportunities: {
-        include: {
-          sellerInterest: {
-            include: {
-              mutualInterest: {
-                include: { reveal: { select: { id: true } } },
-              },
-            },
-          },
-        },
-        take: 1,
-      },
-    },
-    orderBy: { score: "desc" },
-    take: 12,
-  });
-
-  const safe = matches.map((m) => {
-    const revealId =
-      m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
-      null;
-    return {
-      id: m.id,
-      status: m.status,
-      scoreBand: m.scoreBand,
-      explanation: m.explanationJson as MatchExplanation,
-      vehicle: toBuyerMatchView(m.vehicle),
-      interest: m.buyerInterests[0] ?? null,
-      revealId,
-    };
-  });
-
-  return NextResponse.json(safe);
+  return NextResponse.json(await listBuyerMatches(session.user.dealerId));
 }
 
 export async function POST(req: Request) {
@@ -112,10 +67,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     if (e instanceof Error && e.message === "VEHICLE_UNAVAILABLE") {
-      return NextResponse.json(
-        { error: "vehicle_unavailable" },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "vehicle_unavailable" }, { status: 409 });
     }
     throw e;
   }
