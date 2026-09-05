@@ -90,7 +90,7 @@ export default async function LandingPage() {
           <Surface depth="raised" className="mx-auto max-w-2xl p-8 text-center">
             <h2 className="text-h2 font-bold text-v2-warm">רשת פרטית — לא לוח רכב</h2>
             <p className="mt-4 text-v2-text-secondary">
-              סוחרים אחרים לא גולשים במלאי שלך ולא רואים מי אתה לפני עניין הדדי.
+              סוחרים אחרים לא גולשים במלאי שלך ולא רואים מי אתה לפני עניין הדדי.{" "}
               {BRAND.product} מחזיקה מלאי וחיפושים לאורך זמן, בודקת התאמות
               ברקע, ומציגה רק הזדמנות ששווה החלטה — לא עוד פיד לגלול.
             </p>
