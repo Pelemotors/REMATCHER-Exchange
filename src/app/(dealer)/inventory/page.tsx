@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import {
   InventoryPageClient,
   type InventoryFilterId,
 } from "@/components/inventory/inventory-page-client";
 import { InventoryEnrichmentPanel } from "@/components/inventory/inventory-enrichment-panel";
+import { ActionCardLoadingSkeleton } from "@/components/ui/brand-v2";
 import { getInventoryList } from "@/services/inventory/list-inventory";
 
 const FILTERS: InventoryFilterId[] = [
@@ -15,11 +17,9 @@ const FILTERS: InventoryFilterId[] = [
   "missing_price",
 ];
 
-export default async function InventoryPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+async function InventoryContent({ searchParams }: { searchParams: SearchParams }) {
   const session = await auth();
   const dealerId = session!.user!.dealerId!;
   const params = await searchParams;
@@ -54,5 +54,13 @@ export default async function InventoryPage({
         initialFilter={initialFilter}
       />
     </>
+  );
+}
+
+export default function InventoryPage({ searchParams }: { searchParams: SearchParams }) {
+  return (
+    <Suspense fallback={<ActionCardLoadingSkeleton />}>
+      <InventoryContent searchParams={searchParams} />
+    </Suspense>
   );
 }
