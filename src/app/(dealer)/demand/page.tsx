@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ButtonV2,
   EmptyStateV2,
@@ -29,6 +29,7 @@ export default function DemandPage() {
 }
 
 function DemandPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const showNew = searchParams.get("new") === "1";
   const editId = searchParams.get("edit");
@@ -43,6 +44,7 @@ function DemandPageContent() {
   useSetAgentPageContext({ surface: "demand", route: "/demand" }, []);
   const [editDemand, setEditDemand] = useState<EnrichedDemand | null>(null);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
+  const [editError, setEditError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAttentionOnly, setShowAttentionOnly] = useState(
@@ -72,6 +74,7 @@ function DemandPageContent() {
       if (found) {
         setEditDemand(found);
         setEditForm({ ...found.confirmed });
+        setEditError(null);
         setMode("edit");
       }
     }
@@ -89,9 +92,7 @@ function DemandPageContent() {
 
   const attentionItems = useMemo(() => {
     return active
-      .filter(
-        (d) => d.hasAuthorizedMatch || d.uxStatus === "EXPIRING"
-      )
+      .filter((d) => d.hasAuthorizedMatch || d.uxStatus === "EXPIRING")
       .map((d) => ({
         id: d.id,
         title: d.title,
@@ -108,9 +109,7 @@ function DemandPageContent() {
 
   const sortedActive = useMemo(() => {
     const list = showAttentionOnly
-      ? active.filter(
-          (d) => d.hasAuthorizedMatch || d.uxStatus === "EXPIRING"
-        )
+      ? active.filter((d) => d.hasAuthorizedMatch || d.uxStatus === "EXPIRING")
       : [...active];
     return list.sort((a, b) => {
       const score = (d: EnrichedDemand) => {
@@ -122,17 +121,39 @@ function DemandPageContent() {
     });
   }, [active, showAttentionOnly]);
 
-  async function saveEdit() {
-    if (!editDemand) return;
-    setSaving(true);
-    await fetch(`/api/demands/${editDemand.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmed: editForm }),
-    });
-    setSaving(false);
+  function exitEdit() {
+    setEditDemand(null);
+    setEditError(null);
     setMode("list");
-    load();
+    if (editId) router.replace("/demand");
+  }
+
+  async function saveEdit() {
+    if (!editDemand || saving) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/demands/${editDemand.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmed: editForm }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEditError(
+          typeof data.error === "string"
+            ? data.error
+            : "לא הצלחנו לעדכן את החיפוש. נסה שוב."
+        );
+        return;
+      }
+      exitEdit();
+      void load();
+    } catch {
+      setEditError("לא הצלחנו לעדכן את החיפוש. בדוק את החיבור ונסה שוב.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleRenew(id: string) {
@@ -167,10 +188,7 @@ function DemandPageContent() {
             </ButtonV2>
           }
         />
-        <CreateDemandFlow
-          onCreated={load}
-          onCancel={() => setMode("list")}
-        />
+        <CreateDemandFlow onCreated={load} onCancel={() => setMode("list")} />
       </div>
     );
   }
@@ -182,7 +200,7 @@ function DemandPageContent() {
           title="עריכת חיפוש"
           subtitle={editDemand.title}
           action={
-            <ButtonV2 variant="secondary" onClick={() => setMode("list")}>
+            <ButtonV2 variant="secondary" onClick={exitEdit}>
               ביטול
             </ButtonV2>
           }
@@ -191,55 +209,23 @@ function DemandPageContent() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">יצרן</label>
-              <input
-                className="input"
-                value={String(editForm.make ?? "")}
-                onChange={(e) => setEditForm({ ...editForm, make: e.target.value })}
-              />
+              <input className="input" value={String(editForm.make ?? "")} onChange={(e) => setEditForm({ ...editForm, make: e.target.value })} />
             </div>
             <div>
               <label className="label">דגם</label>
-              <input
-                className="input"
-                value={String(editForm.model ?? "")}
-                onChange={(e) => setEditForm({ ...editForm, model: e.target.value })}
-              />
+              <input className="input" value={String(editForm.model ?? "")} onChange={(e) => setEditForm({ ...editForm, model: e.target.value })} />
             </div>
             <div>
               <label className="label">שנתון מינימום</label>
-              <input
-                className="input"
-                type="number"
-                value={String(editForm.yearMin ?? "")}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    yearMin: parseInt(e.target.value, 10) || null,
-                  })
-                }
-              />
+              <input className="input" type="number" value={String(editForm.yearMin ?? "")} onChange={(e) => setEditForm({ ...editForm, yearMin: parseInt(e.target.value, 10) || null })} />
             </div>
             <div>
               <label className="label">תקציב מקסימום</label>
-              <input
-                className="input"
-                type="number"
-                value={String(editForm.budgetMax ?? "")}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    budgetMax: parseInt(e.target.value, 10) || null,
-                  })
-                }
-              />
+              <input className="input" type="number" value={String(editForm.budgetMax ?? "")} onChange={(e) => setEditForm({ ...editForm, budgetMax: parseInt(e.target.value, 10) || null })} />
             </div>
           </div>
-          <ButtonV2
-            variant="signal"
-            className="w-full"
-            onClick={saveEdit}
-            disabled={saving}
-          >
+          {editError && <p className="text-sm text-error">{editError}</p>}
+          <ButtonV2 variant="signal" className="w-full" onClick={saveEdit} disabled={saving}>
             {saving ? "שומר..." : "שמור וחפש מחדש"}
           </ButtonV2>
         </Surface>
@@ -252,27 +238,14 @@ function DemandPageContent() {
       <PageHeaderV2
         title="החיפושים שלי"
         subtitle="מה REMATCHER מחפש עבורך ברקע"
-        action={
-          <ButtonV2 variant="signal" onClick={() => setMode("create")}>
-            + חיפוש חדש
-          </ButtonV2>
-        }
+        action={<ButtonV2 variant="signal" onClick={() => setMode("create")}>+ חיפוש חדש</ButtonV2>}
       />
 
       <SnapshotBar
         metrics={[
           { label: "פעילים", value: snapshot.active },
-          {
-            label: "עם התאמות",
-            value: snapshot.withMatches,
-            href: "/matches?tab=action",
-            emphasize: snapshot.withMatches > 0,
-          },
-          {
-            label: "מסתיים בקרוב",
-            value: snapshot.expiring,
-            emphasize: snapshot.expiring > 0,
-          },
+          { label: "עם התאמות", value: snapshot.withMatches, href: "/matches?tab=action", emphasize: snapshot.withMatches > 0 },
+          { label: "מסתיים בקרוב", value: snapshot.expiring, emphasize: snapshot.expiring > 0 },
         ]}
       />
 
@@ -307,6 +280,7 @@ function DemandPageContent() {
                   onEdit={() => {
                     setEditDemand(d);
                     setEditForm({ ...d.confirmed });
+                    setEditError(null);
                     setMode("edit");
                   }}
                 />
@@ -314,30 +288,13 @@ function DemandPageContent() {
             </div>
           ) : (
             <EmptyStateV2
-              title={
-                showAttentionOnly
-                  ? "אין חיפושים שדורשים תשומת לב כרגע"
-                  : "אין חיפושים פעילים"
-              }
-              description={
-                showAttentionOnly
-                  ? "כל החיפושים הפעילים ממשיכים ברקע."
-                  : "פתח חיפוש כדי ש-REMATCHER יבדוק את הרשת עבורך."
-              }
-              action={
-                showAttentionOnly ? (
-                  <ButtonV2
-                    variant="secondary"
-                    onClick={() => setShowAttentionOnly(false)}
-                  >
-                    הצג את כל החיפושים
-                  </ButtonV2>
-                ) : (
-                  <ButtonV2 variant="signal" onClick={() => setMode("create")}>
-                    פתח חיפוש ראשון
-                  </ButtonV2>
-                )
-              }
+              title={showAttentionOnly ? "אין חיפושים שדורשים תשומת לב כרגע" : "אין חיפושים פעילים"}
+              description={showAttentionOnly ? "כל החיפושים הפעילים ממשיכים ברקע." : "פתח חיפוש כדי ש-REMATCHER יבדוק את הרשת עבורך."}
+              action={showAttentionOnly ? (
+                <ButtonV2 variant="secondary" onClick={() => setShowAttentionOnly(false)}>הצג את כל החיפושים</ButtonV2>
+              ) : (
+                <ButtonV2 variant="signal" onClick={() => setMode("create")}>פתח חיפוש ראשון</ButtonV2>
+              )}
             />
           )}
         </WorkspaceSection>
@@ -345,13 +302,7 @@ function DemandPageContent() {
         <WorkspaceSection>
           {ended.length > 0 ? (
             <div className="space-y-3">
-              {ended.map((d) => (
-                <DemandCard
-                  key={d.id}
-                  demand={d}
-                  onRenew={handleRenew}
-                />
-              ))}
+              {ended.map((d) => <DemandCard key={d.id} demand={d} onRenew={handleRenew} />)}
             </div>
           ) : (
             <p className="text-sm text-v2-text-muted">אין חיפושים שהסתיימו.</p>
