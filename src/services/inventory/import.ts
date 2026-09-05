@@ -300,6 +300,7 @@ export async function confirmImport(params: {
         vehicleId: row.duplicateOfVehicleId,
         source: "import",
         skipEventLog: true,
+        skipRematch: true,
         fields: {
           ...fields,
           rawInput: tag || null,
@@ -314,6 +315,7 @@ export async function confirmImport(params: {
           dealerId: params.dealerId,
           vehicleId: row.duplicateOfVehicleId,
           source: "import",
+          skipRematch: true,
         });
         if (!re.ok) continue;
         result = await updateVehicleForDealer({
@@ -321,6 +323,7 @@ export async function confirmImport(params: {
           vehicleId: row.duplicateOfVehicleId,
           source: "import",
           skipEventLog: true,
+          skipRematch: true,
           fields: {
             ...fields,
             rawInput: tag || null,
@@ -329,7 +332,6 @@ export async function confirmImport(params: {
         });
       }
       if (!result.ok) {
-        // Ownership / stale id — skip row; do not mutate foreign inventory
         continue;
       }
       touchedIds.add(row.duplicateOfVehicleId);
@@ -340,9 +342,9 @@ export async function confirmImport(params: {
         rawInput: tag || null,
         fields,
         source: "import",
-        // Preserve import rowHasMinimum (OR) — not Agent hard identity gate
         requireIdentity: false,
         lastAvailabilityConfirmedAt: now,
+        skipRematch: true,
       });
       if (!result.ok) {
         continue;
@@ -363,12 +365,19 @@ export async function confirmImport(params: {
           vehicleId: missing.vehicleId,
           source: "import_diff",
         });
-        // Domain service owns AppEvent logging for sold
-        if (!result.ok) {
-          continue;
-        }
+        if (!result.ok) continue;
       }
     }
+  }
+
+  if (touchedIds.size > 0) {
+    const { rematchInventoryBatch } = await import(
+      "@/services/matching/inventory-rematch"
+    );
+    await rematchInventoryBatch({
+      vehicleIds: [...touchedIds],
+      sellerDealerId: params.dealerId,
+    });
   }
 
   await prisma.inventoryImport.update({
