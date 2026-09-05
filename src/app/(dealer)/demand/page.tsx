@@ -1,12 +1,12 @@
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { DemandPageClient } from "@/components/demand/demand-page-client";
+import { ActionCardLoadingSkeleton } from "@/components/ui/brand-v2";
 import { getEnrichedDemandsForDealer } from "@/services/demand/demand-queries";
 
-export default async function DemandPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+async function DemandContent({ searchParams }: { searchParams: SearchParams }) {
   const session = await auth();
   const dealerId = session!.user!.dealerId!;
   const params = await searchParams;
@@ -29,5 +29,13 @@ export default async function DemandPage({
       initialMode={showNew ? "create" : editId ? "edit" : "list"}
       initialAttentionOnly={filter === "attention"}
     />
+  );
+}
+
+export default function DemandPage({ searchParams }: { searchParams: SearchParams }) {
+  return (
+    <Suspense fallback={<ActionCardLoadingSkeleton />}>
+      <DemandContent searchParams={searchParams} />
+    </Suspense>
   );
 }

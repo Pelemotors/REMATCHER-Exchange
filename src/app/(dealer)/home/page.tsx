@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { HomeV2 } from "@/components/home/home-v2";
+import { ActionCardLoadingSkeleton } from "@/components/ui/brand-v2";
 import { getWorkCenterSnapshot } from "@/services/dealer/work-center";
 
-export default async function HomePage() {
+async function HomeContent() {
   const session = await auth();
   const dealerId = session!.user!.dealerId!;
   const userId = session!.user!.id;
@@ -29,5 +31,13 @@ export default async function HomePage() {
       notifications={snapshot.notifications}
       setupStatus={snapshot.setupStatus}
     />
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<ActionCardLoadingSkeleton />}>
+      <HomeContent />
+    </Suspense>
   );
 }
