@@ -122,7 +122,7 @@ export async function getDealerSetupStatus(
     activeDemandCount: demandCount,
     profileComplete,
     pushEnabled: pushCount > 0,
-    onboardingComplete: existingActiveDealer,
+    onboardingComplete: persistedOnboardingComplete,
     // A dealer who already has live inventory OR an active demand is not a cold-start user.
     // Missing one side may still be suggested on Home, but must never force /onboarding.
     shouldShowOnboarding: !existingActiveDealer,
