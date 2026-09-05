@@ -15,6 +15,7 @@ interface Validation {
   type: "AVAILABILITY" | "B2B_PRICE";
   candidateMatchId?: string | null;
   vehicle: {
+    id: string;
     make: string | null;
     model: string | null;
     year: number | null;
@@ -59,56 +60,88 @@ function ValidationsContent() {
   const [loading, setLoading] = useState(true);
   const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [staleFocus, setStaleFocus] = useState(false);
 
+  function matchesFocus(v: Validation) {
+    return Boolean(
+      focusId &&
+        (v.id === focusId ||
+          v.candidateMatchId === focusId ||
+          v.vehicle.id === focusId)
+    );
+  }
+
   async function load() {
-    const res = await fetch("/api/validations");
-    const data = await res.json();
-    const list: Validation[] = Array.isArray(data) ? data : [];
-    setItems(list);
-    setLoading(false);
-    if (focusId) {
-      const found = list.find(
-        (v) => v.id === focusId || v.candidateMatchId === focusId
-      );
-      setStaleFocus(!found);
-      if (found) {
-        window.setTimeout(() => {
-          document
-            .getElementById(`validation-${found.id}`)
-            ?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 80);
+    try {
+      const res = await fetch("/api/validations");
+      if (!res.ok) throw new Error("load_failed");
+      const data = await res.json();
+      const list: Validation[] = Array.isArray(data) ? data : [];
+      setItems(list);
+      setSubmitError(null);
+      if (focusId) {
+        const found = list.find(matchesFocus);
+        setStaleFocus(!found);
+        if (found) {
+          window.setTimeout(() => {
+            document
+              .getElementById(`validation-${found.id}`)
+              ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 80);
+        }
+      } else {
+        setStaleFocus(false);
       }
+    } catch {
+      setSubmitError("לא הצלחנו לטעון את האימותים. נסה שוב.");
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId]);
 
   async function respondAvailability(id: string, available: boolean) {
+    if (submitting) return;
     setSubmitting(id);
-    await fetch("/api/validations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ validationId: id, available }),
-    });
-    setSubmitting(null);
-    load();
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/validations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ validationId: id, available }),
+      });
+      if (!res.ok) throw new Error("submit_failed");
+      await load();
+    } catch {
+      setSubmitError("לא הצלחנו לעדכן זמינות. שום דבר לא השתנה — נסה שוב.");
+    } finally {
+      setSubmitting(null);
+    }
   }
 
   async function submitPrice(id: string) {
     const b2bPrice = priceInputs[id];
-    if (!b2bPrice) return;
+    if (!b2bPrice || submitting) return;
     setSubmitting(id);
-    await fetch("/api/validations/b2b-price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ validationId: id, b2bPrice }),
-    });
-    setSubmitting(null);
-    load();
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/validations/b2b-price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ validationId: id, b2bPrice }),
+      });
+      if (!res.ok) throw new Error("submit_failed");
+      await load();
+    } catch {
+      setSubmitError("לא הצלחנו לעדכן מחיר. שום דבר לא השתנה — נסה שוב.");
+    } finally {
+      setSubmitting(null);
+    }
   }
 
   if (loading) {
@@ -129,10 +162,15 @@ function ValidationsContent() {
         title="פרטים חסרים"
         subtitle="השלמת פרטים לבדיקת התאמה — לא עניין ולא חיוב"
       />
+      {submitError && (
+        <Surface depth="secondary" className="mb-4 border border-error/30 px-4 py-3">
+          <p className="text-sm text-error">{submitError}</p>
+        </Surface>
+      )}
       {staleFocus && (
         <Surface depth="secondary" className="mb-4 px-4 py-3">
           <p className="text-sm text-v2-text-secondary">
-            בקשת האימות מההתראה כבר אינה פתוחה. מוצג המצב העדכני.
+            בקשת האימות כבר אינה פתוחה. מוצג המצב העדכני.
           </p>
         </Surface>
       )}
@@ -147,61 +185,54 @@ function ValidationsContent() {
             <div
               key={v.id}
               id={`validation-${v.id}`}
-              className={
-                focusId === v.id || focusId === v.candidateMatchId
-                  ? "ring-2 ring-v2-signal rounded-md"
-                  : undefined
-              }
+              className={matchesFocus(v) ? "ring-2 ring-v2-signal rounded-md" : undefined}
             >
-            <Surface
-              depth="raised"
-              className="space-y-3 p-4"
-            >
-              <p className="text-sm text-v2-text-secondary">{whyNow(v)}</p>
-              <p className="text-h3 font-bold text-v2-warm">
-                {v.vehicle.make} {v.vehicle.model} {v.vehicle.year}
-              </p>
-              {v.type === "AVAILABILITY" ? (
-                <div className="flex gap-2">
-                  <ButtonV2
-                    variant="signal"
-                    disabled={submitting === v.id}
-                    onClick={() => respondAvailability(v.id, true)}
-                  >
-                    כן, עדיין זמין
-                  </ButtonV2>
-                  <ButtonV2
-                    variant="secondary"
-                    disabled={submitting === v.id}
-                    onClick={() => respondAvailability(v.id, false)}
-                  >
-                    לא זמין
-                  </ButtonV2>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    className="input"
-                    inputMode="numeric"
-                    placeholder="מחיר"
-                    value={priceInputs[v.id] ?? ""}
-                    onChange={(e) =>
-                      setPriceInputs((prev) => ({
-                        ...prev,
-                        [v.id]: e.target.value,
-                      }))
-                    }
-                  />
-                  <ButtonV2
-                    variant="signal"
-                    disabled={submitting === v.id}
-                    onClick={() => submitPrice(v.id)}
-                  >
-                    עדכן ובדוק התאמה
-                  </ButtonV2>
-                </div>
-              )}
-            </Surface>
+              <Surface depth="raised" className="space-y-3 p-4">
+                <p className="text-sm text-v2-text-secondary">{whyNow(v)}</p>
+                <p className="text-h3 font-bold text-v2-warm">
+                  {v.vehicle.make} {v.vehicle.model} {v.vehicle.year}
+                </p>
+                {v.type === "AVAILABILITY" ? (
+                  <div className="flex gap-2">
+                    <ButtonV2
+                      variant="signal"
+                      disabled={submitting === v.id}
+                      onClick={() => respondAvailability(v.id, true)}
+                    >
+                      {submitting === v.id ? "מעדכן..." : "כן, עדיין זמין"}
+                    </ButtonV2>
+                    <ButtonV2
+                      variant="secondary"
+                      disabled={submitting === v.id}
+                      onClick={() => respondAvailability(v.id, false)}
+                    >
+                      לא זמין
+                    </ButtonV2>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      className="input"
+                      inputMode="numeric"
+                      placeholder="מחיר"
+                      value={priceInputs[v.id] ?? ""}
+                      onChange={(e) =>
+                        setPriceInputs((prev) => ({
+                          ...prev,
+                          [v.id]: e.target.value,
+                        }))
+                      }
+                    />
+                    <ButtonV2
+                      variant="signal"
+                      disabled={submitting === v.id}
+                      onClick={() => submitPrice(v.id)}
+                    >
+                      {submitting === v.id ? "מעדכן..." : "עדכן ובדוק התאמה"}
+                    </ButtonV2>
+                  </div>
+                )}
+              </Surface>
             </div>
           ))}
         </div>
