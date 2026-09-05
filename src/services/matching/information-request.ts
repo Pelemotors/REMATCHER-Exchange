@@ -214,7 +214,6 @@ async function notifySellerEnrichmentAggregated(params: {
   const fields = [...fieldSet];
   const count = open.length;
 
-  // Anti-spam: skip if recent enrichment notification exists
   const since = new Date(Date.now() - ENRICHMENT_NOTIFY_COOLDOWN_MS);
   const recent = await prisma.notification.findFirst({
     where: {
@@ -277,7 +276,6 @@ export async function getOpenEnrichmentForVehicle(params: {
     openRequestCount: open.length,
     requestedFields: [...fields],
     labels: [...fields].map(fieldLabelHe),
-    // Never expose requester identity
     requesterIdentity: null,
   };
 }
@@ -310,27 +308,28 @@ export async function cancelOpenRequestsForVehicleDemand(params: {
   });
 }
 
-/** Re-run Matching for active demands that already have a candidate on this vehicle. */
+/** Full discovery for this vehicle across every active demand. */
 export async function reevaluateDemandsForVehicle(vehicleId: string) {
-  const rows = await prisma.candidateMatch.findMany({
-    where: { vehicleId, demand: { status: "ACTIVE" } },
-    select: { demandId: true },
+  const vehicle = await prisma.vehicle.findUnique({
+    where: { id: vehicleId },
+    select: { dealerId: true },
   });
-  const demandIds = [...new Set(rows.map((r) => r.demandId))];
-  if (demandIds.length === 0) return [] as string[];
-  const { runMatchingForDemand } = await import(
-    "@/services/domain/matching-flow"
+  if (!vehicle) return [] as string[];
+
+  const { rematchAfterInventoryMutation } = await import(
+    "@/services/matching/inventory-rematch"
   );
-  for (const demandId of demandIds) {
-    await runMatchingForDemand(demandId);
-  }
-  return demandIds;
+  return rematchAfterInventoryMutation({
+    vehicleId,
+    sellerDealerId: vehicle.dealerId,
+  });
 }
 
 export async function fulfillRequestsAfterVehicleUpdate(params: {
   vehicleId: string;
   sellerDealerId: string;
   updatedFields: string[];
+  skipRematch?: boolean;
 }) {
   const open = await prisma.informationRequest.findMany({
     where: {
@@ -345,7 +344,6 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
     },
   });
 
-  const demandIds = new Set<string>();
   let fulfilled = 0;
 
   if (open.length > 0) {
@@ -385,7 +383,6 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
           data: { status: "FULFILLED", fulfilledAt: new Date() },
         });
         fulfilled += 1;
-        demandIds.add(req.demandId);
       } else {
         await prisma.informationRequest.update({
           where: { id: req.id },
@@ -395,25 +392,20 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
     }
   }
 
-  // Always re-evaluate related active demands (covers post-fulfillment price changes)
-  const related = await prisma.candidateMatch.findMany({
-    where: { vehicleId: params.vehicleId, demand: { status: "ACTIVE" } },
-    select: { demandId: true },
-  });
-  for (const row of related) demandIds.add(row.demandId);
-
-  const { runMatchingForDemand } = await import(
-    "@/services/domain/matching-flow"
-  );
-  const reevaluated: string[] = [];
-  for (const demandId of demandIds) {
-    await runMatchingForDemand(demandId);
-    reevaluated.push(demandId);
+  let reevaluated: string[] = [];
+  if (!params.skipRematch) {
+    const { rematchAfterInventoryMutation } = await import(
+      "@/services/matching/inventory-rematch"
+    );
+    reevaluated = await rematchAfterInventoryMutation({
+      vehicleId: params.vehicleId,
+      sellerDealerId: params.sellerDealerId,
+    });
   }
+  const reevaluatedSet = new Set(reevaluated);
 
-  // Notify Demand owner only when Candidate is now buyer-visible (Qualified)
   for (const req of open) {
-    if (!demandIds.has(req.demandId)) continue;
+    if (!reevaluatedSet.has(req.demandId)) continue;
     const updatedMatch = await prisma.candidateMatch.findUnique({
       where: { id: req.candidateMatchId },
     });
@@ -452,7 +444,6 @@ function remainingBlockingFields(
   const remaining: string[] = [];
   for (const f of requested) {
     if (f === "price") {
-      // Private matching price only — do not treat retailPrice as substitute
       if (vehicle.b2bPrice == null) remaining.push(f);
       continue;
     }
