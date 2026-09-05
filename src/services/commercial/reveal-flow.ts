@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { COPY } from "@/config/brand";
-import { getProductConfig } from "@/config/product";
 import { recordRevealUsageBothSides } from "@/services/commercial/reveal-usage";
 import { notifyDealerUsers, logAppEvent } from "@/services/notifications";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { recordActivationMilestone } from "@/services/activation/milestones";
 import { isKillSwitchOn } from "@/config/kill-switches";
+import { canPresentCandidateToBuyer } from "@/services/domain/candidate-policy";
 
 export async function createRevealFromMutualInterest(params: {
   mutualInterestId: string;
@@ -17,25 +17,45 @@ export async function createRevealFromMutualInterest(params: {
   const existing = await prisma.reveal.findUnique({
     where: { mutualInterestId: params.mutualInterestId },
   });
-  if (existing) {
-    return existing;
-  }
+  if (existing) return existing;
+
   if (isKillSwitchOn("reveal")) {
     throw new Error("REVEAL_DISABLED");
   }
+  if (!params.candidateMatchId) {
+    throw new Error("REVEAL_MATCH_REQUIRED");
+  }
 
-  const [buyerDealer, sellerDealer, match] = await Promise.all([
+  // Final live gate immediately before contact disclosure. A stale opportunity,
+  // changed vehicle, expired demand, or candidate that returned to validation
+  // must never create a Reveal.
+  const match = await prisma.candidateMatch.findUnique({
+    where: { id: params.candidateMatchId },
+    include: { vehicle: true, demand: true },
+  });
+  if (
+    !match ||
+    match.demand.dealerId !== params.buyerDealerId ||
+    match.vehicle.dealerId !== params.sellerDealerId ||
+    !canPresentCandidateToBuyer({
+      status: match.status,
+      resolutionState: match.resolutionState,
+      scoreBand: match.scoreBand,
+      demandStatus: match.demand.status,
+      vehicleStatus: match.vehicle.status,
+    })
+  ) {
+    throw new Error("REVEAL_CANDIDATE_INELIGIBLE");
+  }
+
+  const [buyerDealer, sellerDealer] = await Promise.all([
     prisma.dealer.findUnique({ where: { id: params.buyerDealerId } }),
     prisma.dealer.findUnique({ where: { id: params.sellerDealerId } }),
-    params.candidateMatchId
-      ? prisma.candidateMatch.findUnique({
-          where: { id: params.candidateMatchId },
-          include: { vehicle: true, demand: true },
-        })
-      : null,
   ]);
+  if (!buyerDealer || !sellerDealer) {
+    throw new Error("REVEAL_DEALER_NOT_FOUND");
+  }
 
-  const config = getProductConfig();
   const reveal = await prisma.reveal.create({
     data: {
       mutualInterestId: params.mutualInterestId,
@@ -43,25 +63,23 @@ export async function createRevealFromMutualInterest(params: {
       sellerDealerId: params.sellerDealerId,
       candidateMatchId: params.candidateMatchId,
       buyerContactJson: toPrismaJson({
-        businessName: buyerDealer?.businessName,
-        contactName: buyerDealer?.contactName,
-        phone: buyerDealer?.phone,
+        businessName: buyerDealer.businessName,
+        contactName: buyerDealer.contactName,
+        phone: buyerDealer.phone,
       }),
       sellerContactJson: toPrismaJson({
-        businessName: sellerDealer?.businessName,
-        contactName: sellerDealer?.contactName,
-        phone: sellerDealer?.phone,
+        businessName: sellerDealer.businessName,
+        contactName: sellerDealer.contactName,
+        phone: sellerDealer.phone,
       }),
-      matchSummaryJson: match
-        ? toPrismaJson(
-            buildPublicMatchSummary({
-              make: match.vehicle.make,
-              model: match.vehicle.model,
-              year: match.vehicle.year,
-              explanation: match.explanationText,
-            })
-          )
-        : undefined,
+      matchSummaryJson: toPrismaJson(
+        buildPublicMatchSummary({
+          make: match.vehicle.make,
+          model: match.vehicle.model,
+          year: match.vehicle.year,
+          explanation: match.explanationText,
+        })
+      ),
     },
   });
 
@@ -88,7 +106,7 @@ export async function createRevealFromMutualInterest(params: {
     await emitExchangeEvent({
       eventType: "MATCH_REVEALED",
       dealerId: params.buyerDealerId,
-      candidateMatchId: params.candidateMatchId ?? null,
+      candidateMatchId: params.candidateMatchId,
       evidenceType: "BILATERAL_CONFIRMED",
       privacyClass: "DEALER_SCOPED",
       eventData: { revealId: reveal.id },
@@ -290,7 +308,6 @@ export async function getRevealForDealer(revealId: string, dealerId: string) {
     revealedAt: reveal.revealedAt,
     isBuyer,
     counterparty,
-    // Sanitize on read — legacy rows may still store private commercial fields
     matchSummary: sanitizeMatchSummaryForClient(reveal.matchSummaryJson),
     outcome: reveal.outcome
       ? { status: reveal.outcome.status, reportedAt: reveal.outcome.reportedAt }
