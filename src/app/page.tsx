@@ -28,16 +28,20 @@ export const metadata: Metadata = {
 
 const steps = [
   {
-    title: "מספרים לנו מה יש ומה מחפשים",
-    body: "מעלים מלאי ופותחים חיפושים.",
+    title: "אומרים מה יש ומה מחפשים",
+    body: "מעלים מלאי ופותחים חיפוש — גם בקצרה. לא צריך לנהל לוח או לסרוק שוק.",
   },
   {
-    title: "REMATCHER Exchange מחפש התאמות ברשת",
-    body: "אין צורך לעבור על מלאים של סוחרים אחרים.",
+    title: "REMATCHER ממשיך לעבוד ברקע",
+    body: "המלאי והחיפושים נשארים ברשת. המערכת בודקת התאמות לאורך זמן — גם כשאתה לא בתוך האפליקציה.",
   },
   {
-    title: "כשיש עניין משני הצדדים — נוצר חיבור",
-    body: "רק אז הצדדים נחשפים זה לזה.",
+    title: "חוזרים אליך רק כשבאמת צריך",
+    body: "כשחסר פרט כדי לבדוק התאמה, או כשיש הזדמנות ששווה תשומת לב. בלי רעש ובלי מלאי פתוח לכולם.",
+  },
+  {
+    title: "עניין הדדי → חיבור ישיר",
+    body: "רק אחרי ששני הצדדים בוחרים להתקדם נחשפים פרטי הקשר. עד אז הזהות נשארת פרטית.",
   },
 ];
 
@@ -56,13 +60,26 @@ export default async function LandingPage() {
       <PublicLayout showHeader={false}>
         <section id="how-it-works" className="border-t border-v2-border bg-v2-surface py-16">
           <div className="container-app">
-            <h2 className="mb-10 text-center text-h2 font-bold text-v2-warm">איך Exchange עובד</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <h2 className="mb-3 text-center text-h2 font-bold text-v2-warm">
+              איך Exchange עובד
+            </h2>
+            <p className="mx-auto mb-10 max-w-2xl text-center text-v2-text-secondary">
+              לא צריך לזכור לחזור ל-{BRAND.parent}.{" "}
+              {BRAND.parent} חוזרת אליך כשנוצרת הזדמנות אמיתית — או כשחסר משהו
+              רק ממך כדי לבדוק אותה.
+            </p>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {steps.map((step, i) => (
                 <Surface key={step.title} depth="raised" className="p-5">
-                  <span className="text-sm font-semibold text-v2-signal">{i + 1}</span>
-                  <h3 className="mt-2 font-semibold text-v2-text-primary">{step.title}</h3>
-                  <p className="mt-2 text-sm text-v2-text-secondary">{step.body}</p>
+                  <span className="text-sm font-semibold text-v2-signal">
+                    {i + 1}
+                  </span>
+                  <h3 className="mt-2 font-semibold text-v2-text-primary">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-v2-text-secondary">
+                    {step.body}
+                  </p>
                 </Surface>
               ))}
             </div>
@@ -71,11 +88,11 @@ export default async function LandingPage() {
 
         <section className="container-app py-16">
           <Surface depth="raised" className="mx-auto max-w-2xl p-8 text-center">
-            <h2 className="text-h2 font-bold text-v2-warm">המלאי שלך נשאר פרטי</h2>
+            <h2 className="text-h2 font-bold text-v2-warm">רשת פרטית — לא לוח רכב</h2>
             <p className="mt-4 text-v2-text-secondary">
-              סוחרים אחרים לא מקבלים גישה למלאי שלך ולא יכולים לעבור עליו.{" "}
-              {BRAND.product} מציג רק הזדמנות רלוונטית כאשר יש סיבה עסקית אמיתית
-              לחיבור.
+              סוחרים אחרים לא גולשים במלאי שלך ולא רואים מי אתה לפני עניין הדדי.
+              {BRAND.product} מחזיקה מלאי וחיפושים לאורך זמן, בודקת התאמות
+              ברקע, ומציגה רק הזדמנות ששווה החלטה — לא עוד פיד לגלול.
             </p>
           </Surface>
         </section>
