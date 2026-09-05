@@ -36,7 +36,8 @@
 6. **Resume scheduled / reactive processing**
    * Call lifecycle catch-up once (authorized):
      * `GET /api/cron/lifecycle` with `Authorization: Bearer $CRON_SECRET`
-   * Or wait for Vercel Cron (`*/15`)
+   * Or wait for Vercel Cron (daily `0 3 * * *` on Hobby; catch-up processes all overdue work)
+   * For sub-daily cadence, use Pro cron or external caller with `CRON_SECRET`
    * Catch-up expires overdue Demands and runs idempotent reminders
 
 7. **Prevent duplicate events after recovery**
