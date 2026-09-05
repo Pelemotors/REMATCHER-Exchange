@@ -109,9 +109,11 @@ export async function getDealerSetupStatus(
   const { vehicleCount, demandCount } = counts;
 
   const profileComplete = dealer ? isProfileComplete(dealer) : false;
-  const onboardingComplete = Boolean(state?.completedAt || state?.dismissedAt);
+  const persistedOnboardingComplete = Boolean(
+    state?.completedAt || state?.dismissedAt
+  );
   const existingActiveDealer =
-    vehicleCount > 0 || demandCount > 0 || onboardingComplete;
+    vehicleCount > 0 || demandCount > 0 || persistedOnboardingComplete;
 
   return {
     hasInventory: vehicleCount > 0,
@@ -120,8 +122,10 @@ export async function getDealerSetupStatus(
     activeDemandCount: demandCount,
     profileComplete,
     pushEnabled: pushCount > 0,
-    onboardingComplete: existingActiveDealer && (onboardingComplete || (vehicleCount > 0 && demandCount > 0)),
-    shouldShowOnboarding: !onboardingComplete && !state?.dismissedAt && !(vehicleCount > 0 && demandCount > 0),
+    onboardingComplete: persistedOnboardingComplete,
+    // A dealer who already has live inventory OR an active demand is not a cold-start user.
+    // Missing one side may still be suggested on Home, but must never force /onboarding.
+    shouldShowOnboarding: !existingActiveDealer,
     currentStep: state?.currentStep ?? "intro",
   };
 }
