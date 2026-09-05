@@ -183,12 +183,10 @@ async function main() {
   await ensureOnboarding(cookies);
 
   // Memory OFF — no new persistence (rejected attempts must not count as mutations)
-  await setConsent(cookies, "DEALER_MEMORY", false);
-  // Confirm server state before chat (avoid race with parallel QA)
-  const offState = await api(cookies, "/api/privacy/status");
+  const offConsents = await setConsent(cookies, "DEALER_MEMORY", false);
   requireQa(
-    offState.body.consents?.DEALER_MEMORY === false,
-    "DEALER_MEMORY not off before gate test"
+    offConsents.DEALER_MEMORY === false,
+    "DEALER_MEMORY not off after PATCH"
   );
   const memOff = await chat(
     cookies,
