@@ -5,32 +5,42 @@ import { PublicLayout } from "@/components/public/public-layout";
 import { Surface } from "@/components/ui/brand-v2";
 import { PRIVACY_POLICY_DISPLAY } from "@/config/legal/versions";
 
-function renderInline(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[([^\]]+)\]\(([^)]+)\))/g);
-  return parts.map((part, i) => {
-    if (!part) return null;
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <strong key={i} className="font-semibold text-v2-text-primary">
-          {part.slice(2, -2)}
+function renderInline(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|\[([^\]]+)\]\(([^)]+)\))/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) {
+      nodes.push(<span key={key++}>{text.slice(last, match.index)}</span>);
+    }
+    const token = match[0];
+    if (token.startsWith("**") && token.endsWith("**")) {
+      const inner = token.slice(2, -2);
+      nodes.push(
+        <strong key={key++} className="font-semibold text-v2-text-primary">
+          {renderInline(inner)}
         </strong>
       );
-    }
-    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (link) {
-      return (
+    } else if (match[2] && match[3]) {
+      nodes.push(
         <a
-          key={i}
-          href={link[2]}
+          key={key++}
+          href={match[3]}
           className="text-v2-warm underline underline-offset-2"
-          dir={link[2].startsWith("mailto:") ? "ltr" : undefined}
+          dir={match[3].startsWith("mailto:") ? "ltr" : undefined}
         >
-          {link[1]}
+          {match[2]}
         </a>
       );
     }
-    return <span key={i}>{part}</span>;
-  });
+    last = match.index + token.length;
+  }
+  if (last < text.length) {
+    nodes.push(<span key={key++}>{text.slice(last)}</span>);
+  }
+  return nodes;
 }
 
 export default async function PrivacyPolicyPage() {
