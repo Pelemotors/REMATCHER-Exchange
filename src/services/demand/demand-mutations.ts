@@ -11,6 +11,47 @@ import {
 import { logAppEvent } from "@/services/notifications";
 import { recordActivationMilestone } from "@/services/activation/milestones";
 
+async function rebuildDemandConstraintsFromParsed(
+  demandId: string,
+  parsed: ParsedDemand | null
+) {
+  await prisma.demandConstraint.deleteMany({ where: { demandId } });
+
+  for (const ex of parsed?.exclusions ?? []) {
+    await prisma.demandConstraint.create({
+      data: {
+        demandId,
+        field: ex.field,
+        constraintType: "EXCLUSION",
+        value: toPrismaJson(ex),
+        source: "user_confirmed",
+      },
+    });
+  }
+  for (const hc of parsed?.hardConstraints ?? []) {
+    await prisma.demandConstraint.create({
+      data: {
+        demandId,
+        field: hc.field,
+        constraintType: "HARD",
+        value: toPrismaJson(hc),
+        source: "user_confirmed",
+      },
+    });
+  }
+  for (const sp of parsed?.softPreferences ?? []) {
+    await prisma.demandConstraint.create({
+      data: {
+        demandId,
+        field: sp.field,
+        constraintType: "SOFT",
+        value: toPrismaJson(sp),
+        source: "user_confirmed",
+      },
+    });
+  }
+}
+
 export async function persistDemandDraftForDealer(params: {
   dealerId: string;
   rawText: string;
@@ -55,18 +96,19 @@ export async function updateDemandForDealer(params: {
     return { ok: false as const, error: "cannot_edit" as const };
   }
 
+  const reactivatingExpired = demand.status === "EXPIRED";
   const updated = await prisma.demand.update({
     where: { id: params.demandId },
     data: {
       confirmedJson: toPrismaJson(params.confirmed),
       updatedAt: new Date(),
-      status: demand.status === "EXPIRED" ? "ACTIVE" : demand.status,
+      status: reactivatingExpired ? "ACTIVE" : demand.status,
+      ...(reactivatingExpired ? { expiresAt: computeDemandExpiry() } : {}),
     },
   });
 
-  await prisma.demandConstraint.deleteMany({
-    where: { demandId: params.demandId },
-  });
+  const parsed = demand.parsedJson as ParsedDemand | null;
+  await rebuildDemandConstraintsFromParsed(params.demandId, parsed);
 
   await logAppEvent({
     eventType: "demand_updated",
@@ -77,9 +119,6 @@ export async function updateDemandForDealer(params: {
   });
 
   if (updated.status === "ACTIVE") {
-    // An ACTIVE demand must never rematch against a stale SearchIntentVersion.
-    // Rebuild the canonical intent from the newly confirmed fields first, then
-    // run the matcher across the current active inventory.
     const { legacyToSearchIntent } = await import(
       "@/services/matching/legacy-search-intent-adapter"
     );
@@ -127,43 +166,7 @@ export async function activateDemandForDealer(params: {
     ((demand.confirmedJson ?? {}) as DemandConfirmed);
   const parsed = demand.parsedJson as ParsedDemand | null;
 
-  await prisma.demandConstraint.deleteMany({
-    where: { demandId: params.demandId },
-  });
-
-  for (const ex of parsed?.exclusions ?? []) {
-    await prisma.demandConstraint.create({
-      data: {
-        demandId: params.demandId,
-        field: ex.field,
-        constraintType: "EXCLUSION",
-        value: toPrismaJson(ex),
-        source: "user_confirmed",
-      },
-    });
-  }
-  for (const hc of parsed?.hardConstraints ?? []) {
-    await prisma.demandConstraint.create({
-      data: {
-        demandId: params.demandId,
-        field: hc.field,
-        constraintType: "HARD",
-        value: toPrismaJson(hc),
-        source: "user_confirmed",
-      },
-    });
-  }
-  for (const sp of parsed?.softPreferences ?? []) {
-    await prisma.demandConstraint.create({
-      data: {
-        demandId: params.demandId,
-        field: sp.field,
-        constraintType: "SOFT",
-        value: toPrismaJson(sp),
-        source: "user_confirmed",
-      },
-    });
-  }
+  await rebuildDemandConstraintsFromParsed(params.demandId, parsed);
 
   const updated = await prisma.demand.update({
     where: { id: params.demandId },
