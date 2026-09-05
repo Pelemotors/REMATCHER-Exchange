@@ -9,6 +9,87 @@ import {
   type StructuredSearchIntent,
 } from "@/services/matching/search-intent-types";
 
+/**
+ * Matching identity must be language-independent. Inventory normalization commonly
+ * stores Latin manufacturer/model names while dealer demand can be entered in Hebrew.
+ * Keep this deterministic: no AI/network call is allowed in the matching path.
+ */
+const VEHICLE_IDENTITY_ALIASES: Record<string, string> = {
+  // Makes
+  "סקודה": "Skoda",
+  "שקודה": "Skoda",
+  "פולקסווגן": "Volkswagen",
+  "פולקסוואגן": "Volkswagen",
+  "פולקסוגן": "Volkswagen",
+  "טויוטה": "Toyota",
+  "יונדאי": "Hyundai",
+  "קיה": "Kia",
+  "מאזדה": "Mazda",
+  "מיצובישי": "Mitsubishi",
+  "ניסאן": "Nissan",
+  "ניסן": "Nissan",
+  "רנו": "Renault",
+  "פיג'ו": "Peugeot",
+  "פיגו": "Peugeot",
+  "סיאט": "Seat",
+  "סוזוקי": "Suzuki",
+  "אאודי": "Audi",
+  "ב.מ.וו": "BMW",
+  "במוו": "BMW",
+  "מרצדס": "Mercedes-Benz",
+  "סובארו": "Subaru",
+  "הונדה": "Honda",
+  "פורד": "Ford",
+  "שברולט": "Chevrolet",
+  "סיטרואן": "Citroen",
+  "אופל": "Opel",
+  "וולוו": "Volvo",
+  "לקסוס": "Lexus",
+  "ג'יפ": "Jeep",
+  "ג׳יפ": "Jeep",
+  "דאצ'יה": "Dacia",
+  "דאציה": "Dacia",
+  "טסלה": "Tesla",
+  "ג'ילי": "Geely",
+  "ג׳ילי": "Geely",
+  "צ'רי": "Chery",
+  "צ׳רי": "Chery",
+  "בי.וואי.די": "BYD",
+  "ביואידי": "BYD",
+  // Common model transliterations where Hebrew and Latin otherwise cannot compare.
+  "סופרב": "Superb",
+  "אוקטביה": "Octavia",
+  "קודיאק": "Kodiaq",
+  "קארוק": "Karoq",
+  "טוסון": "Tucson",
+  "ספורטאז'": "Sportage",
+  "ספורטז'": "Sportage",
+  "ספורטאז׳": "Sportage",
+  "קשקאי": "Qashqai",
+  "אקסטרייל": "X-Trail",
+  "אאוטלנדר": "Outlander",
+  "קורולה": "Corolla",
+  "יאריס": "Yaris",
+  "סוויפט": "Swift",
+  "ויטרה": "Vitara",
+  "גולף": "Golf",
+  "טיגואן": "Tiguan",
+  "לאון": "Leon",
+  "ארונה": "Arona",
+  "אטקה": "Ateca",
+  "מגאן": "Megane",
+  "מגאן": "Megane",
+  "קפצ'ור": "Captur",
+  "קפצ׳ור": "Captur",
+};
+
+function canonicalVehicleIdentity(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return VEHICLE_IDENTITY_ALIASES[trimmed.toLowerCase()] ?? trimmed;
+}
+
 export function legacyToSearchIntent(
   confirmedJson: unknown,
   constraints: DemandConstraint[] = []
@@ -16,18 +97,21 @@ export function legacyToSearchIntent(
   const confirmed = confirmedFromJson(confirmedJson);
   const intent = emptyStructuredIntent();
 
-  if (confirmed.make) {
+  const canonicalMake = canonicalVehicleIdentity(confirmed.make);
+  const canonicalModel = canonicalVehicleIdentity(confirmed.model);
+
+  if (canonicalMake) {
     intent.make = {
       importance: "VERY_HIGH",
-      target: confirmed.make,
+      target: canonicalMake,
       provenance: "legacy_adapter",
       confidence: 0.9,
     };
   }
-  if (confirmed.model) {
+  if (canonicalModel) {
     intent.model = {
       importance: "VERY_HIGH",
-      target: confirmed.model,
+      target: canonicalModel,
       provenance: "legacy_adapter",
       confidence: 0.9,
     };
