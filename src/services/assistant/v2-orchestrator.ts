@@ -34,6 +34,9 @@ export interface AssistantV2Response extends AssistantResponse {
   meta?: AgentMeta;
 }
 
+const MOBILE_RESPONSE_POLICY = `RESPONSE MODE: mobile operational default.
+For routine operational turns (status, create/update, confirmation, short data question), answer in one short sentence by default and never more than two short sentences. Ask at most one question. Do not explain internal reasoning or restate the full request unless the dealer asks. Use a longer commercial analysis only when the dealer explicitly asks for analysis/advice/comparison or the decision genuinely requires it.`;
+
 function withHistory(
   conversation: ConversationState | undefined,
   userMessage: string,
@@ -120,6 +123,7 @@ export async function runExchangeAssistantV2(params: {
       params.conversation?.sessionContext?.operatingMode ===
         "inventory_management",
     pageContextBlock: [
+      MOBILE_RESPONSE_POLICY,
       params.context.surface ? `surface=${params.context.surface}` : null,
       params.context.entityType && params.context.entityId
         ? `selectedEntity=${params.context.entityType}:${params.context.entityId}`
