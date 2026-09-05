@@ -219,6 +219,10 @@ describe("Mass 2.5 Partial Match", () => {
     expect(svc).toContain("runMatchingForDemand");
     expect(svc).toContain("BUYER_MATCH");
     expect(svc).toContain("reevaluateDemandsForVehicle");
+    // Must rematch even when no OPEN InformationRequest remains
+    expect(svc).not.toMatch(
+      /if \(open\.length === 0\) return \{ fulfilled: 0, reevaluated/
+    );
     const flow = readFileSync(
       join(process.cwd(), "src/services/domain/matching-flow.ts"),
       "utf8"

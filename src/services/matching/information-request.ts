@@ -317,53 +317,54 @@ export async function fulfillRequestsAfterVehicleUpdate(params: {
       vehicle: true,
     },
   });
-  if (open.length === 0) return { fulfilled: 0, reevaluated: [] as string[] };
-
-  await emitExchangeEvent({
-    eventType: "INVENTORY_ENRICHED",
-    dealerId: params.sellerDealerId,
-    vehicleId: params.vehicleId,
-    evidenceType: "SYSTEM_OBSERVED",
-    privacyClass: "DEALER_SCOPED",
-    eventData: { updatedFields: params.updatedFields },
-    idempotencyKey: `inventory-enriched:${params.vehicleId}:${[...params.updatedFields].sort().join(",")}:${new Date().toISOString().slice(0, 13)}`,
-  });
 
   const demandIds = new Set<string>();
   let fulfilled = 0;
 
-  for (const req of open) {
-    if (req.demand.status !== "ACTIVE") {
-      await prisma.informationRequest.update({
-        where: { id: req.id },
-        data: { status: "EXPIRED", cancelledAt: new Date() },
-      });
-      continue;
-    }
-    if (req.vehicle.status !== "ACTIVE") {
-      await prisma.informationRequest.update({
-        where: { id: req.id },
-        data: { status: "CANCELLED", cancelledAt: new Date() },
-      });
-      continue;
-    }
+  if (open.length > 0) {
+    await emitExchangeEvent({
+      eventType: "INVENTORY_ENRICHED",
+      dealerId: params.sellerDealerId,
+      vehicleId: params.vehicleId,
+      evidenceType: "SYSTEM_OBSERVED",
+      privacyClass: "DEALER_SCOPED",
+      eventData: { updatedFields: params.updatedFields },
+      idempotencyKey: `inventory-enriched:${params.vehicleId}:${[...params.updatedFields].sort().join(",")}:${new Date().toISOString().slice(0, 13)}`,
+    });
 
-    const requested = Array.isArray(req.requestedFields)
-      ? (req.requestedFields as string[])
-      : [];
-    const remaining = remainingBlockingFields(req.vehicle, requested);
-    if (remaining.length === 0) {
-      await prisma.informationRequest.update({
-        where: { id: req.id },
-        data: { status: "FULFILLED", fulfilledAt: new Date() },
-      });
-      fulfilled += 1;
-      demandIds.add(req.demandId);
-    } else {
-      await prisma.informationRequest.update({
-        where: { id: req.id },
-        data: { requestedFields: toPrismaJson(remaining) },
-      });
+    for (const req of open) {
+      if (req.demand.status !== "ACTIVE") {
+        await prisma.informationRequest.update({
+          where: { id: req.id },
+          data: { status: "EXPIRED", cancelledAt: new Date() },
+        });
+        continue;
+      }
+      if (req.vehicle.status !== "ACTIVE") {
+        await prisma.informationRequest.update({
+          where: { id: req.id },
+          data: { status: "CANCELLED", cancelledAt: new Date() },
+        });
+        continue;
+      }
+
+      const requested = Array.isArray(req.requestedFields)
+        ? (req.requestedFields as string[])
+        : [];
+      const remaining = remainingBlockingFields(req.vehicle, requested);
+      if (remaining.length === 0) {
+        await prisma.informationRequest.update({
+          where: { id: req.id },
+          data: { status: "FULFILLED", fulfilledAt: new Date() },
+        });
+        fulfilled += 1;
+        demandIds.add(req.demandId);
+      } else {
+        await prisma.informationRequest.update({
+          where: { id: req.id },
+          data: { requestedFields: toPrismaJson(remaining) },
+        });
+      }
     }
   }
 
