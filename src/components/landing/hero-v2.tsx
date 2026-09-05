@@ -19,12 +19,12 @@ export function HeroV2() {
               <h1 className={styles.headline}>
                 <span className="block text-v2-warm">מה שאתה מחפש</span>
                 <span className={styles.headlineAccent}>
-                  נמצא בטח ממש מעבר לפינה.
+                  בטח נמצא ממש מעבר לפינה
                 </span>
               </h1>
 
               <p className={styles.supporting}>
-                ויש סוחר לידך שבטח מחפש בדיוק את הרכב שאתה
+                ויש סוחר לידך שבטח מחפש בדיוק את הרכב שאתה{" "}
                 <span className={styles.supportingBreak}>
                   רוצה להוציא מהמלאי.
                 </span>

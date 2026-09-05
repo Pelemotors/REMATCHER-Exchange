@@ -48,7 +48,10 @@ async function main() {
     fail("Landing hero CTA visible", "missing הצטרפות ל-Exchange");
   }
 
-  if (landingHtml.includes("הרכב שאתה מחפש")) {
+  if (
+    landingHtml.includes("מה שאתה מחפש") &&
+    landingHtml.includes("בטח נמצא ממש מעבר לפינה")
+  ) {
     pass("Landing hero headline");
   } else {
     fail("Landing hero headline");
