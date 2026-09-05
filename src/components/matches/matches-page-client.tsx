@@ -37,12 +37,37 @@ export function MatchesPageClient({
   useSetAgentPageContext({ surface: "matches", route: "/matches" }, []);
 
   async function load() {
-    const res = await fetch("/api/matches");
+    const res = await fetch("/api/matches", { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     const list: BuyerMatchListItem[] = Array.isArray(data) ? data : [];
     setMatches(list);
   }
+
+  // Buyer Interest is asynchronous: the seller can accept while the buyer is
+  // still looking at the waiting state. Keep only that state live so Mutual →
+  // Reveal appears without requiring a manual reload or a push-notification tap.
+  const hasPendingSellerDecision = matches.some(
+    (m) => m.interest?.status === "INTERESTED" && !m.revealId
+  );
+
+  useEffect(() => {
+    if (!hasPendingSellerDecision) return;
+
+    const refresh = () => void load();
+    const interval = window.setInterval(refresh, 5000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [hasPendingSellerDecision]);
 
   useEffect(() => {
     if (!focusId) return;
