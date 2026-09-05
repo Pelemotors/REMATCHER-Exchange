@@ -27,6 +27,21 @@ export type VehicleUpdateFields = {
   lastAvailabilityConfirmedAt?: Date | null;
 };
 
+const MATCH_RELEVANT_FIELDS = new Set([
+  "make",
+  "model",
+  "year",
+  "mileage",
+  "b2bPrice",
+  "retailPrice",
+  "color",
+  "trim",
+  "ownershipHand",
+  "region",
+  "fieldProvenance",
+  "lastAvailabilityConfirmedAt",
+]);
+
 /**
  * Canonical vehicle fact update — ownership scoped.
  * Does NOT set SOLD or reactivate SOLD→ACTIVE (use dedicated commands).
@@ -38,6 +53,8 @@ export async function updateVehicleForDealer(input: {
   fields: VehicleUpdateFields;
   source?: InventoryMutationSource | string;
   skipEventLog?: boolean;
+  /** Import batches can defer discovery and rematch once at the end. */
+  skipRematch?: boolean;
   db?: InventoryDbClient;
 }) {
   const db = input.db ?? prisma;
@@ -51,12 +68,9 @@ export async function updateVehicleForDealer(input: {
   }
 
   if (vehicle.status === "SOLD" || vehicle.status === "ARCHIVED") {
-    // Fact edits on terminal inventory require reactivation first
     const onlyMeta =
       Object.keys(input.fields).length > 0 &&
-      Object.keys(input.fields).every((k) =>
-        ["rawInput"].includes(k)
-      );
+      Object.keys(input.fields).every((k) => ["rawInput"].includes(k));
     if (!onlyMeta && input.fields.status !== "ARCHIVED") {
       return {
         ok: false as const,
@@ -66,10 +80,7 @@ export async function updateVehicleForDealer(input: {
     }
   }
 
-  const data: Record<string, unknown> = {
-    lastInventoryUpdate: new Date(),
-  };
-
+  const data: Record<string, unknown> = { lastInventoryUpdate: new Date() };
   const f = input.fields;
   if ("make" in f) data.make = f.make;
   if ("model" in f) data.model = f.model;
@@ -95,7 +106,6 @@ export async function updateVehicleForDealer(input: {
     data.fieldProvenance = toPrismaJson({ ...prev, ...f.fieldProvenance });
   }
 
-  // Availability confirmation is explicit — not implied by generic edits
   if ("lastAvailabilityConfirmedAt" in f && f.lastAvailabilityConfirmedAt) {
     data.lastAvailabilityConfirmedAt = f.lastAvailabilityConfirmedAt;
     data.freshnessState = "FRESH";
@@ -126,6 +136,10 @@ export async function updateVehicleForDealer(input: {
     }).catch(() => undefined);
   }
 
+  const matchingRelevant = Object.keys(f).some((k) =>
+    MATCH_RELEVANT_FIELDS.has(k)
+  );
+
   if (!input.skipEventLog) {
     await logAppEvent({
       eventType: "vehicle_updated",
@@ -138,7 +152,6 @@ export async function updateVehicleForDealer(input: {
       },
     });
 
-    // Durable exchange events — failure fails the mutation path for caller retry
     if (f.status === "ARCHIVED" && vehicle.status !== "ARCHIVED") {
       await emitExchangeEvent({
         eventType: "INVENTORY_REMOVED",
@@ -153,22 +166,7 @@ export async function updateVehicleForDealer(input: {
         "@/services/matching/information-request"
       );
       await cancelOpenRequestsForVehicle(updated.id);
-    } else if (
-      Object.keys(f).some((k) =>
-        [
-          "make",
-          "model",
-          "year",
-          "mileage",
-          "b2bPrice",
-          "retailPrice",
-          "color",
-          "trim",
-          "ownershipHand",
-          "fieldProvenance",
-        ].includes(k)
-      )
-    ) {
+    } else if (matchingRelevant) {
       await emitExchangeEvent({
         eventType: "INVENTORY_UPDATED",
         dealerId: input.dealerId,
@@ -193,8 +191,21 @@ export async function updateVehicleForDealer(input: {
         vehicleId: updated.id,
         sellerDealerId: input.dealerId,
         updatedFields,
+        skipRematch: input.skipRematch,
       });
     }
+  } else if (
+    matchingRelevant &&
+    updated.status === "ACTIVE" &&
+    !input.skipRematch
+  ) {
+    const { rematchAfterInventoryMutation } = await import(
+      "@/services/matching/inventory-rematch"
+    );
+    await rematchAfterInventoryMutation({
+      vehicleId: updated.id,
+      sellerDealerId: input.dealerId,
+    });
   }
 
   return { ok: true as const, vehicle: updated };
@@ -205,6 +216,8 @@ export async function reactivateVehicleForDealer(input: {
   dealerId: string;
   vehicleId: string;
   source?: InventoryMutationSource | string;
+  /** Import batches can defer discovery and rematch once at the end. */
+  skipRematch?: boolean;
 }) {
   const vehicle = await prisma.vehicle.findFirst({
     where: { id: input.vehicleId, dealerId: input.dealerId },
@@ -251,6 +264,16 @@ export async function reactivateVehicleForDealer(input: {
     dealerId: input.dealerId,
     metadata: { source: input.source ?? "domain", from: vehicle.status },
   });
+
+  if (!input.skipRematch) {
+    const { rematchAfterInventoryMutation } = await import(
+      "@/services/matching/inventory-rematch"
+    );
+    await rematchAfterInventoryMutation({
+      vehicleId: updated.id,
+      sellerDealerId: input.dealerId,
+    });
+  }
 
   return { ok: true as const, vehicle: updated, alreadyActive: false as const };
 }
