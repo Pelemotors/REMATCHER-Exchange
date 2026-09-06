@@ -30,6 +30,7 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [password, setPassword] = useState("");
+  const [inventoryText, setInventoryText] = useState("");
   const [message, setMessage] = useState("");
 
   async function reload() {
@@ -51,43 +52,67 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
     const data = await r.json().catch(() => ({}));
     setActionLoading(false);
     if (!r.ok) {
-      setMessage(data.error === "password_too_short" ? "הסיסמה חייבת להכיל לפחות 8 תווים" : "הפעולה נכשלה");
-      return false;
+      setMessage(
+        data.error === "password_too_short"
+          ? "הסיסמה חייבת להכיל לפחות 8 תווים"
+          : data.error === "too_many_rows"
+            ? `אפשר להזין עד ${data.maxRows ?? 40} רכבים בכל פעם`
+            : "הפעולה נכשלה"
+      );
+      return { ok: false as const, data };
     }
     await reload();
     router.refresh();
-    return true;
+    return { ok: true as const, data };
   }
 
   async function approve() {
     if (!confirm("לאשר ולהפעיל את הסוחר? אם המייל לא אומת, הוא יאומת מנהלית.")) return;
-    if (await post(`/api/admin/dealers/${dealerId}/approve`)) setMessage("הסוחר אושר והופעל");
+    const result = await post(`/api/admin/dealers/${dealerId}/approve`);
+    if (result.ok) setMessage("הסוחר אושר והופעל");
   }
 
   async function reject() {
     if (!confirm("לדחות את הבקשה?")) return;
-    if (await post(`/api/admin/dealers/${dealerId}/reject`, { reason: rejectReason })) setMessage("הבקשה נדחתה");
+    const result = await post(`/api/admin/dealers/${dealerId}/reject`, { reason: rejectReason });
+    if (result.ok) setMessage("הבקשה נדחתה");
   }
 
   async function toggleFreeze() {
     const frozen = dealer?.verificationStatus === "VERIFIED";
     if (!confirm(frozen ? "להקפיא את הסוחר?" : "להפעיל מחדש את הסוחר?")) return;
-    if (await post(`/api/admin/dealers/${dealerId}/freeze`, { frozen })) {
-      setMessage(frozen ? "הסוחר הוקפא" : "הסוחר הופעל מחדש");
-    }
+    const result = await post(`/api/admin/dealers/${dealerId}/freeze`, { frozen });
+    if (result.ok) setMessage(frozen ? "הסוחר הוקפא" : "הסוחר הופעל מחדש");
   }
 
   async function verifyEmail() {
-    if (await post(`/api/admin/dealers/${dealerId}/owner/verify-email`)) setMessage("המייל סומן כמאומת");
+    const result = await post(`/api/admin/dealers/${dealerId}/owner/verify-email`);
+    if (result.ok) setMessage("המייל סומן כמאומת");
   }
 
   async function resetPassword() {
     if (password.length < 8) { setMessage("הסיסמה חייבת להכיל לפחות 8 תווים"); return; }
     if (!confirm("להחליף לבעל החשבון את הסיסמה?")) return;
-    if (await post(`/api/admin/dealers/${dealerId}/owner/password`, { password })) {
+    const result = await post(`/api/admin/dealers/${dealerId}/owner/password`, { password });
+    if (result.ok) {
       setPassword("");
       setMessage("הסיסמה הוחלפה");
     }
+  }
+
+  async function seedInventory() {
+    const rows = inventoryText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (rows.length === 0) { setMessage("הדבק לפחות רכב אחד"); return; }
+    if (!confirm(`להוסיף ${rows.length} רכבים כמלאי הראשוני של הסוחר?`)) return;
+    const result = await post(`/api/admin/dealers/${dealerId}/inventory/seed`, { inventory: inventoryText });
+    if (!result.ok) return;
+    const { created = 0, failed = [] } = result.data as { created?: number; failed?: unknown[] };
+    setInventoryText("");
+    setMessage(
+      failed.length > 0
+        ? `נוספו ${created} רכבים. ${failed.length} שורות לא נקלטו כי חסרו יצרן/דגם/שנה.`
+        : `נוספו ${created} רכבים למלאי הראשוני`
+    );
   }
 
   if (loading) return <SkeletonBlockV2 lines={4} />;
@@ -136,6 +161,28 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
           </Surface>
         )}
       </div>
+
+      <Surface depth="raised" className="space-y-3 p-4">
+        <div>
+          <h2 className="font-semibold text-v2-text-primary">שתילת מלאי ראשוני</h2>
+          <p className="mt-1 text-sm text-v2-text-secondary">
+            הדבק רכב אחד בכל שורה. אפשר לכתוב טבעי, לדוגמה: “סקודה סופרב 2024 30 אלף ק״מ 192 לסוחר”. המערכת תקלוט אותם כמלאי רגיל של הסוחר.
+          </p>
+        </div>
+        <textarea
+          className="input min-h-[150px] w-full"
+          dir="rtl"
+          placeholder={"סקודה סופרב 2024 30,000 ק״מ 192 לסוחר\nמאזדה CX5 2023 יד 1 145 לסוחר"}
+          value={inventoryText}
+          onChange={(e) => setInventoryText(e.target.value)}
+        />
+        <ButtonV2 variant="signal" disabled={actionLoading || !inventoryText.trim()} onClick={seedInventory}>
+          שתול מלאי לסוחר
+        </ButtonV2>
+        <p className="text-xs text-v2-text-muted">
+          אחרי ההזנה זה אותו מלאי שהסוחר והסוכן האישי רואים. הסוחר יוכל להוסיף, לעדכן, למכור או להסיר רכבים גם באמצעות פקודות לסוכן AI, ומנגנון רעננות המלאי ימשיך לעבוד כרגיל.
+        </p>
+      </Surface>
 
       <Surface depth="raised" className="space-y-4 p-4">
         <h2 className="font-semibold text-v2-text-primary">פעולות מנהל</h2>
