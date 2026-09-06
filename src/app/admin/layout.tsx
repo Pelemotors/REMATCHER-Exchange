@@ -26,6 +26,9 @@ export default async function AdminLayout({
             <Link href="/admin" className={styles.navBrand}>
               Control Room
             </Link>
+            <Link href="/admin#dealer-management" className={styles.navLink}>
+              ניהול סוחרים
+            </Link>
             <Link href="/admin/dealers" className={styles.navLink}>
               סוחרים לאישור
               {pendingCount > 0 && (
