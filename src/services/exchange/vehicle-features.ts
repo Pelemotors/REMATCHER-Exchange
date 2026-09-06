@@ -17,90 +17,35 @@ export const CANONICAL_VEHICLE_FEATURES = [
 
 export type CanonicalVehicleFeature = (typeof CANONICAL_VEHICLE_FEATURES)[number];
 
-function clean(value: string): string {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
-    .replace(/["'׳״`]/g, "")
-    .replace(/[._/\\-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+const FEATURE_SET = new Set<string>(CANONICAL_VEHICLE_FEATURES);
 
-const FEATURE_ALIASES: Record<string, CanonicalVehicleFeature> = {
-  "4x4": "AWD_4X4",
-  "4 x 4": "AWD_4X4",
-  "4wd": "AWD_4X4",
-  "awd": "AWD_4X4",
-  "הנעה כפולה": "AWD_4X4",
-  "כפולה": "AWD_4X4",
-  "ארבע על ארבע": "AWD_4X4",
-  "גג שמש": "SUNROOF",
-  "חלון בגג": "SUNROOF",
-  "סאנרוף": "SUNROOF",
-  "sunroof": "SUNROOF",
-  "גג פנורמי": "PANORAMIC_ROOF",
-  "פנורמי": "PANORAMIC_ROOF",
-  "panoramic roof": "PANORAMIC_ROOF",
-  "panorama roof": "PANORAMIC_ROOF",
-  "עור": "LEATHER_SEATS",
-  "מושבי עור": "LEATHER_SEATS",
-  "leather": "LEATHER_SEATS",
-  "leather seats": "LEATHER_SEATS",
-  "מושבים חשמליים": "ELECTRIC_SEATS",
-  "electric seats": "ELECTRIC_SEATS",
-  "מושבים מחוממים": "HEATED_SEATS",
-  "heated seats": "HEATED_SEATS",
-  "מושבים מאווררים": "VENTILATED_SEATS",
-  "ventilated seats": "VENTILATED_SEATS",
-  "קרוז אדפטיבי": "ADAPTIVE_CRUISE",
-  "בקרת שיוט אדפטיבית": "ADAPTIVE_CRUISE",
-  "adaptive cruise": "ADAPTIVE_CRUISE",
-  "שמירת נתיב": "LANE_ASSIST",
-  "תיקון סטייה מנתיב": "LANE_ASSIST",
-  "lane assist": "LANE_ASSIST",
-  "שטח מת": "BLIND_SPOT_MONITOR",
-  "ניטור שטח מת": "BLIND_SPOT_MONITOR",
-  "blind spot": "BLIND_SPOT_MONITOR",
-  "חיישני חניה": "PARKING_SENSORS",
-  "parking sensors": "PARKING_SENSORS",
-  "מצלמת רוורס": "REAR_CAMERA",
-  "rear camera": "REAR_CAMERA",
-  "מצלמות 360": "SURROUND_CAMERA",
-  "מצלמת 360": "SURROUND_CAMERA",
-  "360 camera": "SURROUND_CAMERA",
-  "וו גרירה": "TOW_BAR",
-  "tow bar": "TOW_BAR",
-};
-
+/**
+ * Validation-only canonicalizer.
+ * IMPORTANT: this layer does NOT interpret aliases or natural language.
+ * Semantic normalization belongs to vehicle-feature-intelligence (AI).
+ */
 export function canonicalizeVehicleFeature(value: string | null | undefined): CanonicalVehicleFeature | null {
   if (!value) return null;
-  const normalized = clean(value);
-  if (!normalized) return null;
-  if ((CANONICAL_VEHICLE_FEATURES as readonly string[]).includes(value as CanonicalVehicleFeature)) {
-    return value as CanonicalVehicleFeature;
-  }
-  return FEATURE_ALIASES[normalized] ?? null;
+  const normalized = value.trim().toUpperCase();
+  return FEATURE_SET.has(normalized) ? (normalized as CanonicalVehicleFeature) : null;
 }
 
+/** Validation + de-duplication of already-canonical AI output only. */
 export function canonicalizeVehicleFeatures(values: Array<string | null | undefined>): CanonicalVehicleFeature[] {
   const out = new Set<CanonicalVehicleFeature>();
   for (const value of values) {
     const feature = canonicalizeVehicleFeature(value);
     if (feature) out.add(feature);
   }
-  if (out.has("PANORAMIC_ROOF")) out.add("SUNROOF");
   return [...out];
 }
 
-export function extractVehicleFeaturesFromText(rawText: string): CanonicalVehicleFeature[] {
-  const text = clean(rawText);
-  const found: CanonicalVehicleFeature[] = [];
-  for (const [alias, feature] of Object.entries(FEATURE_ALIASES)) {
-    if (text.includes(alias)) found.push(feature);
-  }
-  return canonicalizeVehicleFeatures(found);
+/**
+ * @deprecated Do not infer feature meaning deterministically from free text.
+ * Use normalizeVehicleFeaturesWithAi() from vehicle-feature-intelligence.ts.
+ */
+export function extractVehicleFeaturesFromText(_rawText: string): CanonicalVehicleFeature[] {
+  return [];
 }
 
 export function vehicleFeatureLabelHe(feature: string): string {
