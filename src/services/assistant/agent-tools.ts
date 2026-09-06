@@ -134,7 +134,7 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   ),
   tool(
     "update_inventory_draft",
-    "Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user's message. Conversation state only — does NOT write to the database and does NOT require confirmation. Use when describing/correcting an unsaved vehicle. Only include facts actually stated or clearly corrected. Do not invent model/year/mileage/price.",
+    "Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user message. Conversation state only — does NOT write to the database and does NOT require confirmation. Use for initial facts AND follow-up corrections such as also has 4x4. Product semantics have ONE seller price: asking price. For features, use only canonical feature identifiers from the product vocabulary. Only include facts actually stated or clearly corrected.",
     {
       type: "object",
       properties: {
@@ -149,9 +149,14 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
             color: nullableString,
             ownershipHand: nullableNumber,
             ownershipType: nullableString,
-            retailPrice: nullableNumber,
             b2bPrice: nullableNumber,
             region: nullableString,
+            fuelType: nullableString,
+            engineDisplacementCc: nullableNumber,
+            features: {
+              type: ["array", "null"],
+              items: { type: "string" },
+            },
           },
           additionalProperties: false,
         },

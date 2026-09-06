@@ -136,7 +136,7 @@ export async function buildImportPreview(params: {
     if (fields.fuelType !== "ELECTRIC" && fields.fuelType !== "HYDROGEN" && !fields.engineDisplacementCc) {
       warnings.push("נפח מנוע חסר — הסוכן ישלים לפי צורך");
     }
-    if (!fields.b2bPrice) warnings.push("מחיר סוחר חסר — לא תיווצר התאמה סופית עד שיושלם");
+    if (!fields.b2bPrice) warnings.push("מחיר מבוקש חסר — לא תיווצר התאמה סופית עד שיושלם");
     const dup = findDuplicate(fields, existing);
     if (dup?.confidence === "low") warnings.push("ייתכן כפילות — ייווצר רכב חדש");
     const valid = rowHasMinimum(fields);
