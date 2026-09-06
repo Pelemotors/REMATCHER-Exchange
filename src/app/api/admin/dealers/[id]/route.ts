@@ -33,6 +33,7 @@ export async function GET(
     region: dealer.region,
     businessId: dealer.businessId,
     verificationStatus: dealer.verificationStatus,
+    isActive: dealer.isActive,
     createdAt: dealer.createdAt,
     commercial: dealer.commercial,
     onboardingState: dealer.onboardingState,

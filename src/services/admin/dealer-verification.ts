@@ -10,14 +10,7 @@ import { recordActivationMilestone } from "@/services/activation/milestones";
 
 export async function getPendingDealers() {
   return prisma.dealer.findMany({
-    where: {
-      verificationStatus: "PENDING",
-      memberships: {
-        some: {
-          user: { emailVerifiedAt: { not: null } },
-        },
-      },
-    },
+    where: { verificationStatus: "PENDING" },
     include: {
       memberships: {
         include: { user: true },
@@ -64,18 +57,29 @@ export async function approveDealer(dealerId: string, adminUserId: string) {
     return { ok: false as const, error: "invalid_status" as const };
   }
 
-  const updated = await prisma.dealer.update({
-    where: { id: dealerId },
-    data: {
-      verificationStatus: "VERIFIED",
-      rejectionReason: null,
-      ...(dealer.cohort == null ? { cohort: "PILOT" } : {}),
-    },
+  const owner = dealer.memberships[0]?.user;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (owner && !owner.emailVerifiedAt) {
+      await tx.user.update({
+        where: { id: owner.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+    }
+
+    return tx.dealer.update({
+      where: { id: dealerId },
+      data: {
+        verificationStatus: "VERIFIED",
+        isActive: true,
+        rejectionReason: null,
+        ...(dealer.cohort == null ? { cohort: "PILOT" } : {}),
+      },
+    });
   });
 
   await ensureDealerCommercial(dealerId);
 
-  const owner = dealer.memberships[0]?.user;
   if (owner) {
     await sendDealerApprovedEmail({ to: owner.email, name: owner.name });
     await createNotification({
@@ -99,7 +103,7 @@ export async function approveDealer(dealerId: string, adminUserId: string) {
     entityType: "Dealer",
     entityId: dealerId,
     dealerId,
-    metadata: { adminUserId },
+    metadata: { adminUserId, emailVerifiedByAdmin: Boolean(owner && !owner.emailVerifiedAt) },
   });
 
   return { ok: true as const, dealer: updated };
@@ -150,12 +154,5 @@ export async function rejectDealer(
 }
 
 export async function countPendingDealersForApproval() {
-  return prisma.dealer.count({
-    where: {
-      verificationStatus: "PENDING",
-      memberships: {
-        some: { user: { emailVerifiedAt: { not: null } } },
-      },
-    },
-  });
+  return prisma.dealer.count({ where: { verificationStatus: "PENDING" } });
 }

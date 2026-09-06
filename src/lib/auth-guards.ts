@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { isAdminRole } from "@/lib/brand-copy";
 
 export async function requireSession() {
@@ -23,10 +24,28 @@ export async function requireVerifiedDealer() {
   if ("error" in result) return result;
 
   const { session } = result;
-  if (!session.user.emailVerifiedAt) {
+  const dealerId = session.user.dealerId!;
+
+  const membership = await prisma.dealerMembership.findUnique({
+    where: {
+      userId_dealerId: {
+        userId: session.user.id,
+        dealerId,
+      },
+    },
+    select: {
+      user: { select: { emailVerifiedAt: true } },
+      dealer: { select: { verificationStatus: true, isActive: true } },
+    },
+  });
+
+  if (!membership?.user.emailVerifiedAt) {
     return { error: "Email not verified" as const, status: 403 as const };
   }
-  if (session.user.verificationStatus !== "VERIFIED") {
+  if (
+    membership.dealer.verificationStatus !== "VERIFIED" ||
+    !membership.dealer.isActive
+  ) {
     return { error: "Dealer not verified" as const, status: 403 as const };
   }
   return { session };
