@@ -6,7 +6,10 @@ import {
   Surface,
 } from "@/components/ui/brand-v2";
 import { Check, Minus, ShieldCheck } from "lucide-react";
-import { fuelTypeLabelHe } from "@/services/exchange/vehicle-identity";
+import {
+  fuelTypeLabelHe,
+  ownershipSourceLabelHe,
+} from "@/services/exchange/vehicle-identity";
 import styles from "./match-card-v2.module.css";
 
 export interface MatchCardV2Props {
@@ -37,16 +40,6 @@ export interface MatchCardV2Props {
   revealHref?: string;
 }
 
-function ownershipTypeLabelHe(value: string): string {
-  const labels: Record<string, string> = {
-    private: "פרטי",
-    leasing: "ליסינג",
-    rental: "השכרה",
-    company: "חברה",
-  };
-  return labels[value.trim().toLowerCase()] ?? value;
-}
-
 function vehicleMetaLine(vehicle: MatchCardV2Props["vehicle"]) {
   const parts: string[] = [];
   if (vehicle.year) parts.push(String(vehicle.year));
@@ -54,7 +47,7 @@ function vehicleMetaLine(vehicle: MatchCardV2Props["vehicle"]) {
   if (vehicle.fuelType) parts.push(fuelTypeLabelHe(vehicle.fuelType) ?? vehicle.fuelType);
   if (vehicle.engineDisplacementCc != null) parts.push(`${formatNumber(vehicle.engineDisplacementCc)} סמ״ק`);
   if (vehicle.ownershipHand) parts.push(`יד ${vehicle.ownershipHand}`);
-  if (vehicle.ownershipType) parts.push(ownershipTypeLabelHe(vehicle.ownershipType));
+  if (vehicle.ownershipType) parts.push(ownershipSourceLabelHe(vehicle.ownershipType) ?? vehicle.ownershipType);
   if (vehicle.trim) parts.push(vehicle.trim);
   if (vehicle.color) parts.push(vehicle.color);
   if (vehicle.region) parts.push(vehicle.region);
