@@ -9,6 +9,7 @@ import type { NormalizedVehicle } from "@/lib/schemas/ai";
 import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
 import { canonicalizeOwnershipSource } from "@/services/exchange/vehicle-identity";
 import { canonicalizeVehicleFeatures } from "@/services/exchange/vehicle-features";
+import { normalizeVehicleFeaturesWithAi } from "@/services/exchange/vehicle-feature-intelligence";
 
 /** Shared Prisma client (default) or interactive-transaction client */
 export type InventoryDbClient = typeof prisma;
@@ -127,7 +128,22 @@ export async function createVehicleForDealer(input: {
   fields.engineDisplacementCc = identity.engineDisplacementCc;
   fields.ownershipHand = identity.ownershipHand;
   fields.ownershipType = identity.ownershipType ?? canonicalizeOwnershipSource(fields.ownershipType);
-  fields.features = canonicalizeVehicleFeatures(fields.features ?? []);
+
+  // AI owns semantic feature normalization on every inventory ingress.
+  // Deterministic code only validates/de-duplicates canonical AI output.
+  const featureSourceText = [
+    input.rawInput ?? "",
+    ...(fields.features ?? []),
+  ].filter(Boolean).join("\n");
+  if (featureSourceText) {
+    const normalizedFeatures = await normalizeVehicleFeaturesWithAi({
+      rawText: featureSourceText,
+      userId: input.userId,
+    });
+    fields.features = canonicalizeVehicleFeatures(normalizedFeatures.features);
+  } else {
+    fields.features = [];
+  }
 
   fields.fieldProvenance = {
     ...provenanceObject(fields.fieldProvenance),
