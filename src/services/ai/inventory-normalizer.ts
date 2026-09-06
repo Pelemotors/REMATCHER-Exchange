@@ -16,6 +16,10 @@ import {
   parseYearFromText,
   resolveVehicleShorthand,
 } from "@/services/assistant/vehicle-shorthand";
+import {
+  canonicalizeFuelType,
+  normalizeEngineDisplacementCc,
+} from "@/services/exchange/vehicle-identity";
 
 const SYSTEM_PROMPT = `${INVENTORY_COMMERCIAL_PLAYBOOK}
 
@@ -27,6 +31,8 @@ Rules (CRITICAL):
 - Year "22" = 2022. Prices in ILS.
 - "62 אלף" = mileage 62000 when km context; "134 לסוחר" / "B2B 134" = b2bPrice 134000.
 - ownershipType: private | leasing | rental | company when stated.
+- fuelType: return one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER only when stated.
+- engineDisplacementCc: integer cubic centimeters only when stated; 1.6L means 1600, 2.0 means 2000 in engine context.
 - Return structured JSON only.`;
 
 const RESPONSE_SCHEMA = {
@@ -43,6 +49,8 @@ const RESPONSE_SCHEMA = {
     retailPrice: JSON_SCHEMA_STATUS_FIELD,
     b2bPrice: JSON_SCHEMA_STATUS_FIELD,
     region: JSON_SCHEMA_STATUS_FIELD,
+    fuelType: JSON_SCHEMA_STATUS_FIELD,
+    engineDisplacementCc: JSON_SCHEMA_STATUS_FIELD,
     ambiguities: { type: "array", items: { type: "string" } },
     rawSummary: { type: "string" },
   },
@@ -58,6 +66,8 @@ const RESPONSE_SCHEMA = {
     "retailPrice",
     "b2bPrice",
     "region",
+    "fuelType",
+    "engineDisplacementCc",
     "ambiguities",
     "rawSummary",
   ],
@@ -71,6 +81,33 @@ function knownStr(s: string | null | undefined) {
   return s ? { value: s, status: "known" as const } : undefined;
 }
 
+function parseFuelFromText(rawInput: string): string | null {
+  const patterns = [
+    /פלאג[\s־-]*אין(?:\s+היברידי)?/i,
+    /plug[\s-]*in(?:\s+hybrid)?|\bphev\b/i,
+    /היברידי|\bhybrid\b|\bhev\b/i,
+    /חשמלי|\belectric\b|\bev\b/i,
+    /דיזל|סולר|\bdiesel\b/i,
+    /בנזין|\bgasoline\b|\bpetrol\b/i,
+    /גפ[״"]?מ|\blpg\b/i,
+    /\bcng\b/i,
+    /מימן|\bhydrogen\b/i,
+  ];
+  for (const p of patterns) {
+    const m = rawInput.match(p);
+    if (m) return canonicalizeFuelType(m[0]);
+  }
+  return null;
+}
+
+function parseEngineFromText(rawInput: string): number | null {
+  const explicitCc = rawInput.match(/(?:מנוע|נפח(?:\s+מנוע)?|engine)\s*[:=]?\s*(\d{3,4})\s*(?:cc|סמ[״"]?ק)?/i);
+  if (explicitCc) return normalizeEngineDisplacementCc(explicitCc[1]);
+  const liters = rawInput.match(/(?:מנוע|נפח(?:\s+מנוע)?|engine)\s*[:=]?\s*(\d(?:[.,]\d)?)\s*(?:l|ליטר)?/i);
+  if (liters) return normalizeEngineDisplacementCc(`${liters[1]} ליטר`);
+  return null;
+}
+
 export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
   const shorthand = resolveVehicleShorthand(rawInput);
   const applied = applyShorthandToFields(rawInput, {
@@ -81,7 +118,6 @@ export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
     b2bPrice: parseDealerPriceFromText(rawInput),
   });
 
-  // Safety: never invent Corolla from Toyota-only text
   let model = applied.model;
   if (model && !assertNoInventedModel(rawInput, model)) {
     model = null;
@@ -96,7 +132,6 @@ export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
   const handMatch = rawInput.match(/יד\s*(\d)/i);
   const ownershipHand = handMatch ? parseInt(handMatch[1], 10) : null;
 
-  // Retail only when not clearly dealer price and large number present
   let retailPrice: number | undefined;
   if (!applied.b2bPrice) {
     const priceMatch = rawInput.match(/\b(\d{5,7})\b/);
@@ -114,6 +149,8 @@ export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
     retailPrice: knownNum(retailPrice ?? null),
     ownershipHand: knownNum(ownershipHand),
     ownershipType: knownStr(ownershipType),
+    fuelType: knownStr(parseFuelFromText(rawInput)),
+    engineDisplacementCc: knownNum(parseEngineFromText(rawInput)),
     ambiguities: [],
     rawSummary: rawInput,
   };
@@ -142,7 +179,6 @@ export async function normalizeVehicle(
     });
 
     const parsed = normalizedVehicleSchema.parse(data);
-    // Post-guard: merge HIGH-confidence shorthand if AI left identity empty
     const fb = normalizeVehicleFallback(rawInput);
     const merge = (a?: { value?: unknown; status?: string }, b?: { value?: unknown; status?: string }) => {
       if (a?.status === "known") return a;
@@ -166,6 +202,11 @@ export async function normalizeVehicle(
       b2bPrice: merge(parsed.b2bPrice, fb.b2bPrice),
       ownershipType: merge(parsed.ownershipType, fb.ownershipType),
       ownershipHand: merge(parsed.ownershipHand, fb.ownershipHand),
+      fuelType: merge(parsed.fuelType, fb.fuelType),
+      engineDisplacementCc: merge(
+        parsed.engineDisplacementCc,
+        fb.engineDisplacementCc
+      ),
     });
   } catch {
     return normalizeVehicleFallback(rawInput);
@@ -185,6 +226,8 @@ export function normalizedToVehicleFields(normalized: NormalizedVehicle) {
     retailPrice: extractKnownNumber(normalized.retailPrice),
     b2bPrice: extractKnownNumber(normalized.b2bPrice),
     region: extractKnownString(normalized.region),
+    fuelType: extractKnownString(normalized.fuelType),
+    engineDisplacementCc: extractKnownNumber(normalized.engineDisplacementCc),
     fieldProvenance: normalized,
   };
 }

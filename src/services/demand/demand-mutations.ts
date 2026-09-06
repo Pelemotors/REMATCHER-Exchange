@@ -11,6 +11,10 @@ import {
 import { logAppEvent } from "@/services/notifications";
 import { recordActivationMilestone } from "@/services/activation/milestones";
 
+function knownParsedValue(field: { value?: unknown; status?: string } | undefined): unknown | null {
+  return field?.status === "known" ? field.value ?? null : null;
+}
+
 async function rebuildDemandConstraints(
   demandId: string,
   parsed: ParsedDemand | null
@@ -46,6 +50,42 @@ async function rebuildDemandConstraints(
         field: sp.field,
         constraintType: "SOFT",
         value: toPrismaJson(sp),
+        source: "user_confirmed",
+      },
+    });
+  }
+
+  // Explicitly stated fuel / engine facts must survive the legacy confirmedJson bridge.
+  // If the parser did not classify them as hard, keep them as soft preference rather than lose them.
+  const already = new Set([
+    ...(parsed?.hardConstraints ?? []),
+    ...(parsed?.softPreferences ?? []),
+  ].map((c) => c.field.toLowerCase()));
+
+  const fuelType = knownParsedValue(parsed?.fuelType);
+  if (fuelType != null && !["fuel", "fueltype", "propulsion"].some((f) => already.has(f))) {
+    await prisma.demandConstraint.create({
+      data: {
+        demandId,
+        field: "fuelType",
+        constraintType: "SOFT",
+        value: toPrismaJson({ field: "fuelType", description: "סוג הנעה/דלק", value: fuelType }),
+        source: "user_confirmed",
+      },
+    });
+  }
+
+  const engineDisplacementCc = knownParsedValue(parsed?.engineDisplacementCc);
+  if (
+    engineDisplacementCc != null &&
+    !["engine", "enginedisplacementcc", "engine_displacement", "enginecapacity", "engine_capacity"].some((f) => already.has(f))
+  ) {
+    await prisma.demandConstraint.create({
+      data: {
+        demandId,
+        field: "engineDisplacementCc",
+        constraintType: "SOFT",
+        value: toPrismaJson({ field: "engineDisplacementCc", description: "נפח מנוע", value: engineDisplacementCc }),
         source: "user_confirmed",
       },
     });
@@ -107,8 +147,6 @@ export async function updateDemandForDealer(params: {
     },
   });
 
-  // Preserve the confirmed hard/soft/exclusion constraints on edit. Rebuilding
-  // them from stale parsedJson would be just as dangerous as deleting them.
   await logAppEvent({
     eventType: "demand_updated",
     entityType: "Demand",

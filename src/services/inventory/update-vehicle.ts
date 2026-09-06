@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { logAppEvent } from "@/services/notifications";
 import { emitExchangeEvent } from "@/services/exchange/events";
+import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
 import type {
   InventoryDbClient,
   InventoryMutationSource,
@@ -19,69 +20,99 @@ export type VehicleUpdateFields = {
   retailPrice?: number | null;
   b2bPrice?: number | null;
   region?: string | null;
-  /** Merge into fieldProvenance JSON (fuel/drivetrain/transmission/seats) */
-  fieldProvenance?: Record<string, string>;
-  /** ARCHIVED only — SOLD must use markVehicleSoldForDealer; ACTIVE reactivation uses reactivateVehicleForDealer */
+  fuelType?: string | null;
+  engineDisplacementCc?: number | null;
+  /** Merge into fieldProvenance JSON (fuel/drivetrain/transmission/seats/identity) */
+  fieldProvenance?: Record<string, unknown>;
   status?: "ARCHIVED";
   rawInput?: string | null;
   lastAvailabilityConfirmedAt?: Date | null;
 };
 
 const MATCH_RELEVANT_FIELDS = new Set([
-  "make",
-  "model",
-  "year",
-  "mileage",
-  "b2bPrice",
-  "retailPrice",
-  "color",
-  "trim",
-  "ownershipHand",
-  "region",
-  "fieldProvenance",
-  "lastAvailabilityConfirmedAt",
+  "make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color", "trim",
+  "ownershipHand", "region", "fuelType", "engineDisplacementCc", "fieldProvenance", "lastAvailabilityConfirmedAt",
 ]);
 
-/**
- * Canonical vehicle fact update — ownership scoped.
- * Does NOT set SOLD or reactivate SOLD→ACTIVE (use dedicated commands).
- * Edited now ≠ availability confirmed (freshness only bumps when explicitly confirmed).
- */
+function provenanceObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function provenanceValue(value: unknown, key: string): string | number | null {
+  const obj = provenanceObject(value);
+  const candidate = obj[key];
+  if (typeof candidate === "string" || typeof candidate === "number") return candidate;
+  if (candidate && typeof candidate === "object" && !Array.isArray(candidate) && "value" in candidate) {
+    const inner = (candidate as { value?: unknown }).value;
+    if (typeof inner === "string" || typeof inner === "number") return inner;
+  }
+  return null;
+}
+
 export async function updateVehicleForDealer(input: {
   dealerId: string;
   vehicleId: string;
   fields: VehicleUpdateFields;
   source?: InventoryMutationSource | string;
   skipEventLog?: boolean;
-  /** Import batches can defer discovery and rematch once at the end. */
   skipRematch?: boolean;
   db?: InventoryDbClient;
 }) {
   const db = input.db ?? prisma;
-
-  const vehicle = await db.vehicle.findFirst({
-    where: { id: input.vehicleId, dealerId: input.dealerId },
-  });
-
-  if (!vehicle) {
-    return { ok: false as const, error: "not_found" as const };
-  }
+  const vehicle = await db.vehicle.findFirst({ where: { id: input.vehicleId, dealerId: input.dealerId } });
+  if (!vehicle) return { ok: false as const, error: "not_found" as const };
 
   if (vehicle.status === "SOLD" || vehicle.status === "ARCHIVED") {
-    const onlyMeta =
-      Object.keys(input.fields).length > 0 &&
-      Object.keys(input.fields).every((k) => ["rawInput"].includes(k));
+    const onlyMeta = Object.keys(input.fields).length > 0 && Object.keys(input.fields).every((k) => ["rawInput"].includes(k));
     if (!onlyMeta && input.fields.status !== "ARCHIVED") {
-      return {
-        ok: false as const,
-        error: "terminal_status" as const,
-        message: "רכב שנמכר דורש הפעלה מחדש מפורשת לפני עדכון.",
-      };
+      return { ok: false as const, error: "terminal_status" as const, message: "רכב שנמכר דורש הפעלה מחדש מפורשת לפני עדכון." };
     }
   }
 
+  const f = { ...input.fields };
+  const identityRelevant =
+    "make" in f || "model" in f || "fuelType" in f || "engineDisplacementCc" in f || "rawInput" in f;
+
+  let mergedProvenance = provenanceObject(vehicle.fieldProvenance);
+  if (f.fieldProvenance) mergedProvenance = { ...mergedProvenance, ...f.fieldProvenance };
+
+  if (identityRelevant) {
+    const resolved = await resolveVehicleThroughExchangeBrain({
+      make: "make" in f ? f.make : vehicle.make,
+      model: "model" in f ? f.model : vehicle.model,
+      fuelType:
+        "fuelType" in f
+          ? f.fuelType
+          : (provenanceValue(mergedProvenance, "fuel") as string | null) ??
+            (provenanceValue(mergedProvenance, "fuelType") as string | null),
+      engineDisplacementCc:
+        "engineDisplacementCc" in f
+          ? f.engineDisplacementCc
+          : (provenanceValue(mergedProvenance, "engineDisplacementCc") as number | null),
+      rawText: "rawInput" in f ? f.rawInput : vehicle.rawInput,
+    });
+    if (resolved.make) f.make = resolved.make;
+    if (resolved.model) f.model = resolved.model;
+    if (resolved.fuelType) f.fuelType = resolved.fuelType;
+    if (resolved.engineDisplacementCc != null) f.engineDisplacementCc = resolved.engineDisplacementCc;
+    mergedProvenance = {
+      ...mergedProvenance,
+      ...(resolved.fuelType ? { fuel: { value: resolved.fuelType, status: "known", source: resolved.source } } : {}),
+      ...(resolved.engineDisplacementCc != null
+        ? { engineDisplacementCc: { value: resolved.engineDisplacementCc, status: "known", source: resolved.source } }
+        : {}),
+      vehicleIdentity: {
+        make: resolved.make,
+        model: resolved.model,
+        source: resolved.source,
+        confidence: resolved.confidence,
+      },
+    };
+  }
+
   const data: Record<string, unknown> = { lastInventoryUpdate: new Date() };
-  const f = input.fields;
   if ("make" in f) data.make = f.make;
   if ("model" in f) data.model = f.model;
   if ("trim" in f) data.trim = f.trim;
@@ -95,185 +126,67 @@ export async function updateVehicleForDealer(input: {
   if ("region" in f) data.region = f.region;
   if ("rawInput" in f) data.rawInput = f.rawInput;
 
-  if (f.fieldProvenance && Object.keys(f.fieldProvenance).length > 0) {
+  if (f.fieldProvenance || identityRelevant) {
     const { toPrismaJson } = await import("@/lib/prisma-json");
-    const prev =
-      vehicle.fieldProvenance &&
-      typeof vehicle.fieldProvenance === "object" &&
-      !Array.isArray(vehicle.fieldProvenance)
-        ? (vehicle.fieldProvenance as Record<string, unknown>)
-        : {};
-    data.fieldProvenance = toPrismaJson({ ...prev, ...f.fieldProvenance });
+    data.fieldProvenance = toPrismaJson(mergedProvenance);
   }
 
   if ("lastAvailabilityConfirmedAt" in f && f.lastAvailabilityConfirmedAt) {
     data.lastAvailabilityConfirmedAt = f.lastAvailabilityConfirmedAt;
     data.freshnessState = "FRESH";
   }
-
   if (f.status === "ARCHIVED") {
     data.status = "ARCHIVED";
     data.archivedAt = new Date();
   }
 
-  const b2bNewlySet =
-    "b2bPrice" in f && f.b2bPrice != null && vehicle.b2bPrice == null;
-
-  const updated = await db.vehicle.update({
-    where: { id: vehicle.id },
-    data,
-  });
+  const b2bNewlySet = "b2bPrice" in f && f.b2bPrice != null && vehicle.b2bPrice == null;
+  const updated = await db.vehicle.update({ where: { id: vehicle.id }, data });
 
   if (b2bNewlySet) {
-    const { recordActivationMilestone } = await import(
-      "@/services/activation/milestones"
-    );
-    void recordActivationMilestone({
-      dealerId: input.dealerId,
-      milestone: "FIRST_PRIVATE_PRICE_SET",
-      entityType: "Vehicle",
-      entityId: updated.id,
-    }).catch(() => undefined);
+    const { recordActivationMilestone } = await import("@/services/activation/milestones");
+    void recordActivationMilestone({dealerId: input.dealerId,milestone:"FIRST_PRIVATE_PRICE_SET",entityType:"Vehicle",entityId:updated.id}).catch(()=>undefined);
   }
 
-  const matchingRelevant = Object.keys(f).some((k) =>
-    MATCH_RELEVANT_FIELDS.has(k)
-  );
-
+  const matchingRelevant = Object.keys(f).some((k) => MATCH_RELEVANT_FIELDS.has(k));
   if (!input.skipEventLog) {
-    await logAppEvent({
-      eventType: "vehicle_updated",
-      entityType: "Vehicle",
-      entityId: updated.id,
-      dealerId: input.dealerId,
-      metadata: {
-        source: input.source ?? "domain",
-        fields: Object.keys(f),
-      },
-    });
-
+    await logAppEvent({eventType:"vehicle_updated",entityType:"Vehicle",entityId:updated.id,dealerId:input.dealerId,metadata:{source:input.source??"domain",fields:Object.keys(f)}});
     if (f.status === "ARCHIVED" && vehicle.status !== "ARCHIVED") {
-      await emitExchangeEvent({
-        eventType: "INVENTORY_REMOVED",
-        dealerId: input.dealerId,
-        vehicleId: updated.id,
-        evidenceType: "SYSTEM_OBSERVED",
-        privacyClass: "DEALER_SCOPED",
-        eventData: { source: input.source ?? "domain", note: "archived_not_sold" },
-        idempotencyKey: `inventory-removed:${updated.id}:${updated.archivedAt?.toISOString() ?? "x"}`,
-      });
-      const { cancelOpenRequestsForVehicle } = await import(
-        "@/services/matching/information-request"
-      );
+      await emitExchangeEvent({eventType:"INVENTORY_REMOVED",dealerId:input.dealerId,vehicleId:updated.id,evidenceType:"SYSTEM_OBSERVED",privacyClass:"DEALER_SCOPED",eventData:{source:input.source??"domain",note:"archived_not_sold"},idempotencyKey:`inventory-removed:${updated.id}:${updated.archivedAt?.toISOString()??"x"}`});
+      const { cancelOpenRequestsForVehicle } = await import("@/services/matching/information-request");
       await cancelOpenRequestsForVehicle(updated.id);
     } else if (matchingRelevant) {
-      await emitExchangeEvent({
-        eventType: "INVENTORY_UPDATED",
-        dealerId: input.dealerId,
-        vehicleId: updated.id,
-        evidenceType: "SYSTEM_OBSERVED",
-        privacyClass: "DEALER_SCOPED",
-        eventData: { fields: Object.keys(f) },
-        idempotencyKey: `inventory-updated:${updated.id}:${updated.updatedAt.toISOString()}`,
-      });
+      await emitExchangeEvent({eventType:"INVENTORY_UPDATED",dealerId:input.dealerId,vehicleId:updated.id,evidenceType:"SYSTEM_OBSERVED",privacyClass:"DEALER_SCOPED",eventData:{fields:Object.keys(f)},idempotencyKey:`inventory-updated:${updated.id}:${updated.updatedAt.toISOString()}`});
       const updatedFields = Object.keys(f).flatMap((k) => {
         if (k === "b2bPrice" || k === "retailPrice") return ["price"];
         if (k === "ownershipHand") return ["hand"];
-        if (k === "fieldProvenance" && f.fieldProvenance) {
-          return Object.keys(f.fieldProvenance);
-        }
+        if (k === "fuelType") return ["fuel"];
+        if (k === "engineDisplacementCc") return ["engineDisplacementCc"];
+        if (k === "fieldProvenance" && f.fieldProvenance) return Object.keys(f.fieldProvenance);
         return [k];
       });
-      const { fulfillRequestsAfterVehicleUpdate } = await import(
-        "@/services/matching/information-request"
-      );
-      await fulfillRequestsAfterVehicleUpdate({
-        vehicleId: updated.id,
-        sellerDealerId: input.dealerId,
-        updatedFields,
-        skipRematch: input.skipRematch,
-      });
+      const { fulfillRequestsAfterVehicleUpdate } = await import("@/services/matching/information-request");
+      await fulfillRequestsAfterVehicleUpdate({vehicleId:updated.id,sellerDealerId:input.dealerId,updatedFields,skipRematch:input.skipRematch});
     }
-  } else if (
-    matchingRelevant &&
-    updated.status === "ACTIVE" &&
-    !input.skipRematch
-  ) {
-    const { rematchAfterInventoryMutation } = await import(
-      "@/services/matching/inventory-rematch"
-    );
-    await rematchAfterInventoryMutation({
-      vehicleId: updated.id,
-      sellerDealerId: input.dealerId,
-    });
+  } else if (matchingRelevant && updated.status === "ACTIVE" && !input.skipRematch) {
+    const { rematchAfterInventoryMutation } = await import("@/services/matching/inventory-rematch");
+    await rematchAfterInventoryMutation({vehicleId:updated.id,sellerDealerId:input.dealerId});
   }
-
   return { ok: true as const, vehicle: updated };
 }
 
-/** Explicit reactivation — never via generic update side-effect. */
 export async function reactivateVehicleForDealer(input: {
   dealerId: string;
   vehicleId: string;
   source?: InventoryMutationSource | string;
-  /** Import batches can defer discovery and rematch once at the end. */
   skipRematch?: boolean;
 }) {
-  const vehicle = await prisma.vehicle.findFirst({
-    where: { id: input.vehicleId, dealerId: input.dealerId },
-  });
-  if (!vehicle) {
-    return { ok: false as const, error: "not_found" as const };
-  }
-  if (vehicle.status === "ACTIVE") {
-    return { ok: true as const, vehicle, alreadyActive: true as const };
-  }
-  if (vehicle.status !== "SOLD" && vehicle.status !== "ARCHIVED") {
-    return { ok: false as const, error: "invalid_status" as const };
-  }
-
-  const updated = await prisma.$transaction(async (tx) => {
-    const row = await tx.vehicle.update({
-      where: { id: vehicle.id },
-      data: {
-        status: "ACTIVE",
-        archivedAt: null,
-        lastInventoryUpdate: new Date(),
-        freshnessState: "UNKNOWN",
-      },
-    });
-    await emitExchangeEvent(
-      {
-        eventType: "INVENTORY_REACTIVATED",
-        dealerId: input.dealerId,
-        vehicleId: row.id,
-        evidenceType: "SYSTEM_OBSERVED",
-        privacyClass: "DEALER_SCOPED",
-        eventData: { source: input.source ?? "domain", from: vehicle.status },
-        idempotencyKey: `inventory-reactivated:${row.id}:${vehicle.status}`,
-      },
-      tx
-    );
-    return row;
-  });
-
-  await logAppEvent({
-    eventType: "vehicle_reactivated",
-    entityType: "Vehicle",
-    entityId: updated.id,
-    dealerId: input.dealerId,
-    metadata: { source: input.source ?? "domain", from: vehicle.status },
-  });
-
-  if (!input.skipRematch) {
-    const { rematchAfterInventoryMutation } = await import(
-      "@/services/matching/inventory-rematch"
-    );
-    await rematchAfterInventoryMutation({
-      vehicleId: updated.id,
-      sellerDealerId: input.dealerId,
-    });
-  }
-
-  return { ok: true as const, vehicle: updated, alreadyActive: false as const };
+  const vehicle = await prisma.vehicle.findFirst({where:{id:input.vehicleId,dealerId:input.dealerId}});
+  if (!vehicle) return { ok:false as const,error:"not_found" as const };
+  if (vehicle.status === "ACTIVE") return {ok:true as const,vehicle,alreadyActive:true as const};
+  if (vehicle.status !== "SOLD" && vehicle.status !== "ARCHIVED") return {ok:false as const,error:"invalid_status" as const};
+  const updated=await prisma.$transaction(async(tx)=>{const row=await tx.vehicle.update({where:{id:vehicle.id},data:{status:"ACTIVE",archivedAt:null,lastInventoryUpdate:new Date(),freshnessState:"UNKNOWN"}});await emitExchangeEvent({eventType:"INVENTORY_REACTIVATED",dealerId:input.dealerId,vehicleId:row.id,evidenceType:"SYSTEM_OBSERVED",privacyClass:"DEALER_SCOPED",eventData:{source:input.source??"domain",from:vehicle.status},idempotencyKey:`inventory-reactivated:${row.id}:${vehicle.status}`},tx);return row;});
+  await logAppEvent({eventType:"vehicle_reactivated",entityType:"Vehicle",entityId:updated.id,dealerId:input.dealerId,metadata:{source:input.source??"domain",from:vehicle.status}});
+  if(!input.skipRematch){const{rematchAfterInventoryMutation}=await import("@/services/matching/inventory-rematch");await rematchAfterInventoryMutation({vehicleId:updated.id,sellerDealerId:input.dealerId});}
+  return {ok:true as const,vehicle:updated,alreadyActive:false as const};
 }
