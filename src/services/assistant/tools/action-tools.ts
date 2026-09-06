@@ -248,11 +248,13 @@ export async function createInventoryDraftFromText(
   const { fieldsFromNormalized } = await import(
     "@/services/inventory/create-vehicle"
   );
+  const { normalizeVehicleFeaturesWithAi } = await import(
+    "@/services/exchange/vehicle-feature-intelligence"
+  );
   const {
     emptyDraftFields,
     hasInventoryIdentity,
     nextGapToAsk,
-    gapQuestion,
     buildStructuredSummary,
     buildCompactSummary,
     readyForConfirmation,
@@ -267,7 +269,10 @@ export async function createInventoryDraftFromText(
   const chunks = splitMultiVehicleText(rawText);
 
   async function draftFromChunk(text: string): Promise<Draft> {
-    const normalized = await normalizeVehicle(text, userId);
+    const [normalized, featureResult] = await Promise.all([
+      normalizeVehicle(text, userId),
+      normalizeVehicleFeaturesWithAi({ rawText: text, userId }),
+    ]);
     const mapped = fieldsFromNormalized(normalized);
     return {
       status: "DRAFT",
@@ -285,19 +290,25 @@ export async function createInventoryDraftFromText(
         retailPrice: mapped.retailPrice,
         b2bPrice: mapped.b2bPrice,
         region: mapped.region,
+        fuelType: mapped.fuelType ?? null,
+        engineDisplacementCc: mapped.engineDisplacementCc ?? null,
+        features: featureResult.features,
       },
       askedGaps: [],
       skippedGaps: [],
-      ambiguities: normalized.ambiguities,
+      ambiguities: [
+        ...(normalized.ambiguities ?? []),
+        ...featureResult.unresolved.map((x) => `פיצ'ר לא פתור: ${x}`),
+      ],
     };
   }
 
   if (chunks.length > 1) {
     const drafts = await Promise.all(chunks.map((c) => draftFromChunk(c)));
-    const lines = drafts.map((d, i) => {
+    const lines = drafts.map((d) => {
       const ok = hasInventoryIdentity(d.fields) && readyForConfirmation(d);
       const idOk = hasInventoryIdentity(d.fields);
-      const mark = ok ? "✓" : idOk ? "!" : "!";
+      const mark = ok ? "✓" : "!";
       const note = !idOk
         ? "חסר זיהוי"
         : !readyForConfirmation(d)
@@ -396,6 +407,9 @@ export async function executeConfirmInventoryCreate(
       retailPrice: number | null;
       b2bPrice: number | null;
       region: string | null;
+      fuelType?: string | null;
+      engineDisplacementCc?: number | null;
+      features?: string[];
     };
   }
 ) {
@@ -406,6 +420,7 @@ export async function executeConfirmInventoryCreate(
     dealerId,
     rawInput: draft.sourceText,
     fields: draft.fields,
+    source: "agent",
   });
 
   if (!result.ok) {
