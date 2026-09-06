@@ -4,10 +4,8 @@ import { logAppEvent } from "@/services/notifications";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
 import { canonicalizeOwnershipSource } from "@/services/exchange/vehicle-identity";
-import {
-  canonicalizeVehicleFeatures,
-  extractVehicleFeaturesFromText,
-} from "@/services/exchange/vehicle-features";
+import { canonicalizeVehicleFeatures } from "@/services/exchange/vehicle-features";
+import { normalizeVehicleFeaturesWithAi } from "@/services/exchange/vehicle-feature-intelligence";
 import type {
   InventoryDbClient,
   InventoryMutationSource,
@@ -92,15 +90,23 @@ export async function updateVehicleForDealer(input: {
   let mergedProvenance = provenanceObject(vehicle.fieldProvenance);
   if (f.fieldProvenance) mergedProvenance = { ...mergedProvenance, ...f.fieldProvenance };
 
-  const rawFeatureHints = typeof f.rawInput === "string" ? extractVehicleFeaturesFromText(f.rawInput) : [];
-  if ("features" in f || rawFeatureHints.length > 0) {
-    const mergedFeatures = canonicalizeVehicleFeatures([
-      ...provenanceArray(mergedProvenance, "features"),
+  if ("features" in f || (typeof f.rawInput === "string" && f.rawInput.trim())) {
+    const existingFeatures = provenanceArray(mergedProvenance, "features");
+    const featureSourceText = [
       ...(f.features ?? []),
-      ...rawFeatureHints,
+      typeof f.rawInput === "string" ? f.rawInput : "",
+    ].filter(Boolean).join("\n");
+    const normalized = featureSourceText
+      ? await normalizeVehicleFeaturesWithAi({ rawText: featureSourceText })
+      : { features: [] as string[] };
+    const mergedFeatures = canonicalizeVehicleFeatures([
+      ...existingFeatures,
+      ...normalized.features,
     ]);
-    f.features = mergedFeatures;
-    mergedProvenance = { ...mergedProvenance, features: mergedFeatures };
+    if ("features" in f || normalized.features.length > 0) {
+      f.features = mergedFeatures;
+      mergedProvenance = { ...mergedProvenance, features: mergedFeatures };
+    }
   }
 
   if (identityRelevant) {
@@ -155,7 +161,7 @@ export async function updateVehicleForDealer(input: {
     if (f.ownershipType) {
       mergedProvenance = {
         ...mergedProvenance,
-        ownershipType: { value: f.ownershipType, status: "known", source: "deterministic" },
+        ownershipType: { value: f.ownershipType, status: "known", source: "exchange_ai" },
       };
     }
   }
