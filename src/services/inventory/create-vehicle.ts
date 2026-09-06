@@ -6,6 +6,7 @@ import {
   normalizedToVehicleFields,
 } from "@/services/ai/inventory-normalizer";
 import type { NormalizedVehicle } from "@/lib/schemas/ai";
+import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
 
 /** Shared Prisma client (default) or interactive-transaction client */
 export type InventoryDbClient = typeof prisma;
@@ -29,6 +30,10 @@ export type VehicleCreateFields = {
   retailPrice: number | null;
   b2bPrice: number | null;
   region: string | null;
+  /** Canonical fuel type is persisted in fieldProvenance until it becomes a first-class DB column. */
+  fuelType?: string | null;
+  /** Engine capacity in cubic centimeters, persisted in fieldProvenance. */
+  engineDisplacementCc?: number | null;
   fieldProvenance?: unknown;
 };
 
@@ -40,9 +45,15 @@ export function hasVehicleIdentity(fields: {
   return Boolean(fields.make && fields.model && fields.year);
 }
 
+function provenanceObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 /**
  * Canonical vehicle create for Dealer — used by manual inventory API, Agent, and Import.
- * Do not duplicate prisma.vehicle.create elsewhere for dealer ingestion.
+ * Every ingress goes through the Exchange vehicle-intelligence boundary before persistence.
  */
 export async function createVehicleForDealer(input: {
   dealerId: string;
@@ -78,6 +89,8 @@ export async function createVehicleForDealer(input: {
     retailPrice: input.fields?.retailPrice ?? null,
     b2bPrice: input.fields?.b2bPrice ?? null,
     region: input.fields?.region ?? null,
+    fuelType: input.fields?.fuelType ?? null,
+    engineDisplacementCc: input.fields?.engineDisplacementCc ?? null,
     fieldProvenance: input.fields?.fieldProvenance ?? null,
   };
 
@@ -96,9 +109,45 @@ export async function createVehicleForDealer(input: {
       retailPrice: mapped.retailPrice,
       b2bPrice: mapped.b2bPrice,
       region: mapped.region,
+      fuelType: mapped.fuelType,
+      engineDisplacementCc: mapped.engineDisplacementCc,
       fieldProvenance: mapped.fieldProvenance,
     };
   }
+
+  const identity = await resolveVehicleThroughExchangeBrain({
+    make: fields.make,
+    model: fields.model,
+    fuelType: fields.fuelType,
+    engineDisplacementCc: fields.engineDisplacementCc,
+    rawText: input.rawInput,
+    userId: input.userId,
+  });
+  fields.make = identity.make;
+  fields.model = identity.model;
+  fields.fuelType = identity.fuelType;
+  fields.engineDisplacementCc = identity.engineDisplacementCc;
+  fields.fieldProvenance = {
+    ...provenanceObject(fields.fieldProvenance),
+    ...(identity.fuelType
+      ? { fuel: { value: identity.fuelType, status: "known", source: identity.source } }
+      : {}),
+    ...(identity.engineDisplacementCc != null
+      ? {
+          engineDisplacementCc: {
+            value: identity.engineDisplacementCc,
+            status: "known",
+            source: identity.source,
+          },
+        }
+      : {}),
+    vehicleIdentity: {
+      make: identity.make,
+      model: identity.model,
+      source: identity.source,
+      confidence: identity.confidence,
+    },
+  };
 
   if (requireIdentity && !hasVehicleIdentity(fields)) {
     return {
@@ -121,7 +170,7 @@ export async function createVehicleForDealer(input: {
     };
   }
 
-  const { fieldProvenance, ...scalarFields } = fields;
+  const { fieldProvenance, fuelType: _fuelType, engineDisplacementCc: _engine, ...scalarFields } = fields;
 
   const vehicle = await db.vehicle.create({
     data: {
@@ -139,7 +188,6 @@ export async function createVehicleForDealer(input: {
     },
   });
 
-  // Durable: INVENTORY_ADDED must not be silently lost after create
   const { emitExchangeEvent } = await import("@/services/exchange/events");
   await emitExchangeEvent({
     eventType: "INVENTORY_ADDED",
@@ -151,6 +199,8 @@ export async function createVehicleForDealer(input: {
       make: vehicle.make,
       model: vehicle.model,
       year: vehicle.year,
+      fuelType: identity.fuelType,
+      engineDisplacementCc: identity.engineDisplacementCc,
       source: input.source ?? "domain",
     },
     idempotencyKey: `inventory-added:${vehicle.id}`,
@@ -205,6 +255,8 @@ export function fieldsFromNormalized(
     retailPrice: mapped.retailPrice,
     b2bPrice: mapped.b2bPrice,
     region: mapped.region,
+    fuelType: mapped.fuelType,
+    engineDisplacementCc: mapped.engineDisplacementCc,
     fieldProvenance: mapped.fieldProvenance,
   };
 }
