@@ -10,9 +10,25 @@ import {
 } from "@/services/matching/search-intent-types";
 import {
   canonicalizeFuelType,
+  canonicalizeOwnershipSource,
   canonicalizeVehicleIdentity,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
+
+function numericConstraintValue(raw: unknown): number | null {
+  const candidate = raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw
+    ? (raw as { value?: unknown }).value
+    : raw;
+  const n = Number(candidate);
+  return Number.isFinite(n) ? n : null;
+}
+
+function stringConstraintValue(raw: unknown): string {
+  const candidate = raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw
+    ? (raw as { value?: unknown }).value
+    : raw;
+  return candidate == null ? "" : String(candidate);
+}
 
 export function legacyToSearchIntent(
   confirmedJson: unknown,
@@ -54,14 +70,14 @@ export function legacyToSearchIntent(
 
   for (const c of constraints) {
     const val = c.value as { description?: string; value?: unknown };
-    const field = c.field.toLowerCase();
+    const field = c.field.toLowerCase().replace(/[\s-]+/g, "_");
     const importance = c.constraintType === "HARD" ? "HARD" : c.constraintType === "SOFT" ? "PREFERENCE" : null;
 
-    if (importance && ["fuel", "fueltype", "engine_type", "propulsion"].includes(field)) {
-      const fuel = canonicalizeFuelType(String(val?.value ?? val ?? ""));
+    if (importance && ["fuel", "fueltype", "fuel_type", "engine_type", "propulsion", "powertrain"].includes(field)) {
+      const fuel = canonicalizeFuelType(stringConstraintValue(val));
       if (fuel) intent.fuel = { importance, target: fuel, provenance: "legacy_adapter" };
     }
-    if (importance && ["engine", "enginedisplacementcc", "engine_displacement", "enginecapacity", "engine_capacity"].includes(field)) {
+    if (importance && ["engine", "enginedisplacementcc", "engine_displacement_cc", "engine_displacement", "enginecapacity", "engine_capacity"].includes(field)) {
       const cc = normalizeEngineDisplacementCc(val?.value ?? val);
       if (cc) {
         const tolerance = Math.max(50, Math.round(cc * 0.04));
@@ -79,12 +95,33 @@ export function legacyToSearchIntent(
         };
       }
     }
-    if (importance === "HARD" && (field === "mileage" || field === "mileagemax")) {
-      const n = Number(val?.value ?? val);
-      if (Number.isFinite(n)) intent.mileage = { importance: "HARD", flexibility: { hardMax: n, comfortableMax: n }, provenance: "legacy_adapter" };
+    if (importance && ["hand", "ownershiphand", "ownership_hand", "vehicle_hand"].includes(field)) {
+      const hand = numericConstraintValue(val);
+      if (hand != null && hand >= 1) {
+        intent.hand = {
+          importance,
+          target: hand,
+          flexibility: {
+            target: hand,
+            comfortableMax: hand,
+            hardMax: importance === "HARD" ? hand : null,
+          },
+          provenance: "legacy_adapter",
+        };
+      }
+    }
+    if (importance && ["ownershipsource", "ownership_source", "ownershiptype", "ownership_type", "source", "originality"].includes(field)) {
+      const ownership = canonicalizeOwnershipSource(stringConstraintValue(val));
+      if (ownership) {
+        intent.ownershipSource = { importance, target: ownership, provenance: "legacy_adapter" };
+      }
+    }
+    if (importance === "HARD" && (field === "mileage" || field === "mileagemax" || field === "mileage_max")) {
+      const n = numericConstraintValue(val);
+      if (n != null) intent.mileage = { importance: "HARD", flexibility: { hardMax: n, comfortableMax: n }, provenance: "legacy_adapter" };
     }
     if (c.constraintType === "EXCLUSION" && field === "color") {
-      intent.color = { importance: "HARD", exclusions: [...(intent.color?.exclusions ?? []), String(val?.value ?? c.value)], provenance: "legacy_adapter" };
+      intent.color = { importance: "HARD", exclusions: [...(intent.color?.exclusions ?? []), stringConstraintValue(c.value)], provenance: "legacy_adapter" };
     }
   }
 
