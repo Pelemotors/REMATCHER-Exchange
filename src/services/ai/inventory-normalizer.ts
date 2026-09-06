@@ -8,37 +8,23 @@ import {
 import { callOpenAIStructured, isOpenAIConfigured } from "./client";
 import { JSON_SCHEMA_STATUS_FIELD } from "./json-schemas";
 import { INVENTORY_COMMERCIAL_PLAYBOOK } from "@/services/assistant/inventory-commercial-playbook";
-import {
-  applyShorthandToFields,
-  assertNoInventedModel,
-  parseDealerPriceFromText,
-  parseMileageFromText,
-  parseYearFromText,
-  resolveVehicleShorthand,
-} from "@/services/assistant/vehicle-shorthand";
-import {
-  canonicalizeFuelType,
-  normalizeEngineDisplacementCc,
-} from "@/services/exchange/vehicle-identity";
-import {
-  canonicalizeVehicleFeatures,
-  extractVehicleFeaturesFromText,
-} from "@/services/exchange/vehicle-features";
+import { canonicalizeVehicleFeatures } from "@/services/exchange/vehicle-features";
 
 const SYSTEM_PROMPT = `${INVENTORY_COMMERCIAL_PLAYBOOK}
 
-You normalize messy Hebrew/English vehicle inventory text into structured data.
+You are the semantic normalization authority for messy Hebrew/English vehicle inventory text.
+Application fallback code must not interpret aliases, nicknames, synonyms or vehicle meaning.
 Rules (CRITICAL):
 - NEVER invent missing vehicle data. If a field is not in source, status must be "unknown".
-- Do not guess model from make alone (Toyota ≠ Corolla).
-- HIGH-confidence nicknames OK: קורולה→Toyota Corolla, CX5→Mazda CX-5, ספורטאז→Kia Sportage.
-- Year "22" = 2022. Prices in ILS.
-- "62 אלף" = mileage 62000 when km context; "134 לסוחר" / "B2B 134" = b2bPrice 134000.
+- Do not guess model from make alone.
+- Resolve high-confidence nicknames/transliterations only when supported by the source text.
+- Year "22" = 2022. Prices are in ILS unless explicitly stated otherwise.
+- Product semantics have ONE seller vehicle price: the asking price (מחיר מבוקש). retailPrice and b2bPrice are legacy storage aliases only. When one asking price is stated, return the SAME value in BOTH fields. Never invent a second price.
 - ownershipType: private | leasing | rental | company when stated.
-- fuelType: return one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER only when stated.
+- fuelType: GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN or OTHER only when stated.
 - engineDisplacementCc: integer cubic centimeters only when stated; 1.6L means 1600, 2.0 means 2000 in engine context.
-- features: include only explicitly stated special equipment / drivetrain features. Canonical examples: AWD_4X4, SUNROOF, PANORAMIC_ROOF, LEATHER_SEATS, ELECTRIC_SEATS, HEATED_SEATS, VENTILATED_SEATS, ADAPTIVE_CRUISE, LANE_ASSIST, BLIND_SPOT_MONITOR, PARKING_SENSORS, REAR_CAMERA, SURROUND_CAMERA, TOW_BAR.
-- 4x4 / AWD / 4WD / הנעה כפולה => AWD_4X4. חלון בגג / sunroof => SUNROOF. גג פנורמי => PANORAMIC_ROOF.
+- features: include only explicitly stated special equipment/drivetrain features and return canonical feature identifiers from the product vocabulary.
+- Never infer equipment from make/model/trim knowledge.
 - Return structured JSON only.`;
 
 const RESPONSE_SCHEMA = {
@@ -62,118 +48,49 @@ const RESPONSE_SCHEMA = {
     rawSummary: { type: "string" },
   },
   required: [
-    "make",
-    "model",
-    "trim",
-    "year",
-    "mileage",
-    "color",
-    "ownershipHand",
-    "ownershipType",
-    "retailPrice",
-    "b2bPrice",
-    "region",
-    "fuelType",
-    "engineDisplacementCc",
-    "features",
-    "ambiguities",
-    "rawSummary",
+    "make", "model", "trim", "year", "mileage", "color", "ownershipHand", "ownershipType",
+    "retailPrice", "b2bPrice", "region", "fuelType", "engineDisplacementCc", "features", "ambiguities", "rawSummary",
   ],
   additionalProperties: false,
 } as const;
 
-function knownNum(n: number | null) {
-  return n != null ? { value: n, status: "known" as const } : undefined;
-}
-function knownStr(s: string | null | undefined) {
-  return s ? { value: s, status: "known" as const } : undefined;
+function unknownField() {
+  return { value: null, status: "unknown" as const };
 }
 
-function parseFuelFromText(rawInput: string): string | null {
-  const patterns = [
-    /פלאג[\s־-]*אין(?:\s+היברידי)?/i,
-    /plug[\s-]*in(?:\s+hybrid)?|\bphev\b/i,
-    /היברידי|\bhybrid\b|\bhev\b/i,
-    /חשמלי|\belectric\b|\bev\b/i,
-    /דיזל|סולר|\bdiesel\b/i,
-    /בנזין|\bgasoline\b|\bpetrol\b/i,
-    /גפ[״"]?מ|\blpg\b/i,
-    /\bcng\b/i,
-    /מימן|\bhydrogen\b/i,
-  ];
-  for (const p of patterns) {
-    const m = rawInput.match(p);
-    if (m) return canonicalizeFuelType(m[0]);
-  }
-  return null;
-}
-
-function parseEngineFromText(rawInput: string): number | null {
-  const explicitCc = rawInput.match(/(?:מנוע|נפח(?:\s+מנוע)?|engine)\s*[:=]?\s*(\d{3,4})\s*(?:cc|סמ[״"]?ק)?/i);
-  if (explicitCc) return normalizeEngineDisplacementCc(explicitCc[1]);
-  const liters = rawInput.match(/(?:מנוע|נפח(?:\s+מנוע)?|engine)\s*[:=]?\s*(\d(?:[.,]\d)?)\s*(?:l|ליטר)?/i);
-  if (liters) return normalizeEngineDisplacementCc(`${liters[1]} ליטר`);
-  return null;
-}
-
+/**
+ * AI-unavailable fallback intentionally does not parse natural language.
+ * Raw input is retained so the workflow can ask again/retry instead of silently changing meaning.
+ */
 export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
-  const shorthand = resolveVehicleShorthand(rawInput);
-  const applied = applyShorthandToFields(rawInput, {
-    make: shorthand?.make ?? null,
-    model: shorthand?.model ?? null,
-    year: parseYearFromText(rawInput),
-    mileage: parseMileageFromText(rawInput),
-    b2bPrice: parseDealerPriceFromText(rawInput),
-  });
-
-  let model = applied.model;
-  if (model && !assertNoInventedModel(rawInput, model)) {
-    model = null;
-  }
-
-  let ownershipType: string | undefined;
-  if (/פרטי|פרטית/i.test(rawInput)) ownershipType = "private";
-  else if (/ליסינג/i.test(rawInput)) ownershipType = "leasing";
-  else if (/השכרה|רנט/i.test(rawInput)) ownershipType = "rental";
-  else if (/חברה|צי/i.test(rawInput)) ownershipType = "company";
-
-  const handMatch = rawInput.match(/יד\s*(\d)/i);
-  const ownershipHand = handMatch ? parseInt(handMatch[1], 10) : null;
-
-  let retailPrice: number | undefined;
-  if (!applied.b2bPrice) {
-    const priceMatch = rawInput.match(/\b(\d{5,7})\b/);
-    if (priceMatch && !/לסוחר|b2b/i.test(rawInput)) {
-      retailPrice = parseInt(priceMatch[1], 10);
-    }
-  }
-
-  const result: NormalizedVehicle = {
-    make: knownStr(applied.make),
-    model: knownStr(model),
-    year: knownNum(applied.year),
-    mileage: knownNum(applied.mileage),
-    b2bPrice: knownNum(applied.b2bPrice),
-    retailPrice: knownNum(retailPrice ?? null),
-    ownershipHand: knownNum(ownershipHand),
-    ownershipType: knownStr(ownershipType),
-    fuelType: knownStr(parseFuelFromText(rawInput)),
-    engineDisplacementCc: knownNum(parseEngineFromText(rawInput)),
-    features: extractVehicleFeaturesFromText(rawInput),
-    ambiguities: [],
+  return normalizedVehicleSchema.parse({
+    make: unknownField(),
+    model: unknownField(),
+    trim: unknownField(),
+    year: unknownField(),
+    mileage: unknownField(),
+    color: unknownField(),
+    ownershipHand: unknownField(),
+    ownershipType: unknownField(),
+    retailPrice: unknownField(),
+    b2bPrice: unknownField(),
+    region: unknownField(),
+    fuelType: unknownField(),
+    engineDisplacementCc: unknownField(),
+    features: [],
+    ambiguities: ["נדרש AI כדי להבין ולנרמל את פרטי הרכב"],
     rawSummary: rawInput,
-  };
-
-  return normalizedVehicleSchema.parse(result);
+  });
 }
 
-export async function normalizeVehicle(
-  rawInput: string,
-  userId?: string
-): Promise<NormalizedVehicle> {
-  if (!isOpenAIConfigured()) {
-    return normalizeVehicleFallback(rawInput);
-  }
+function askingPriceField(parsed: NormalizedVehicle) {
+  if (parsed.b2bPrice?.status === "known") return parsed.b2bPrice;
+  if (parsed.retailPrice?.status === "known") return parsed.retailPrice;
+  return parsed.b2bPrice ?? parsed.retailPrice ?? unknownField();
+}
+
+export async function normalizeVehicle(rawInput: string, userId?: string): Promise<NormalizedVehicle> {
+  if (!isOpenAIConfigured()) return normalizeVehicleFallback(rawInput);
 
   try {
     const { data } = await callOpenAIStructured<NormalizedVehicle>({
@@ -188,38 +105,14 @@ export async function normalizeVehicle(
     });
 
     const parsed = normalizedVehicleSchema.parse(data);
-    const fb = normalizeVehicleFallback(rawInput);
-    const merge = (a?: { value?: unknown; status?: string }, b?: { value?: unknown; status?: string }) => {
-      if (a?.status === "known") return a;
-      if (b?.status === "known") return b;
-      return a ?? b;
-    };
-
-    let model = merge(parsed.model, fb.model);
-    const modelStr =
-      model?.status === "known" && model.value != null ? String(model.value) : null;
-    if (modelStr && !assertNoInventedModel(rawInput, modelStr)) {
-      model = { value: null, status: "unknown" };
-    }
-
+    const askingPrice = askingPriceField(parsed);
     return normalizedVehicleSchema.parse({
       ...parsed,
-      make: merge(parsed.make, fb.make),
-      model,
-      year: merge(parsed.year, fb.year),
-      mileage: merge(parsed.mileage, fb.mileage),
-      b2bPrice: merge(parsed.b2bPrice, fb.b2bPrice),
-      ownershipType: merge(parsed.ownershipType, fb.ownershipType),
-      ownershipHand: merge(parsed.ownershipHand, fb.ownershipHand),
-      fuelType: merge(parsed.fuelType, fb.fuelType),
-      engineDisplacementCc: merge(
-        parsed.engineDisplacementCc,
-        fb.engineDisplacementCc
-      ),
-      features: canonicalizeVehicleFeatures([
-        ...(parsed.features ?? []),
-        ...(fb.features ?? []),
-      ]),
+      // One product price; duplicate only for backwards-compatible persistence.
+      b2bPrice: askingPrice,
+      retailPrice: askingPrice,
+      // Validation/de-duplication only. Semantic interpretation already happened in AI.
+      features: canonicalizeVehicleFeatures(parsed.features ?? []),
     });
   } catch {
     return normalizeVehicleFallback(rawInput);
@@ -227,6 +120,7 @@ export async function normalizeVehicle(
 }
 
 export function normalizedToVehicleFields(normalized: NormalizedVehicle) {
+  const price = extractKnownNumber(normalized.b2bPrice) ?? extractKnownNumber(normalized.retailPrice);
   return {
     make: extractKnownString(normalized.make),
     model: extractKnownString(normalized.model),
@@ -236,8 +130,8 @@ export function normalizedToVehicleFields(normalized: NormalizedVehicle) {
     color: extractKnownString(normalized.color),
     ownershipHand: extractKnownNumber(normalized.ownershipHand),
     ownershipType: extractKnownString(normalized.ownershipType),
-    retailPrice: extractKnownNumber(normalized.retailPrice),
-    b2bPrice: extractKnownNumber(normalized.b2bPrice),
+    retailPrice: price,
+    b2bPrice: price,
     region: extractKnownString(normalized.region),
     fuelType: extractKnownString(normalized.fuelType),
     engineDisplacementCc: extractKnownNumber(normalized.engineDisplacementCc),
