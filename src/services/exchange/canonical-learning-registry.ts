@@ -44,10 +44,17 @@ function insightOf(value: unknown): AliasInsight | null {
   };
 }
 
-/**
- * Stores AI-observed mappings as PENDING evidence only.
- * They never become deterministic semantic rules automatically.
- */
+async function dealerIdForUser(userId?: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const membership = await prisma.dealerMembership.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { dealerId: true },
+  });
+  return membership?.dealerId ?? null;
+}
+
+/** Stores AI-observed mappings as PENDING evidence only. Never auto-approves. */
 export async function recordCanonicalAliasCandidate(params: {
   dealerId: string;
   dimension: CanonicalAliasDimension;
@@ -61,7 +68,6 @@ export async function recordCanonicalAliasCandidate(params: {
   const rawValue = String(params.rawValue).trim();
   const canonicalValue = String(params.canonicalValue).trim();
   if (!rawValue || !canonicalValue) return null;
-  // Exact canonical input is not a learned alias and adds no useful evidence.
   if (normalizedRawKey(rawValue) === normalizedRawKey(canonicalValue)) return null;
 
   const key = canonicalKey(params.dimension, rawValue);
@@ -115,7 +121,20 @@ export async function recordCanonicalAliasCandidate(params: {
   });
 }
 
-/** Approved aliases are context for the AI only; callers must never use them as a deterministic semantic bypass. */
+/** Non-blocking helper for AI boundaries that only know the authenticated user. */
+export async function recordCanonicalAliasForUser(params: {
+  userId?: string | null;
+  dimension: CanonicalAliasDimension;
+  rawValue: string | number | null | undefined;
+  canonicalValue: string | number | null | undefined;
+  confidence?: number | null;
+}) {
+  const dealerId = await dealerIdForUser(params.userId);
+  if (!dealerId) return null;
+  return recordCanonicalAliasCandidate({ ...params, dealerId });
+}
+
+/** Approved aliases are context for AI only; they never bypass AI semantic interpretation. */
 export async function getApprovedCanonicalAliasContext(params: {
   dealerId: string;
   dimension?: CanonicalAliasDimension;
@@ -134,7 +153,17 @@ export async function getApprovedCanonicalAliasContext(params: {
   });
 }
 
-/** Explicit approval hook for a future admin/review surface. */
+export async function getApprovedCanonicalAliasContextForUser(params: {
+  userId?: string | null;
+  dimension?: CanonicalAliasDimension;
+  limit?: number;
+}): Promise<string[]> {
+  const dealerId = await dealerIdForUser(params.userId);
+  if (!dealerId) return [];
+  return getApprovedCanonicalAliasContext({ dealerId, dimension: params.dimension, limit: params.limit });
+}
+
+/** Explicit approval hook. Candidates cannot become active semantic knowledge without this step. */
 export async function approveCanonicalAliasLearning(params: { dealerId: string; learningId: string }) {
   const row = await prisma.exchangeLearning.findFirst({ where: { id: params.learningId, dealerId: params.dealerId, topic: "canonical_alias" } });
   if (!row) return { ok: false as const, error: "not_found" as const };
