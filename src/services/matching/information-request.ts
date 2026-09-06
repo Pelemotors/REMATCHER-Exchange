@@ -23,7 +23,9 @@ export function hashRequestedFields(fields: string[]): string {
 export function fieldLabelHe(field: string): string {
   const map: Record<string, string> = {
     price: "מחיר",
-    fuel: "סוג דלק",
+    fuel: "סוג דלק/הנעה",
+    fuelType: "סוג דלק/הנעה",
+    engineDisplacementCc: "נפח מנוע",
     mileage: "קילומטראז׳",
     year: "שנתון",
     color: "צבע",
@@ -31,6 +33,9 @@ export function fieldLabelHe(field: string): string {
     transmission: "גיר",
     drivetrain: "הנעה",
     hand: "יד",
+    ownershipHand: "יד",
+    ownershipSource: "מקוריות",
+    ownershipType: "מקוריות",
     region: "אזור",
     seats: "מושבים",
     vehicleIdentity: "זהות רכב",
@@ -218,260 +223,25 @@ async function notifySellerEnrichmentAggregated(params: {
   const recent = await prisma.notification.findFirst({
     where: {
       type: "INVENTORY_ENRICHMENT",
-      entityType: "vehicle",
-      entityId: params.vehicleId,
       createdAt: { gte: since },
+      dataJson: { path: ["vehicleId"], equals: params.vehicleId },
     },
+    orderBy: { createdAt: "desc" },
   });
   if (recent) return;
 
-  await notifyDealerUsers(params.sellerDealerId, {
-    type: "INVENTORY_ENRICHMENT",
-    title: COPY.partialDemandTitle,
-    body: COPY.partialDemandBody,
-    link: `/inventory?focus=${params.vehicleId}&enrich=1`,
-    entityType: "vehicle",
-    entityId: params.vehicleId,
-  });
-
-  await emitExchangeEvent({
-    eventType: "INVENTORY_ENRICHMENT_REQUESTED",
+  const labels = fields.map(fieldLabelHe).join(", ");
+  await notifyDealerUsers({
     dealerId: params.sellerDealerId,
-    vehicleId: params.vehicleId,
-    evidenceType: "SYSTEM_OBSERVED",
-    privacyClass: "DEALER_SCOPED",
-    eventData: {
-      aggregated: true,
-      openRequestCount: count,
+    type: "INVENTORY_ENRICHMENT",
+    title: COPY.inventoryEnrichmentTitle,
+    body: `${params.vehicleTitle}: חסר מידע חשוב להתאמות — ${labels}.`,
+    url: `/inventory?vehicle=${params.vehicleId}`,
+    data: {
+      vehicleId: params.vehicleId,
       requestedFields: fields,
-      note: "seller_push",
-    },
-    idempotencyKey: `enrich-push:${params.vehicleId}:${Math.floor(Date.now() / ENRICHMENT_NOTIFY_COOLDOWN_MS)}`,
-  });
-}
-
-export async function getOpenEnrichmentForVehicle(params: {
-  dealerId: string;
-  vehicleId: string;
-}) {
-  const vehicle = await prisma.vehicle.findFirst({
-    where: { id: params.vehicleId, dealerId: params.dealerId },
-  });
-  if (!vehicle) return null;
-
-  const open = await prisma.informationRequest.findMany({
-    where: { vehicleId: params.vehicleId, status: "OPEN" },
-    select: { id: true, requestedFields: true, createdAt: true },
-  });
-  const fields = new Set<string>();
-  for (const r of open) {
-    for (const f of Array.isArray(r.requestedFields)
-      ? (r.requestedFields as string[])
-      : []) {
-      fields.add(f);
-    }
-  }
-  return {
-    vehicleId: vehicle.id,
-    openRequestCount: open.length,
-    requestedFields: [...fields],
-    labels: [...fields].map(fieldLabelHe),
-    requesterIdentity: null,
-  };
-}
-
-export async function cancelOpenRequestsForDemand(demandId: string) {
-  await prisma.informationRequest.updateMany({
-    where: { demandId, status: "OPEN" },
-    data: { status: "CANCELLED", cancelledAt: new Date() },
-  });
-}
-
-export async function cancelOpenRequestsForVehicle(vehicleId: string) {
-  await prisma.informationRequest.updateMany({
-    where: { vehicleId, status: "OPEN" },
-    data: { status: "CANCELLED", cancelledAt: new Date() },
-  });
-}
-
-export async function cancelOpenRequestsForVehicleDemand(params: {
-  vehicleId: string;
-  demandId: string;
-}) {
-  await prisma.informationRequest.updateMany({
-    where: {
-      vehicleId: params.vehicleId,
-      demandId: params.demandId,
-      status: "OPEN",
-    },
-    data: { status: "CANCELLED", cancelledAt: new Date() },
-  });
-}
-
-/** Full discovery for this vehicle across every active demand. */
-export async function reevaluateDemandsForVehicle(vehicleId: string) {
-  const vehicle = await prisma.vehicle.findUnique({
-    where: { id: vehicleId },
-    select: { dealerId: true },
-  });
-  if (!vehicle) return [] as string[];
-
-  const { rematchAfterInventoryMutation } = await import(
-    "@/services/matching/inventory-rematch"
-  );
-  return rematchAfterInventoryMutation({
-    vehicleId,
-    sellerDealerId: vehicle.dealerId,
-  });
-}
-
-export async function fulfillRequestsAfterVehicleUpdate(params: {
-  vehicleId: string;
-  sellerDealerId: string;
-  updatedFields: string[];
-  skipRematch?: boolean;
-}) {
-  const open = await prisma.informationRequest.findMany({
-    where: {
-      vehicleId: params.vehicleId,
-      status: "OPEN",
-      vehicle: { dealerId: params.sellerDealerId },
-    },
-    include: {
-      demand: true,
-      candidateMatch: true,
-      vehicle: true,
+      openRequestCount: count,
+      initiatedBy: "exchange",
     },
   });
-
-  let fulfilled = 0;
-
-  if (open.length > 0) {
-    await emitExchangeEvent({
-      eventType: "INVENTORY_ENRICHED",
-      dealerId: params.sellerDealerId,
-      vehicleId: params.vehicleId,
-      evidenceType: "SYSTEM_OBSERVED",
-      privacyClass: "DEALER_SCOPED",
-      eventData: { updatedFields: params.updatedFields },
-      idempotencyKey: `inventory-enriched:${params.vehicleId}:${[...params.updatedFields].sort().join(",")}:${new Date().toISOString().slice(0, 13)}`,
-    });
-
-    for (const req of open) {
-      if (req.demand.status !== "ACTIVE") {
-        await prisma.informationRequest.update({
-          where: { id: req.id },
-          data: { status: "EXPIRED", cancelledAt: new Date() },
-        });
-        continue;
-      }
-      if (req.vehicle.status !== "ACTIVE") {
-        await prisma.informationRequest.update({
-          where: { id: req.id },
-          data: { status: "CANCELLED", cancelledAt: new Date() },
-        });
-        continue;
-      }
-
-      const requested = Array.isArray(req.requestedFields)
-        ? (req.requestedFields as string[])
-        : [];
-      const remaining = remainingBlockingFields(req.vehicle, requested);
-      if (remaining.length === 0) {
-        await prisma.informationRequest.update({
-          where: { id: req.id },
-          data: { status: "FULFILLED", fulfilledAt: new Date() },
-        });
-        fulfilled += 1;
-      } else {
-        await prisma.informationRequest.update({
-          where: { id: req.id },
-          data: { requestedFields: toPrismaJson(remaining) },
-        });
-      }
-    }
-  }
-
-  let reevaluated: string[] = [];
-  if (!params.skipRematch) {
-    const { rematchAfterInventoryMutation } = await import(
-      "@/services/matching/inventory-rematch"
-    );
-    reevaluated = await rematchAfterInventoryMutation({
-      vehicleId: params.vehicleId,
-      sellerDealerId: params.sellerDealerId,
-    });
-  }
-  const reevaluatedSet = new Set(reevaluated);
-
-  for (const req of open) {
-    if (!reevaluatedSet.has(req.demandId)) continue;
-    const updatedMatch = await prisma.candidateMatch.findUnique({
-      where: { id: req.candidateMatchId },
-    });
-    if (
-      updatedMatch &&
-      updatedMatch.status === "VALIDATED" &&
-      updatedMatch.resolutionState === "RESOLVED" &&
-      updatedMatch.scoreBand &&
-      ["STRONG", "GOOD", "ALTERNATIVE"].includes(updatedMatch.scoreBand)
-    ) {
-      await notifyDealerUsers(req.requesterDealerId, {
-        type: "BUYER_MATCH",
-        title: "נמצאה התאמה רלוונטית לחיפוש שלך",
-        body: "רוצה להתקדם עם הרכב הזה?",
-        link: `/matches?focus=${updatedMatch.id}`,
-        entityType: "match",
-        entityId: updatedMatch.id,
-      });
-    }
-  }
-
-  return { fulfilled, reevaluated };
-}
-
-function remainingBlockingFields(
-  vehicle: {
-    b2bPrice: number | null;
-    retailPrice: number | null;
-    mileage: number | null;
-    year: number | null;
-    color: string | null;
-    fieldProvenance: unknown;
-  },
-  requested: string[]
-): string[] {
-  const remaining: string[] = [];
-  for (const f of requested) {
-    if (f === "price") {
-      if (vehicle.b2bPrice == null) remaining.push(f);
-      continue;
-    }
-    if (f === "mileage" && vehicle.mileage == null) {
-      remaining.push(f);
-      continue;
-    }
-    if (f === "year" && vehicle.year == null) {
-      remaining.push(f);
-      continue;
-    }
-    if (f === "color" && !vehicle.color) {
-      remaining.push(f);
-      continue;
-    }
-    if (f === "fuel" || f === "transmission" || f === "drivetrain") {
-      const prov = vehicle.fieldProvenance;
-      let present = false;
-      if (prov && typeof prov === "object" && !Array.isArray(prov)) {
-        const v = (prov as Record<string, unknown>)[f];
-        if (typeof v === "string" && v.trim()) present = true;
-        if (v && typeof v === "object" && "value" in v) {
-          const inner = (v as { value?: unknown }).value;
-          if (typeof inner === "string" && inner.trim()) present = true;
-        }
-      }
-      if (!present) remaining.push(f);
-    }
-  }
-  return remaining;
 }
