@@ -83,6 +83,15 @@ export async function updateVehicleForDealer(input: {
   }
 
   const f = { ...input.fields };
+
+  // Product semantics: one asking price. Whichever legacy alias the caller uses,
+  // persist the same value into both columns until the DB schema is safely cleaned.
+  if ("b2bPrice" in f || "retailPrice" in f) {
+    const askingPrice = "b2bPrice" in f ? f.b2bPrice : f.retailPrice;
+    f.b2bPrice = askingPrice ?? null;
+    f.retailPrice = askingPrice ?? null;
+  }
+
   const identityRelevant =
     "make" in f || "model" in f || "fuelType" in f || "engineDisplacementCc" in f ||
     "ownershipHand" in f || "ownershipType" in f || "rawInput" in f;
@@ -100,14 +109,14 @@ export async function updateVehicleForDealer(input: {
     const normalized = featureSourceText
       ? await normalizeVehicleFeaturesWithAi({ rawText: featureSourceText })
       : { features: [] as string[], absentFeatures: [] as string[] };
-    const explicitlyPresent = new Set(canonicalizeVehicleFeatures(normalized.features));
-    const explicitlyAbsent = new Set(canonicalizeVehicleFeatures(normalized.absentFeatures));
+    const explicitlyPresent = new Set<string>(canonicalizeVehicleFeatures(normalized.features));
+    const explicitlyAbsent = new Set<string>(canonicalizeVehicleFeatures(normalized.absentFeatures));
     const mergedFeatures = canonicalizeVehicleFeatures([
-      ...existingFeatures.filter((feature) => !explicitlyAbsent.has(feature as never)),
+      ...existingFeatures.filter((feature) => !explicitlyAbsent.has(feature)),
       ...explicitlyPresent,
     ]);
     const mergedAbsent = canonicalizeVehicleFeatures([
-      ...existingAbsent.filter((feature) => !explicitlyPresent.has(feature as never)),
+      ...existingAbsent.filter((feature) => !explicitlyPresent.has(feature)),
       ...explicitlyAbsent,
     ]);
     if ("features" in f || normalized.features.length > 0 || normalized.absentFeatures.length > 0) {
@@ -205,10 +214,13 @@ export async function updateVehicleForDealer(input: {
     data.archivedAt = new Date();
   }
 
-  const b2bNewlySet = "b2bPrice" in f && f.b2bPrice != null && vehicle.b2bPrice == null;
+  const priceNewlySet =
+    ("b2bPrice" in f || "retailPrice" in f) &&
+    (f.b2bPrice ?? f.retailPrice) != null &&
+    vehicle.b2bPrice == null && vehicle.retailPrice == null;
   const updated = await db.vehicle.update({ where: { id: vehicle.id }, data });
 
-  if (b2bNewlySet) {
+  if (priceNewlySet) {
     const { recordActivationMilestone } = await import("@/services/activation/milestones");
     void recordActivationMilestone({dealerId: input.dealerId,milestone:"FIRST_PRIVATE_PRICE_SET",entityType:"Vehicle",entityId:updated.id}).catch(()=>undefined);
   }
