@@ -46,7 +46,7 @@ export function fieldLabelHe(field: string): string {
     return feature ? vehicleFeatureLabelHe(feature) : "אבזור מיוחד";
   }
   const map: Record<string, string> = {
-    price: "מחיר סוחר",
+    price: "מחיר מבוקש",
     fuel: "סוג דלק/הנעה",
     fuelType: "סוג דלק/הנעה",
     engineDisplacementCc: "נפח מנוע",
@@ -84,8 +84,6 @@ export async function ensureExchangeInitiatedEnrichment(params: {
     (Array.isArray(match.decisionBlockingUnknowns) ? (match.decisionBlockingUnknowns as string[]) : []);
   const fields = [...new Set(blockingFields.filter(isSellerOwnedBlockingField))];
   if (fields.length === 0) {
-    // Example: only buyerPrice is missing. The candidate remains unresolved, but
-    // no seller enrichment is created and no buyer commercial data is exposed.
     return { ok: false as const, error: "no_seller_blocking_fields" as const };
   }
 
@@ -360,9 +358,9 @@ function provenancePresent(provenance: unknown, keys: string[]): boolean {
   return false;
 }
 
-function provenanceFeatures(provenance: unknown): string[] {
+function provenanceFeatures(provenance: unknown, key: "features" | "absentFeatures"): string[] {
   if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) return [];
-  const raw = (provenance as Record<string, unknown>).features;
+  const raw = (provenance as Record<string, unknown>)[key];
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
 }
 
@@ -380,11 +378,12 @@ function remainingBlockingFields(
   requested: string[]
 ): string[] {
   const remaining: string[] = [];
-  const features = new Set(provenanceFeatures(vehicle.fieldProvenance));
+  const features = new Set(provenanceFeatures(vehicle.fieldProvenance, "features"));
+  const absentFeatures = new Set(provenanceFeatures(vehicle.fieldProvenance, "absentFeatures"));
   for (const f of requested) {
     if (!isSellerOwnedBlockingField(f)) continue;
     if (f === "price") {
-      if (vehicle.b2bPrice == null) remaining.push(f);
+      if (vehicle.b2bPrice == null && vehicle.retailPrice == null) remaining.push(f);
       continue;
     }
     if (f === "mileage") { if (vehicle.mileage == null) remaining.push(f); continue; }
@@ -405,18 +404,17 @@ function remainingBlockingFields(
     }
     if (f.startsWith("feature:")) {
       const feature = canonicalizeVehicleFeature(f.slice("feature:".length));
-      if (!feature || !features.has(feature)) remaining.push(f);
+      if (!feature || (!features.has(feature) && !absentFeatures.has(feature))) remaining.push(f);
       continue;
     }
     if (f === "features") {
-      if (features.size === 0) remaining.push(f);
+      if (features.size === 0 && absentFeatures.size === 0) remaining.push(f);
       continue;
     }
     if (f === "transmission" || f === "drivetrain") {
       if (!provenancePresent(vehicle.fieldProvenance, [f])) remaining.push(f);
       continue;
     }
-    // Other seller-owned fields that are not modeled as stored values remain blocking.
     remaining.push(f);
   }
   return remaining;
