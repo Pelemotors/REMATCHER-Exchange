@@ -24,7 +24,7 @@ function normalizedRawKey(value: string): string {
   return value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function canonicalKey(dimension: CanonicalAliasDimension, rawValue: string): string {
+function topicKey(dimension: CanonicalAliasDimension, rawValue: string): string {
   return `canonical_alias:${dimension}:${normalizedRawKey(rawValue)}`.slice(0, 240);
 }
 
@@ -32,14 +32,13 @@ function insightOf(value: unknown): AliasInsight | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const v = value as Record<string, unknown>;
   if (v.kind !== "canonical_alias" || typeof v.dimension !== "string" || typeof v.rawValue !== "string" || typeof v.canonicalValue !== "string") return null;
-  const approvalStatus = v.approvalStatus;
-  if (approvalStatus !== "PENDING" && approvalStatus !== "APPROVED" && approvalStatus !== "REJECTED") return null;
+  if (v.approvalStatus !== "PENDING" && v.approvalStatus !== "APPROVED" && v.approvalStatus !== "REJECTED") return null;
   return {
     kind: "canonical_alias",
     dimension: v.dimension as CanonicalAliasDimension,
     rawValue: v.rawValue,
     canonicalValue: v.canonicalValue,
-    approvalStatus,
+    approvalStatus: v.approvalStatus,
     source: "exchange_ai",
   };
 }
@@ -54,7 +53,7 @@ async function dealerIdForUser(userId?: string | null): Promise<string | null> {
   return membership?.dealerId ?? null;
 }
 
-/** Stores AI-observed mappings as PENDING evidence only. Never auto-approves. */
+/** Stores AI-observed mappings as PENDING evidence. Existing schema is reused; no DB migration is required. */
 export async function recordCanonicalAliasCandidate(params: {
   dealerId: string;
   dimension: CanonicalAliasDimension;
@@ -70,58 +69,51 @@ export async function recordCanonicalAliasCandidate(params: {
   if (!rawValue || !canonicalValue) return null;
   if (normalizedRawKey(rawValue) === normalizedRawKey(canonicalValue)) return null;
 
-  const key = canonicalKey(params.dimension, rawValue);
-  const existing = await prisma.exchangeLearning.findUnique({
-    where: { dealerId_canonicalKey: { dealerId: params.dealerId, canonicalKey: key } },
+  const topic = topicKey(params.dimension, rawValue);
+  const existing = await prisma.exchangeLearning.findFirst({
+    where: { dealerId: params.dealerId, topic, status: "ACTIVE" },
+    orderBy: { updatedAt: "desc" },
   });
   const existingInsight = insightOf(existing?.structuredInsight);
   const approvalStatus = existingInsight?.approvalStatus ?? "PENDING";
   const confidence = Math.max(0, Math.min(1, params.confidence ?? 0.7));
+  const insight: AliasInsight = {
+    kind: "canonical_alias",
+    dimension: params.dimension,
+    rawValue,
+    canonicalValue,
+    approvalStatus,
+    source: "exchange_ai",
+  };
 
-  return prisma.exchangeLearning.upsert({
-    where: { dealerId_canonicalKey: { dealerId: params.dealerId, canonicalKey: key } },
-    create: {
+  if (existing) {
+    return prisma.exchangeLearning.update({
+      where: { id: existing.id },
+      data: {
+        learningType: approvalStatus === "APPROVED" ? "CANONICAL_ALIAS_APPROVED" : "CANONICAL_ALIAS_CANDIDATE",
+        summary: `${rawValue} → ${canonicalValue}`,
+        structuredInsight: toPrismaJson(insight),
+        confidence: Math.max(existing.confidence, confidence),
+        supportCount: { increment: 1 },
+        lastEvaluatedAt: new Date(),
+      },
+    });
+  }
+
+  return prisma.exchangeLearning.create({
+    data: {
       dealerId: params.dealerId,
       learningType: "CANONICAL_ALIAS_CANDIDATE",
-      topic: "canonical_alias",
-      content: `${rawValue} → ${canonicalValue}`,
-      summary: `AI normalized ${params.dimension}`,
-      structuredInsight: toPrismaJson({
-        kind: "canonical_alias",
-        dimension: params.dimension,
-        rawValue,
-        canonicalValue,
-        approvalStatus,
-        source: "exchange_ai",
-      } satisfies AliasInsight),
+      topic,
+      summary: `${rawValue} → ${canonicalValue}`,
+      structuredInsight: toPrismaJson(insight),
       confidence,
-      sourceEventType: "AI_NORMALIZATION",
-      sourceEntityType: params.sourceEntityType ?? null,
-      sourceEntityId: params.sourceEntityId ?? null,
-      canonicalKey: key,
       supportCount: 1,
-      lastConfirmedAt: new Date(),
-    },
-    update: {
-      content: `${rawValue} → ${canonicalValue}`,
-      structuredInsight: toPrismaJson({
-        kind: "canonical_alias",
-        dimension: params.dimension,
-        rawValue,
-        canonicalValue,
-        approvalStatus,
-        source: "exchange_ai",
-      } satisfies AliasInsight),
-      confidence: Math.max(existing?.confidence ?? 0, confidence),
-      supportCount: { increment: 1 },
-      lastConfirmedAt: new Date(),
-      sourceEntityType: params.sourceEntityType ?? existing?.sourceEntityType ?? null,
-      sourceEntityId: params.sourceEntityId ?? existing?.sourceEntityId ?? null,
+      lastEvaluatedAt: new Date(),
     },
   });
 }
 
-/** Non-blocking helper for AI boundaries that only know the authenticated user. */
 export async function recordCanonicalAliasForUser(params: {
   userId?: string | null;
   dimension: CanonicalAliasDimension;
@@ -141,7 +133,7 @@ export async function getApprovedCanonicalAliasContext(params: {
   limit?: number;
 }): Promise<string[]> {
   const rows = await prisma.exchangeLearning.findMany({
-    where: { dealerId: params.dealerId, topic: "canonical_alias", status: "ACTIVE" },
+    where: { dealerId: params.dealerId, topic: { startsWith: "canonical_alias:" }, status: "ACTIVE" },
     orderBy: [{ supportCount: "desc" }, { confidence: "desc" }],
     take: Math.min(Math.max(params.limit ?? 30, 1), 100),
   });
@@ -163,9 +155,9 @@ export async function getApprovedCanonicalAliasContextForUser(params: {
   return getApprovedCanonicalAliasContext({ dealerId, dimension: params.dimension, limit: params.limit });
 }
 
-/** Explicit approval hook. Candidates cannot become active semantic knowledge without this step. */
+/** Explicit approval hook; candidates never auto-promote. */
 export async function approveCanonicalAliasLearning(params: { dealerId: string; learningId: string }) {
-  const row = await prisma.exchangeLearning.findFirst({ where: { id: params.learningId, dealerId: params.dealerId, topic: "canonical_alias" } });
+  const row = await prisma.exchangeLearning.findFirst({ where: { id: params.learningId, dealerId: params.dealerId, topic: { startsWith: "canonical_alias:" } } });
   if (!row) return { ok: false as const, error: "not_found" as const };
   const insight = insightOf(row.structuredInsight);
   if (!insight) return { ok: false as const, error: "invalid_learning" as const };
@@ -174,7 +166,7 @@ export async function approveCanonicalAliasLearning(params: { dealerId: string; 
     data: {
       learningType: "CANONICAL_ALIAS_APPROVED",
       structuredInsight: toPrismaJson({ ...insight, approvalStatus: "APPROVED" } satisfies AliasInsight),
-      lastConfirmedAt: new Date(),
+      lastEvaluatedAt: new Date(),
     },
   });
   return { ok: true as const, learning: updated };
