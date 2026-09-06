@@ -23,6 +23,7 @@ export interface MatchCardV2Props {
     color?: string | null;
     region?: string | null;
     ownershipHand?: number | null;
+    ownershipType?: string | null;
     fuelType?: string | null;
     engineDisplacementCc?: number | null;
   };
@@ -36,6 +37,16 @@ export interface MatchCardV2Props {
   revealHref?: string;
 }
 
+function ownershipTypeLabelHe(value: string): string {
+  const labels: Record<string, string> = {
+    private: "פרטי",
+    leasing: "ליסינג",
+    rental: "השכרה",
+    company: "חברה",
+  };
+  return labels[value.trim().toLowerCase()] ?? value;
+}
+
 function vehicleMetaLine(vehicle: MatchCardV2Props["vehicle"]) {
   const parts: string[] = [];
   if (vehicle.year) parts.push(String(vehicle.year));
@@ -43,6 +54,7 @@ function vehicleMetaLine(vehicle: MatchCardV2Props["vehicle"]) {
   if (vehicle.fuelType) parts.push(fuelTypeLabelHe(vehicle.fuelType) ?? vehicle.fuelType);
   if (vehicle.engineDisplacementCc != null) parts.push(`${formatNumber(vehicle.engineDisplacementCc)} סמ״ק`);
   if (vehicle.ownershipHand) parts.push(`יד ${vehicle.ownershipHand}`);
+  if (vehicle.ownershipType) parts.push(ownershipTypeLabelHe(vehicle.ownershipType));
   if (vehicle.trim) parts.push(vehicle.trim);
   if (vehicle.color) parts.push(vehicle.color);
   if (vehicle.region) parts.push(vehicle.region);
