@@ -53,6 +53,7 @@ export type StructuredSearchIntent = {
   year?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
   price?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
   mileage?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
+  engineDisplacementCc?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
   trim?: DimensionIntent<string>;
   fuel?: DimensionIntent<string>;
   transmission?: DimensionIntent<string>;
@@ -97,8 +98,7 @@ export function summarizeIntentHe(intent: StructuredSearchIntent): string {
     }
   }
   if (intent.price?.target != null || intent.price?.flexibility?.comfortableMax != null) {
-    const p =
-      intent.price.target ?? intent.price.flexibility?.comfortableMax;
+    const p = intent.price.target ?? intent.price.flexibility?.comfortableMax;
     if (p != null) {
       const flex =
         intent.price.importance === "HARD"
@@ -114,12 +114,14 @@ export function summarizeIntentHe(intent: StructuredSearchIntent): string {
   } else if (intent.mileage?.target != null) {
     parts.push(`ק״מ סביב ${intent.mileage.target.toLocaleString("he-IL")}`);
   }
+  if (intent.fuel?.target) parts.push(`דלק ${intent.fuel.target}`);
+  if (intent.engineDisplacementCc?.target != null) {
+    parts.push(`מנוע ${intent.engineDisplacementCc.target} סמ״ק`);
+  }
   if (intent.color?.importance === "OPEN") parts.push("צבע לא משנה");
   if (intent.color?.exclusions?.length) {
     parts.push(`לא ${intent.color.exclusions.join("/")}`);
   }
-  if (intent.tradeOffNotes?.length) {
-    parts.push(intent.tradeOffNotes[0]!);
-  }
+  if (intent.tradeOffNotes?.length) parts.push(intent.tradeOffNotes[0]!);
   return parts.filter(Boolean).join(", ") || "חיפוש בפיתוח";
 }
