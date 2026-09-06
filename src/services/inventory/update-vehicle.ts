@@ -4,6 +4,10 @@ import { logAppEvent } from "@/services/notifications";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
 import { canonicalizeOwnershipSource } from "@/services/exchange/vehicle-identity";
+import {
+  canonicalizeVehicleFeatures,
+  extractVehicleFeaturesFromText,
+} from "@/services/exchange/vehicle-features";
 import type {
   InventoryDbClient,
   InventoryMutationSource,
@@ -23,6 +27,7 @@ export type VehicleUpdateFields = {
   region?: string | null;
   fuelType?: string | null;
   engineDisplacementCc?: number | null;
+  features?: string[];
   fieldProvenance?: Record<string, unknown>;
   status?: "ARCHIVED";
   rawInput?: string | null;
@@ -31,7 +36,7 @@ export type VehicleUpdateFields = {
 
 const MATCH_RELEVANT_FIELDS = new Set([
   "make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color", "trim",
-  "ownershipHand", "ownershipType", "region", "fuelType", "engineDisplacementCc", "fieldProvenance", "lastAvailabilityConfirmedAt",
+  "ownershipHand", "ownershipType", "region", "fuelType", "engineDisplacementCc", "features", "fieldProvenance", "lastAvailabilityConfirmedAt",
 ]);
 
 function provenanceObject(value: unknown): Record<string, unknown> {
@@ -49,6 +54,14 @@ function provenanceValue(value: unknown, key: string): string | number | null {
     if (typeof inner === "string" || typeof inner === "number") return inner;
   }
   return null;
+}
+
+function provenanceArray(value: unknown, key: string): string[] {
+  const obj = provenanceObject(value);
+  const candidate = obj[key];
+  return Array.isArray(candidate)
+    ? candidate.filter((v): v is string => typeof v === "string")
+    : [];
 }
 
 export async function updateVehicleForDealer(input: {
@@ -73,10 +86,22 @@ export async function updateVehicleForDealer(input: {
 
   const f = { ...input.fields };
   const identityRelevant =
-    "make" in f || "model" in f || "fuelType" in f || "engineDisplacementCc" in f || "rawInput" in f;
+    "make" in f || "model" in f || "fuelType" in f || "engineDisplacementCc" in f ||
+    "ownershipHand" in f || "ownershipType" in f || "rawInput" in f;
 
   let mergedProvenance = provenanceObject(vehicle.fieldProvenance);
   if (f.fieldProvenance) mergedProvenance = { ...mergedProvenance, ...f.fieldProvenance };
+
+  const rawFeatureHints = typeof f.rawInput === "string" ? extractVehicleFeaturesFromText(f.rawInput) : [];
+  if ("features" in f || rawFeatureHints.length > 0) {
+    const mergedFeatures = canonicalizeVehicleFeatures([
+      ...provenanceArray(mergedProvenance, "features"),
+      ...(f.features ?? []),
+      ...rawFeatureHints,
+    ]);
+    f.features = mergedFeatures;
+    mergedProvenance = { ...mergedProvenance, features: mergedFeatures };
+  }
 
   if (identityRelevant) {
     const resolved = await resolveVehicleThroughExchangeBrain({
@@ -91,17 +116,30 @@ export async function updateVehicleForDealer(input: {
         "engineDisplacementCc" in f
           ? f.engineDisplacementCc
           : (provenanceValue(mergedProvenance, "engineDisplacementCc") as number | null),
+      ownershipHand: "ownershipHand" in f ? f.ownershipHand : vehicle.ownershipHand,
+      ownershipType:
+        "ownershipType" in f
+          ? f.ownershipType
+          : vehicle.ownershipType ?? (provenanceValue(mergedProvenance, "ownershipType") as string | null),
       rawText: "rawInput" in f ? f.rawInput : vehicle.rawInput,
     });
     if (resolved.make) f.make = resolved.make;
     if (resolved.model) f.model = resolved.model;
     if (resolved.fuelType) f.fuelType = resolved.fuelType;
     if (resolved.engineDisplacementCc != null) f.engineDisplacementCc = resolved.engineDisplacementCc;
+    if (resolved.ownershipHand != null) f.ownershipHand = resolved.ownershipHand;
+    if (resolved.ownershipType) f.ownershipType = resolved.ownershipType;
     mergedProvenance = {
       ...mergedProvenance,
       ...(resolved.fuelType ? { fuel: { value: resolved.fuelType, status: "known", source: resolved.source } } : {}),
       ...(resolved.engineDisplacementCc != null
         ? { engineDisplacementCc: { value: resolved.engineDisplacementCc, status: "known", source: resolved.source } }
+        : {}),
+      ...(resolved.ownershipHand != null
+        ? { ownershipHand: { value: resolved.ownershipHand, status: "known", source: resolved.source } }
+        : {}),
+      ...(resolved.ownershipType
+        ? { ownershipType: { value: resolved.ownershipType, status: "known", source: resolved.source } }
         : {}),
       vehicleIdentity: {
         make: resolved.make,
@@ -136,7 +174,7 @@ export async function updateVehicleForDealer(input: {
   if ("region" in f) data.region = f.region;
   if ("rawInput" in f) data.rawInput = f.rawInput;
 
-  if (f.fieldProvenance || identityRelevant || "ownershipType" in f) {
+  if (f.fieldProvenance || identityRelevant || "ownershipType" in f || "features" in f) {
     const { toPrismaJson } = await import("@/lib/prisma-json");
     data.fieldProvenance = toPrismaJson(mergedProvenance);
   }
@@ -173,6 +211,7 @@ export async function updateVehicleForDealer(input: {
         if (k === "ownershipType") return ["ownershipSource"];
         if (k === "fuelType") return ["fuel"];
         if (k === "engineDisplacementCc") return ["engineDisplacementCc"];
+        if (k === "features") return (f.features ?? []).map((feature) => `feature:${feature}`);
         if (k === "fieldProvenance" && f.fieldProvenance) return Object.keys(f.fieldProvenance);
         return [k];
       });
