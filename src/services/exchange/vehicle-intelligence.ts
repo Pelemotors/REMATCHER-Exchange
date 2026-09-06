@@ -3,9 +3,11 @@ import { AI_MODELS, AI_PROMPT_VERSIONS } from "@/config/product";
 import { callOpenAIStructured, isOpenAIConfigured } from "@/services/ai/client";
 import {
   canonicalizeFuelType,
+  canonicalizeOwnershipSource,
   canonicalizeVehicleIdentity,
   normalizeEngineDisplacementCc,
   type CanonicalFuelType,
+  type CanonicalOwnershipSource,
 } from "@/services/exchange/vehicle-identity";
 
 export type ExchangeVehicleIdentity = {
@@ -13,6 +15,8 @@ export type ExchangeVehicleIdentity = {
   model: string | null;
   fuelType: CanonicalFuelType | null;
   engineDisplacementCc: number | null;
+  ownershipHand: number | null;
+  ownershipType: CanonicalOwnershipSource | null;
   source: "deterministic" | "exchange_ai";
   confidence: number;
 };
@@ -38,6 +42,11 @@ const RESPONSE_SCHEMA = {
       ],
     },
     engineDisplacementCc: { type: ["integer", "null"] },
+    ownershipHand: { type: ["integer", "null"] },
+    ownershipType: {
+      type: ["string", "null"],
+      enum: ["PRIVATE", "LEASING", "RENTAL", "COMPANY", "TRADE_IN", "OTHER", null],
+    },
     confidence: { type: "number" },
   },
   required: [
@@ -45,21 +54,32 @@ const RESPONSE_SCHEMA = {
     "canonicalModel",
     "fuelType",
     "engineDisplacementCc",
+    "ownershipHand",
+    "ownershipType",
     "confidence",
   ],
   additionalProperties: false,
 } as const;
 
 const SYSTEM_PROMPT = `You are the central vehicle-identity brain of REMATCHER Exchange.
-Normalize only facts supplied in the input; do not invent a trim, engine or fuel type.
+Normalize only facts supplied in the input; never invent a trim, engine, fuel type, ownership hand or ownership source.
 Your job is identity resolution across Hebrew, English, spelling variants and transliteration.
 Examples: יונדאי/Hyundai -> Hyundai; אקסנט/Accent -> Accent; סקודה/Skoda -> Skoda; סופרב/Superb -> Superb.
-Return canonical international make/model names. Normalize fuel to one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER.
+Return canonical international make/model names.
+Normalize fuel to one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER.
 Engine displacement must be integer cc (1.6L -> 1600) only if explicitly present.
+Ownership source must be PRIVATE, LEASING, RENTAL, COMPANY, TRADE_IN or OTHER only when explicitly stated.
+Ownership hand must be an integer only when explicitly stated (יד 2 -> 2).
 If a value cannot be resolved confidently, return null rather than guessing.`;
 
 function containsHebrewOrUnresolved(value: string | null | undefined): boolean {
   return Boolean(value && /[\u0590-\u05ff]/.test(value));
+}
+
+function normalizeOwnershipHand(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(String(value).replace(/[^\d]/g, ""));
+  return Number.isInteger(n) && n >= 1 && n <= 9 ? n : null;
 }
 
 export async function resolveVehicleThroughExchangeBrain(input: {
@@ -67,6 +87,8 @@ export async function resolveVehicleThroughExchangeBrain(input: {
   model?: string | null;
   fuelType?: string | null;
   engineDisplacementCc?: number | string | null;
+  ownershipHand?: number | string | null;
+  ownershipType?: string | null;
   rawText?: string | null;
   userId?: string;
 }): Promise<ExchangeVehicleIdentity> {
@@ -78,6 +100,8 @@ export async function resolveVehicleThroughExchangeBrain(input: {
   const engineDisplacementCc = normalizeEngineDisplacementCc(
     input.engineDisplacementCc
   );
+  const ownershipHand = normalizeOwnershipHand(input.ownershipHand);
+  const ownershipType = canonicalizeOwnershipSource(input.ownershipType);
 
   const needsAi =
     containsHebrewOrUnresolved(deterministic.make) ||
@@ -90,6 +114,8 @@ export async function resolveVehicleThroughExchangeBrain(input: {
       model: deterministic.model,
       fuelType,
       engineDisplacementCc,
+      ownershipHand,
+      ownershipType,
       source: "deterministic",
       confidence: needsAi ? 0.65 : 0.98,
     };
@@ -101,6 +127,8 @@ export async function resolveVehicleThroughExchangeBrain(input: {
       canonicalModel: string | null;
       fuelType: CanonicalFuelType | null;
       engineDisplacementCc: number | null;
+      ownershipHand: number | null;
+      ownershipType: CanonicalOwnershipSource | null;
       confidence: number;
     }>({
       operation: "exchange_vehicle_identity",
@@ -112,6 +140,8 @@ export async function resolveVehicleThroughExchangeBrain(input: {
         model: input.model,
         fuelType: input.fuelType,
         engineDisplacementCc: input.engineDisplacementCc,
+        ownershipHand: input.ownershipHand,
+        ownershipType: input.ownershipType,
         rawText: input.rawText,
       }),
       schemaName: "exchange_vehicle_identity",
@@ -130,6 +160,9 @@ export async function resolveVehicleThroughExchangeBrain(input: {
       engineDisplacementCc:
         normalizeEngineDisplacementCc(data.engineDisplacementCc) ??
         engineDisplacementCc,
+      ownershipHand: normalizeOwnershipHand(data.ownershipHand) ?? ownershipHand,
+      ownershipType:
+        canonicalizeOwnershipSource(data.ownershipType) ?? ownershipType,
       source: "exchange_ai",
       confidence: Math.max(0, Math.min(1, data.confidence ?? 0.8)),
     };
@@ -139,6 +172,8 @@ export async function resolveVehicleThroughExchangeBrain(input: {
       model: deterministic.model,
       fuelType,
       engineDisplacementCc,
+      ownershipHand,
+      ownershipType,
       source: "deterministic",
       confidence: 0.65,
     };
