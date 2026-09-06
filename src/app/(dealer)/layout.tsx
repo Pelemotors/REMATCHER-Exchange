@@ -11,12 +11,11 @@ export default async function DealerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const headerList = await headers();
+  const [headerList, session] = await Promise.all([headers(), auth()]);
   const pathname = headerList.get("x-pathname") ?? "";
   const search = headerList.get("x-search") ?? "";
   const returnTarget = sanitizeReturnPath(`${pathname}${search}`);
 
-  const session = await auth();
   if (!session?.user) {
     const cb = returnTarget
       ? `?callbackUrl=${encodeURIComponent(returnTarget)}`
@@ -46,11 +45,7 @@ export default async function DealerLayout({
 
   const onPrivacyAi = pathname.startsWith("/privacy-ai");
 
-  if (
-    session.user.dealerId &&
-    session.user.id &&
-    !onPrivacyAi
-  ) {
+  if (session.user.dealerId && session.user.id && !onPrivacyAi) {
     const completed = await hasCompletedPrivacyAiV1({
       userId: session.user.id,
       dealerId: session.user.dealerId,
