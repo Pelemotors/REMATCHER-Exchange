@@ -17,7 +17,7 @@ export type ExchangeVehicleIdentity = {
   engineDisplacementCc: number | null;
   ownershipHand: number | null;
   ownershipType: CanonicalOwnershipSource | null;
-  source: "deterministic" | "exchange_ai";
+  source: "exchange_ai" | "unavailable";
   confidence: number;
 };
 
@@ -61,25 +61,71 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const SYSTEM_PROMPT = `You are the central vehicle-identity brain of REMATCHER Exchange.
+const SYSTEM_PROMPT = `You are the authoritative vehicle-identity normalization brain of REMATCHER Exchange.
+Application code must not interpret aliases, transliterations or natural-language vehicle meaning instead of you.
 Normalize only facts supplied in the input; never invent a trim, engine, fuel type, ownership hand or ownership source.
-Your job is identity resolution across Hebrew, English, spelling variants and transliteration.
+Resolve Hebrew, English, spelling variants, abbreviations and transliteration into canonical values.
 Examples: יונדאי/Hyundai -> Hyundai; אקסנט/Accent -> Accent; סקודה/Skoda -> Skoda; סופרב/Superb -> Superb.
 Return canonical international make/model names.
 Normalize fuel to one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER.
 Engine displacement must be integer cc (1.6L -> 1600) only if explicitly present.
 Ownership source must be PRIVATE, LEASING, RENTAL, COMPANY, TRADE_IN or OTHER only when explicitly stated.
 Ownership hand must be an integer only when explicitly stated (יד 2 -> 2).
-If a value cannot be resolved confidently, return null rather than guessing.`;
+If a value cannot be resolved confidently, return null rather than guessing.
+Return structured JSON only.`;
 
-function containsHebrewOrUnresolved(value: string | null | undefined): boolean {
-  return Boolean(value && /[\u0590-\u05ff]/.test(value));
+function rawTextValue(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text || null;
 }
 
-function normalizeOwnershipHand(value: unknown): number | null {
-  if (value == null || value === "") return null;
-  const n = Number(String(value).replace(/[^\d]/g, ""));
-  return Number.isInteger(n) && n >= 1 && n <= 9 ? n : null;
+function exactCanonicalFuel(value: unknown): CanonicalFuelType | null {
+  const text = rawTextValue(value)?.toUpperCase() ?? null;
+  if (!text) return null;
+  const canonical = canonicalizeFuelType(text);
+  return canonical === text ? canonical : null;
+}
+
+function exactCanonicalOwnership(value: unknown): CanonicalOwnershipSource | null {
+  const text = rawTextValue(value)?.toUpperCase() ?? null;
+  if (!text) return null;
+  const canonical = canonicalizeOwnershipSource(text);
+  return canonical === text ? canonical : null;
+}
+
+function exactHand(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  return value >= 1 && value <= 9 ? value : null;
+}
+
+function exactEngineCc(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const n = Math.round(value);
+  return n >= 300 && n <= 10000 ? n : null;
+}
+
+function unavailableResult(input: {
+  make?: string | null;
+  model?: string | null;
+  fuelType?: string | null;
+  engineDisplacementCc?: number | string | null;
+  ownershipHand?: number | string | null;
+  ownershipType?: string | null;
+}): ExchangeVehicleIdentity {
+  // No semantic alias resolution here. We only preserve literal text and values
+  // that are already in exact canonical form. This prevents a hidden
+  // deterministic normalizer from becoming the authority when AI is unavailable.
+  return {
+    make: rawTextValue(input.make),
+    model: rawTextValue(input.model),
+    fuelType: exactCanonicalFuel(input.fuelType),
+    engineDisplacementCc: exactEngineCc(input.engineDisplacementCc),
+    ownershipHand: exactHand(input.ownershipHand),
+    ownershipType: exactCanonicalOwnership(input.ownershipType),
+    source: "unavailable",
+    confidence: 0,
+  };
 }
 
 export async function resolveVehicleThroughExchangeBrain(input: {
@@ -92,34 +138,17 @@ export async function resolveVehicleThroughExchangeBrain(input: {
   rawText?: string | null;
   userId?: string;
 }): Promise<ExchangeVehicleIdentity> {
-  const deterministic = canonicalizeVehicleIdentity({
-    make: input.make,
-    model: input.model,
-  });
-  const fuelType = canonicalizeFuelType(input.fuelType);
-  const engineDisplacementCc = normalizeEngineDisplacementCc(
-    input.engineDisplacementCc
+  const hasInput = Boolean(
+    rawTextValue(input.make) ||
+    rawTextValue(input.model) ||
+    rawTextValue(input.fuelType) ||
+    rawTextValue(input.engineDisplacementCc) ||
+    rawTextValue(input.ownershipHand) ||
+    rawTextValue(input.ownershipType) ||
+    rawTextValue(input.rawText)
   );
-  const ownershipHand = normalizeOwnershipHand(input.ownershipHand);
-  const ownershipType = canonicalizeOwnershipSource(input.ownershipType);
 
-  const needsAi =
-    containsHebrewOrUnresolved(deterministic.make) ||
-    containsHebrewOrUnresolved(deterministic.model) ||
-    (Boolean(input.rawText) && (!deterministic.make || !deterministic.model));
-
-  if (!needsAi || !isOpenAIConfigured()) {
-    return {
-      make: deterministic.make,
-      model: deterministic.model,
-      fuelType,
-      engineDisplacementCc,
-      ownershipHand,
-      ownershipType,
-      source: "deterministic",
-      confidence: needsAi ? 0.65 : 0.98,
-    };
-  }
+  if (!hasInput || !isOpenAIConfigured()) return unavailableResult(input);
 
   try {
     const { data } = await callOpenAIStructured<{
@@ -149,33 +178,23 @@ export async function resolveVehicleThroughExchangeBrain(input: {
       userId: input.userId,
     });
 
-    const aiCanonical = canonicalizeVehicleIdentity({
-      make: data.canonicalMake ?? deterministic.make,
-      model: data.canonicalModel ?? deterministic.model,
+    // Deterministic code below validates canonical AI output only. It does not
+    // inspect the user's original language to decide semantic meaning.
+    const identity = canonicalizeVehicleIdentity({
+      make: data.canonicalMake,
+      model: data.canonicalModel,
     });
     return {
-      make: aiCanonical.make,
-      model: aiCanonical.model,
-      fuelType: data.fuelType ?? fuelType,
-      engineDisplacementCc:
-        normalizeEngineDisplacementCc(data.engineDisplacementCc) ??
-        engineDisplacementCc,
-      ownershipHand: normalizeOwnershipHand(data.ownershipHand) ?? ownershipHand,
-      ownershipType:
-        canonicalizeOwnershipSource(data.ownershipType) ?? ownershipType,
+      make: identity.make,
+      model: identity.model,
+      fuelType: canonicalizeFuelType(data.fuelType),
+      engineDisplacementCc: normalizeEngineDisplacementCc(data.engineDisplacementCc),
+      ownershipHand: exactHand(data.ownershipHand),
+      ownershipType: canonicalizeOwnershipSource(data.ownershipType),
       source: "exchange_ai",
       confidence: Math.max(0, Math.min(1, data.confidence ?? 0.8)),
     };
   } catch {
-    return {
-      make: deterministic.make,
-      model: deterministic.model,
-      fuelType,
-      engineDisplacementCc,
-      ownershipHand,
-      ownershipType,
-      source: "deterministic",
-      confidence: 0.65,
-    };
+    return unavailableResult(input);
   }
 }
