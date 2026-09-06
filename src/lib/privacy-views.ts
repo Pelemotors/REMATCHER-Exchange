@@ -21,6 +21,7 @@ export function toBuyerMatchView(vehicle: {
   region: string | null;
   b2bPrice?: number | null;
   ownershipHand: number | null;
+  ownershipType?: string | null;
   dealerId: string;
   fieldProvenance?: unknown;
 }) {
@@ -33,6 +34,9 @@ export function toBuyerMatchView(vehicle: {
     color: vehicle.color,
     region: vehicle.region,
     ownershipHand: vehicle.ownershipHand,
+    ownershipType:
+      vehicle.ownershipType ??
+      (provenanceValue(vehicle.fieldProvenance, "ownershipType") as string | null) ?? null,
     fuelType:
       (provenanceValue(vehicle.fieldProvenance, "fuel") as string | null) ??
       (provenanceValue(vehicle.fieldProvenance, "fuelType") as string | null),

@@ -17,6 +17,8 @@ export const parsedDemandSchema = z.object({
   seatsMin: fieldValueSchema.optional(),
   fuelType: fieldValueSchema.optional(),
   engineDisplacementCc: fieldValueSchema.optional(),
+  ownershipHand: fieldValueSchema.optional(),
+  ownershipType: fieldValueSchema.optional(),
   colorExclusions: z.array(z.string()).optional(),
   colorPreferences: z.array(z.string()).optional(),
   hardConstraints: z.array(

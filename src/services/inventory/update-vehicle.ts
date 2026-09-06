@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logAppEvent } from "@/services/notifications";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
+import { canonicalizeOwnershipSource } from "@/services/exchange/vehicle-identity";
 import type {
   InventoryDbClient,
   InventoryMutationSource,
@@ -22,7 +23,6 @@ export type VehicleUpdateFields = {
   region?: string | null;
   fuelType?: string | null;
   engineDisplacementCc?: number | null;
-  /** Merge into fieldProvenance JSON (fuel/drivetrain/transmission/seats/identity) */
   fieldProvenance?: Record<string, unknown>;
   status?: "ARCHIVED";
   rawInput?: string | null;
@@ -31,7 +31,7 @@ export type VehicleUpdateFields = {
 
 const MATCH_RELEVANT_FIELDS = new Set([
   "make", "model", "year", "mileage", "b2bPrice", "retailPrice", "color", "trim",
-  "ownershipHand", "region", "fuelType", "engineDisplacementCc", "fieldProvenance", "lastAvailabilityConfirmedAt",
+  "ownershipHand", "ownershipType", "region", "fuelType", "engineDisplacementCc", "fieldProvenance", "lastAvailabilityConfirmedAt",
 ]);
 
 function provenanceObject(value: unknown): Record<string, unknown> {
@@ -112,6 +112,16 @@ export async function updateVehicleForDealer(input: {
     };
   }
 
+  if ("ownershipType" in f) {
+    f.ownershipType = canonicalizeOwnershipSource(f.ownershipType);
+    if (f.ownershipType) {
+      mergedProvenance = {
+        ...mergedProvenance,
+        ownershipType: { value: f.ownershipType, status: "known", source: "deterministic" },
+      };
+    }
+  }
+
   const data: Record<string, unknown> = { lastInventoryUpdate: new Date() };
   if ("make" in f) data.make = f.make;
   if ("model" in f) data.model = f.model;
@@ -126,7 +136,7 @@ export async function updateVehicleForDealer(input: {
   if ("region" in f) data.region = f.region;
   if ("rawInput" in f) data.rawInput = f.rawInput;
 
-  if (f.fieldProvenance || identityRelevant) {
+  if (f.fieldProvenance || identityRelevant || "ownershipType" in f) {
     const { toPrismaJson } = await import("@/lib/prisma-json");
     data.fieldProvenance = toPrismaJson(mergedProvenance);
   }
@@ -160,6 +170,7 @@ export async function updateVehicleForDealer(input: {
       const updatedFields = Object.keys(f).flatMap((k) => {
         if (k === "b2bPrice" || k === "retailPrice") return ["price"];
         if (k === "ownershipHand") return ["hand"];
+        if (k === "ownershipType") return ["ownershipSource"];
         if (k === "fuelType") return ["fuel"];
         if (k === "engineDisplacementCc") return ["engineDisplacementCc"];
         if (k === "fieldProvenance" && f.fieldProvenance) return Object.keys(f.fieldProvenance);

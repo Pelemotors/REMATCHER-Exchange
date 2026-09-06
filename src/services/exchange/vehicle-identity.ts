@@ -9,6 +9,14 @@ export type CanonicalFuelType =
   | "HYDROGEN"
   | "OTHER";
 
+export type CanonicalOwnershipSource =
+  | "PRIVATE"
+  | "LEASING"
+  | "RENTAL"
+  | "COMPANY"
+  | "TRADE_IN"
+  | "OTHER";
+
 function clean(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFKC")
@@ -63,6 +71,14 @@ const FUEL_ALIASES: Record<string, CanonicalFuelType> = {
   cng: "CNG", "מימן": "HYDROGEN", hydrogen: "HYDROGEN"
 };
 
+const OWNERSHIP_ALIASES: Record<string, CanonicalOwnershipSource> = {
+  "פרטי": "PRIVATE", private: "PRIVATE", privately: "PRIVATE",
+  "ליסינג": "LEASING", leasing: "LEASING", lease: "LEASING",
+  "השכרה": "RENTAL", rental: "RENTAL", rent: "RENTAL",
+  "חברה": "COMPANY", company: "COMPANY", corporate: "COMPANY",
+  "טרייד אין": "TRADE_IN", "טריידאין": "TRADE_IN", "trade in": "TRADE_IN", tradein: "TRADE_IN",
+};
+
 export function canonicalizeMake(value: string | null | undefined): string | null {
   const cleaned = clean(value);
   if (!cleaned) return null;
@@ -86,6 +102,24 @@ export function canonicalizeFuelType(value: string | null | undefined): Canonica
   const cleaned = clean(value);
   if (!cleaned) return null;
   return FUEL_ALIASES[key(cleaned)] ?? "OTHER";
+}
+
+export function canonicalizeOwnershipSource(value: string | null | undefined): CanonicalOwnershipSource | null {
+  const cleaned = clean(value);
+  if (!cleaned) return null;
+  return OWNERSHIP_ALIASES[key(cleaned)] ?? "OTHER";
+}
+
+export function ownershipSourceLabelHe(value: string | null | undefined): string | null {
+  switch (canonicalizeOwnershipSource(value)) {
+    case "PRIVATE": return "פרטי";
+    case "LEASING": return "ליסינג";
+    case "RENTAL": return "השכרה";
+    case "COMPANY": return "חברה";
+    case "TRADE_IN": return "טרייד־אין";
+    case "OTHER": return value ? clean(value) : "אחר";
+    default: return null;
+  }
 }
 
 export function fuelTypeLabelHe(value: string | null | undefined): string | null {
