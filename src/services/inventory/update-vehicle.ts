@@ -92,20 +92,31 @@ export async function updateVehicleForDealer(input: {
 
   if ("features" in f || (typeof f.rawInput === "string" && f.rawInput.trim())) {
     const existingFeatures = provenanceArray(mergedProvenance, "features");
+    const existingAbsent = provenanceArray(mergedProvenance, "absentFeatures");
     const featureSourceText = [
       ...(f.features ?? []),
       typeof f.rawInput === "string" ? f.rawInput : "",
     ].filter(Boolean).join("\n");
     const normalized = featureSourceText
       ? await normalizeVehicleFeaturesWithAi({ rawText: featureSourceText })
-      : { features: [] as string[] };
+      : { features: [] as string[], absentFeatures: [] as string[] };
+    const explicitlyPresent = new Set(canonicalizeVehicleFeatures(normalized.features));
+    const explicitlyAbsent = new Set(canonicalizeVehicleFeatures(normalized.absentFeatures));
     const mergedFeatures = canonicalizeVehicleFeatures([
-      ...existingFeatures,
-      ...normalized.features,
+      ...existingFeatures.filter((feature) => !explicitlyAbsent.has(feature as never)),
+      ...explicitlyPresent,
     ]);
-    if ("features" in f || normalized.features.length > 0) {
+    const mergedAbsent = canonicalizeVehicleFeatures([
+      ...existingAbsent.filter((feature) => !explicitlyPresent.has(feature as never)),
+      ...explicitlyAbsent,
+    ]);
+    if ("features" in f || normalized.features.length > 0 || normalized.absentFeatures.length > 0) {
       f.features = mergedFeatures;
-      mergedProvenance = { ...mergedProvenance, features: mergedFeatures };
+      mergedProvenance = {
+        ...mergedProvenance,
+        features: mergedFeatures,
+        absentFeatures: mergedAbsent,
+      };
     }
   }
 
@@ -217,7 +228,10 @@ export async function updateVehicleForDealer(input: {
         if (k === "ownershipType") return ["ownershipSource"];
         if (k === "fuelType") return ["fuel"];
         if (k === "engineDisplacementCc") return ["engineDisplacementCc"];
-        if (k === "features") return (f.features ?? []).map((feature) => `feature:${feature}`);
+        if (k === "features") return [
+          ...(provenanceArray(mergedProvenance, "features").map((feature) => `feature:${feature}`)),
+          ...(provenanceArray(mergedProvenance, "absentFeatures").map((feature) => `feature:${feature}`)),
+        ];
         if (k === "fieldProvenance" && f.fieldProvenance) return Object.keys(f.fieldProvenance);
         return [k];
       });
