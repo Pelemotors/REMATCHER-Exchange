@@ -1,14 +1,7 @@
-/** Deterministic column header / content → vehicle field mapping.
- * Semantic normalization of vehicle features is intentionally NOT done here;
- * raw feature text is forwarded to the Exchange AI brain at persistence time.
+/**
+ * Deterministic spreadsheet STRUCTURE mapping only.
+ * Vehicle meaning is intentionally preserved as raw text and normalized later by Exchange AI.
  */
-import {
-  canonicalizeFuelType,
-  canonicalizeOwnershipSource,
-  canonicalizeVehicleIdentity,
-  normalizeEngineDisplacementCc,
-} from "@/services/exchange/vehicle-identity";
-
 export type VehicleImportField =
   | "make" | "model" | "trim" | "year" | "mileage" | "color"
   | "b2bPrice" | "retailPrice" | "region" | "ownershipHand" | "ownershipType"
@@ -21,8 +14,9 @@ const ALIASES: Record<VehicleImportField, string[]> = {
   year:["year","model year","שנה","שנתון","שנת ייצור","עליה לכביש","עלייה לכביש"],
   mileage:["mileage","km","kms","kilometers","קמ",'ק"מ',"קילומטר","קילומטרים","קילומטראז","קילומטראז'","נסועה"],
   color:["color","colour","צבע"],
-  b2bPrice:["b2b","b2bprice","wholesale","מחיר b2b","מחיר סוחר","מחיר לסוחר","מחיר סיטונאי","נטו"],
-  retailPrice:["price","retail","retailprice","asking price","מחיר","מחיר מכירה","מחיר מבוקש","מחיר קמעונאי","מחיר מחירון"],
+  // Both legacy price headers map to the same product concept: asking price.
+  b2bPrice:["asking price","price","מחיר","מחיר מבוקש","b2b","b2bprice","wholesale","מחיר b2b","מחיר סוחר","מחיר לסוחר","מחיר סיטונאי","נטו"],
+  retailPrice:["retail","retailprice","מחיר מכירה","מחיר קמעונאי","מחיר מחירון"],
   region:["region","city","location","branch","אזור","עיר","מיקום","סניף"],
   ownershipHand:["hand","ownership hand","owners","יד","בעלות","מספר יד","יד נוכחית"],
   ownershipType:["ownership type","ownership source","source","originality","מקוריות","מקור","סוג בעלות","בעלות קודמת"],
@@ -49,8 +43,8 @@ export function inferMappingFromRows(rows:unknown[][]):Partial<Record<VehicleImp
   let yi=-1,ys=0;for(let i=0;i<w;i++){const s=score(i,isYear);if(s>ys){ys=s;yi=i}}
   if(yi>=0&&ys>=need){m.year=yi;if(yi>=2){m.make=yi-2;m.model=yi-1}if(yi+1<w)m.mileage=yi+1;if(yi+2<w)m.color=yi+2}
   for(let i=0;i<w;i++){if(score(i,vin)>=need)m.vin??=i;if(score(i,plate)>=need)m.licensePlate??=i}
-  for(let i=w-1;i>=0;i--){if(i===m.mileage||i===m.year||i===m.licensePlate)continue;if(score(i,price)>=need){m.retailPrice=i;break}}
-  if(m.retailPrice!=null&&m.retailPrice>0){const i=m.retailPrice-1;if(score(i,v=>/[A-Za-z\u0590-\u05ff]/.test(cleanText(v)))>=need)m.region=i}
+  for(let i=w-1;i>=0;i--){if(i===m.mileage||i===m.year||i===m.licensePlate)continue;if(score(i,price)>=need){m.b2bPrice=i;break}}
+  if(m.b2bPrice!=null&&m.b2bPrice>0){const i=m.b2bPrice-1;if(score(i,v=>/[A-Za-z\u0590-\u05ff]/.test(cleanText(v)))>=need)m.region=i}
   return m;
 }
 
@@ -77,23 +71,24 @@ export type ParsedImportRow = Record<Exclude<VehicleImportField,"features">,stri
 export function parseRow(row:unknown[],m:Partial<Record<VehicleImportField,number>>):ParsedImportRow{
   const get=(f:VehicleImportField)=>{const i=m[f];if(i===undefined)return null;const r=row[i];return r==null||cleanText(r)===""?null:r as string|number};
   const text=(f:VehicleImportField)=>get(f)!=null?cleanText(get(f)):null;
-  const canonical=canonicalizeVehicleIdentity({make:text("make"),model:text("model")});
   const featureCell=text("features");
   const features=featureCell?featureCell.split(/[,;|]+/).map(v=>v.trim()).filter(Boolean):[];
+  const askingPrice=parseNumber(get("b2bPrice"))??parseNumber(get("retailPrice"));
   return{
-    make:canonical.make,
-    model:canonical.model,
+    // Preserve raw semantic values. The create/update domain boundary sends them through Exchange AI.
+    make:text("make"),
+    model:text("model"),
     trim:text("trim"),
     year:parseNumber(get("year")),
     mileage:parseNumber(get("mileage")),
     color:text("color"),
-    b2bPrice:parseNumber(get("b2bPrice")),
-    retailPrice:parseNumber(get("retailPrice")),
+    b2bPrice:askingPrice,
+    retailPrice:askingPrice,
     region:text("region"),
     ownershipHand:parseNumber(get("ownershipHand")),
-    ownershipType:canonicalizeOwnershipSource(text("ownershipType")),
-    fuelType:canonicalizeFuelType(text("fuelType")),
-    engineDisplacementCc:normalizeEngineDisplacementCc(get("engineDisplacementCc")),
+    ownershipType:text("ownershipType"),
+    fuelType:text("fuelType"),
+    engineDisplacementCc:get("engineDisplacementCc") == null ? null : cleanText(get("engineDisplacementCc")),
     features,
     dealerRefId:text("dealerRefId"),
     licensePlate:text("licensePlate")?.replace(/[-\s]/g,"")??null,
