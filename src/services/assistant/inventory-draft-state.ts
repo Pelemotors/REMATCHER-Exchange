@@ -5,6 +5,7 @@ import {
   type InventoryDraftFields,
   type PendingInventoryDraft,
 } from "@/services/assistant/inventory-draft";
+import { canonicalizeVehicleFeatures } from "@/services/exchange/vehicle-features";
 
 export type InventoryDraftPatch = Partial<InventoryDraftFields>;
 
@@ -22,6 +23,7 @@ const FIELD_NAMES = [
   "region",
   "fuelType",
   "engineDisplacementCc",
+  "features",
 ] as const satisfies ReadonlyArray<keyof InventoryDraftFields>;
 
 function nullableString(value: unknown): string | null | undefined {
@@ -54,6 +56,15 @@ export function sanitizeInventoryDraftFacts(
       case "engineDisplacementCc": {
         const parsed = nullableNumber(value);
         if (parsed !== undefined) (patch as Record<string, unknown>)[field] = parsed;
+        break;
+      }
+      case "features": {
+        const values = Array.isArray(value)
+          ? value.filter((v): v is string => typeof v === "string")
+          : typeof value === "string"
+            ? [value]
+            : [];
+        (patch as Record<string, unknown>)[field] = canonicalizeVehicleFeatures(values);
         break;
       }
       default: {
@@ -91,11 +102,18 @@ export function applyInventoryDraftFacts(params: {
   const existing = params.conversation?.pendingInventoryDraft ?? newDraft();
   const acceptedFields = Object.keys(patch);
   const sourceText = [existing.sourceText, params.sourceText].filter(Boolean).join("\n").trim();
+  const fields = { ...existing.fields, ...patch };
+  if (patch.features) {
+    fields.features = canonicalizeVehicleFeatures([
+      ...(existing.fields.features ?? []),
+      ...patch.features,
+    ]);
+  }
   const draft: PendingInventoryDraft = {
     ...existing,
     status: "DRAFT",
     sourceText,
-    fields: { ...existing.fields, ...patch },
+    fields,
   };
   const pendingConfirmation =
     params.conversation?.pendingConfirmation?.action === "create_inventory"
