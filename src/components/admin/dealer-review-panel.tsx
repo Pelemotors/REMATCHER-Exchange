@@ -22,6 +22,13 @@ interface DealerReview {
   owner: { id: string; name: string; email: string; phone: string | null; emailVerifiedAt: string | null } | null;
 }
 
+interface ImportPreview {
+  importId: string;
+  fileName: string;
+  summary: { total: number; valid: number; needsAttention: number; duplicates: number };
+  diff: { newCount: number; stillActiveCount: number; missingFromFile: Array<{ vehicleId: string; label: string }> };
+}
+
 export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
   const router = useRouter();
   const [dealer, setDealer] = useState<DealerReview | null>(null);
@@ -31,6 +38,8 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
   const [showReject, setShowReject] = useState(false);
   const [password, setPassword] = useState("");
   const [inventoryText, setInventoryText] = useState("");
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [message, setMessage] = useState("");
 
   async function reload() {
@@ -115,6 +124,42 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
     );
   }
 
+  async function previewSpreadsheet(file: File | null) {
+    if (!file) return;
+    setActionLoading(true);
+    setMessage("");
+    setImportPreview(null);
+    setSelectedFileName(file.name);
+    const form = new FormData();
+    form.append("file", file);
+    const r = await fetch(`/api/admin/dealers/${dealerId}/inventory/import/preview`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await r.json().catch(() => ({}));
+    setActionLoading(false);
+    if (!r.ok) {
+      setSelectedFileName("");
+      setMessage("לא הצלחתי לקרוא את הקובץ. יש להשתמש בקובץ Excel או CSV תקין.");
+      return;
+    }
+    setImportPreview(data as ImportPreview);
+  }
+
+  async function confirmSpreadsheet() {
+    if (!importPreview) return;
+    if (!confirm(`לייבא את המלאי מתוך ${importPreview.fileName} לסוחר?`)) return;
+    const result = await post(`/api/admin/dealers/${dealerId}/inventory/import/confirm`, {
+      importId: importPreview.importId,
+      markMissingAsSold: false,
+    });
+    if (!result.ok) return;
+    const { created = 0, updated = 0 } = result.data as { created?: number; updated?: number };
+    setImportPreview(null);
+    setSelectedFileName("");
+    setMessage(`הייבוא הושלם: ${created} רכבים חדשים, ${updated} רכבים עודכנו`);
+  }
+
   if (loading) return <SkeletonBlockV2 lines={4} />;
   if (!dealer?.id) return <p className="text-v2-text-secondary">סוחר לא נמצא</p>;
 
@@ -182,6 +227,47 @@ export function DealerReviewPanel({ dealerId }: { dealerId: string }) {
         <p className="text-xs text-v2-text-muted">
           אחרי ההזנה זה אותו מלאי שהסוחר והסוכן האישי רואים. הסוחר יוכל להוסיף, לעדכן, למכור או להסיר רכבים גם באמצעות פקודות לסוכן AI, ומנגנון רעננות המלאי ימשיך לעבוד כרגיל.
         </p>
+      </Surface>
+
+      <Surface depth="raised" className="space-y-3 p-4">
+        <div>
+          <h2 className="font-semibold text-v2-text-primary">העלאת Excel / CSV</h2>
+          <p className="mt-1 text-sm text-v2-text-secondary">
+            העלה קובץ מלאי מוכן. המערכת מזהה עמודות, בודקת כפילויות ומציגה סיכום לפני הייבוא.
+          </p>
+        </div>
+        <input
+          className="input w-full"
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          disabled={actionLoading}
+          onChange={(e) => void previewSpreadsheet(e.target.files?.[0] ?? null)}
+        />
+        {selectedFileName && !importPreview && (
+          <p className="text-sm text-v2-text-secondary">קורא את {selectedFileName}...</p>
+        )}
+        {importPreview && (
+          <div className="space-y-3 rounded-xl border border-white/10 p-3 text-sm">
+            <p className="font-medium text-v2-text-primary">{importPreview.fileName}</p>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <p>שורות: {importPreview.summary.total}</p>
+              <p>תקינות: {importPreview.summary.valid}</p>
+              <p>כפילויות: {importPreview.summary.duplicates}</p>
+              <p>דורש תשומת לב: {importPreview.summary.needsAttention}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <p>חדשים: {importPreview.diff.newCount}</p>
+              <p>קיימים בקובץ: {importPreview.diff.stillActiveCount}</p>
+              <p>לא נמצאים בקובץ: {importPreview.diff.missingFromFile.length}</p>
+            </div>
+            <ButtonV2 variant="signal" disabled={actionLoading} onClick={confirmSpreadsheet}>
+              ייבא את הקובץ לסוחר
+            </ButtonV2>
+            <p className="text-xs text-v2-text-muted">
+              רכבים קיימים שלא מופיעים בקובץ לא יסומנו כנמכרו אוטומטית. אפשר לעדכן אותם אחר כך מהמלאי או דרך הסוכן האישי.
+            </p>
+          </div>
+        )}
       </Surface>
 
       <Surface depth="raised" className="space-y-4 p-4">
