@@ -7,6 +7,7 @@ import {
 } from "@/services/ai/inventory-normalizer";
 import type { NormalizedVehicle } from "@/lib/schemas/ai";
 import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
+import { canonicalizeOwnershipSource } from "@/services/exchange/vehicle-identity";
 
 /** Shared Prisma client (default) or interactive-transaction client */
 export type InventoryDbClient = typeof prisma;
@@ -30,9 +31,7 @@ export type VehicleCreateFields = {
   retailPrice: number | null;
   b2bPrice: number | null;
   region: string | null;
-  /** Canonical fuel type is persisted in fieldProvenance until it becomes a first-class DB column. */
   fuelType?: string | null;
-  /** Engine capacity in cubic centimeters, persisted in fieldProvenance. */
   engineDisplacementCc?: number | null;
   fieldProvenance?: unknown;
 };
@@ -60,17 +59,10 @@ export async function createVehicleForDealer(input: {
   userId?: string;
   rawInput?: string | null;
   fields?: Partial<VehicleCreateFields>;
-  /** When provided, normalizes and maps to fields (manual free-text path) */
   normalizeFromRaw?: boolean;
   source?: InventoryMutationSource;
-  /**
-   * Default true (Agent/Manual). Import may set false to preserve
-   * historical rowHasMinimum (make OR model OR year) batch behavior.
-   */
   requireIdentity?: boolean;
-  /** Import sets availability confirmation on ingest */
   lastAvailabilityConfirmedAt?: Date | null;
-  /** Import batches can defer discovery and rematch once at the end. */
   skipRematch?: boolean;
   db?: InventoryDbClient;
 }) {
@@ -127,6 +119,8 @@ export async function createVehicleForDealer(input: {
   fields.model = identity.model;
   fields.fuelType = identity.fuelType;
   fields.engineDisplacementCc = identity.engineDisplacementCc;
+  fields.ownershipType = canonicalizeOwnershipSource(fields.ownershipType);
+
   fields.fieldProvenance = {
     ...provenanceObject(fields.fieldProvenance),
     ...(identity.fuelType
@@ -138,6 +132,15 @@ export async function createVehicleForDealer(input: {
             value: identity.engineDisplacementCc,
             status: "known",
             source: identity.source,
+          },
+        }
+      : {}),
+    ...(fields.ownershipType
+      ? {
+          ownershipType: {
+            value: fields.ownershipType,
+            status: "known",
+            source: "deterministic",
           },
         }
       : {}),
@@ -157,12 +160,7 @@ export async function createVehicleForDealer(input: {
     };
   }
 
-  if (
-    !requireIdentity &&
-    !fields.make &&
-    !fields.model &&
-    !fields.year
-  ) {
+  if (!requireIdentity && !fields.make && !fields.model && !fields.year) {
     return {
       ok: false as const,
       error: "identity_incomplete" as const,
@@ -177,9 +175,7 @@ export async function createVehicleForDealer(input: {
       dealerId: input.dealerId,
       rawInput: input.rawInput ?? null,
       ...scalarFields,
-      fieldProvenance: fieldProvenance
-        ? toPrismaJson(fieldProvenance)
-        : undefined,
+      fieldProvenance: fieldProvenance ? toPrismaJson(fieldProvenance) : undefined,
       freshnessState: "FRESH",
       lastInventoryUpdate: new Date(),
       ...(input.lastAvailabilityConfirmedAt !== undefined
@@ -201,14 +197,14 @@ export async function createVehicleForDealer(input: {
       year: vehicle.year,
       fuelType: identity.fuelType,
       engineDisplacementCc: identity.engineDisplacementCc,
+      ownershipHand: vehicle.ownershipHand,
+      ownershipType: vehicle.ownershipType,
       source: input.source ?? "domain",
     },
     idempotencyKey: `inventory-added:${vehicle.id}`,
   });
 
-  const { recordActivationMilestone } = await import(
-    "@/services/activation/milestones"
-  );
+  const { recordActivationMilestone } = await import("@/services/activation/milestones");
   void recordActivationMilestone({
     dealerId: input.dealerId,
     milestone: "FIRST_INVENTORY_CREATED",
@@ -227,21 +223,14 @@ export async function createVehicleForDealer(input: {
   }
 
   if (!input.skipRematch) {
-    const { rematchAfterInventoryMutation } = await import(
-      "@/services/matching/inventory-rematch"
-    );
-    await rematchAfterInventoryMutation({
-      vehicleId: vehicle.id,
-      sellerDealerId: input.dealerId,
-    });
+    const { rematchAfterInventoryMutation } = await import("@/services/matching/inventory-rematch");
+    await rematchAfterInventoryMutation({ vehicleId: vehicle.id, sellerDealerId: input.dealerId });
   }
 
   return { ok: true as const, vehicle, source: input.source ?? "domain" };
 }
 
-export function fieldsFromNormalized(
-  normalized: NormalizedVehicle
-): VehicleCreateFields {
+export function fieldsFromNormalized(normalized: NormalizedVehicle): VehicleCreateFields {
   const mapped = normalizedToVehicleFields(normalized);
   return {
     make: mapped.make,
