@@ -23,11 +23,13 @@ export async function getInventoryList({
   filter = "active",
   q,
 }: InventoryListInput) {
-  const [activeCount, soldCount, allCount, missingPriceCount, attentionBase, openOpps, pendingValidations] =
+  const [statusCounts, missingPriceCount, attentionBase, openOpps, pendingValidations] =
     await Promise.all([
-      prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
-      prisma.vehicle.count({ where: { dealerId, status: "SOLD" } }),
-      prisma.vehicle.count({ where: { dealerId, status: { in: ["ACTIVE", "SOLD"] } } }),
+      prisma.vehicle.groupBy({
+        by: ["status"],
+        where: { dealerId, status: { in: ["ACTIVE", "SOLD"] } },
+        _count: { _all: true },
+      }),
       prisma.vehicle.count({
         where: { dealerId, status: "ACTIVE", b2bPrice: null, retailPrice: null },
       }),
@@ -53,6 +55,11 @@ export async function getInventoryList({
         _count: { _all: true },
       }),
     ]);
+
+  const countByStatus = new Map(statusCounts.map((row) => [row.status, row._count._all]));
+  const activeCount = countByStatus.get("ACTIVE") ?? 0;
+  const soldCount = countByStatus.get("SOLD") ?? 0;
+  const allCount = activeCount + soldCount;
 
   const oppByVehicle = new Map(openOpps.map((o) => [o.vehicleId, o._count._all]));
   const valByVehicle = new Map(pendingValidations.map((v) => [v.vehicleId, v._count._all]));
