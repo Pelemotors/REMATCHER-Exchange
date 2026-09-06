@@ -60,7 +60,7 @@ export type StructuredSearchIntent = {
   drivetrain?: DimensionIntent<string>;
   color?: DimensionIntent<string>;
   ownershipSource?: DimensionIntent<string>;
-  hand?: DimensionIntent<number>;
+  hand?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
   region?: DimensionIntent<string>;
   seats?: DimensionIntent<number>;
   freeFormRequirements?: string[];
@@ -80,32 +80,16 @@ export function emptyStructuredIntent(): StructuredSearchIntent {
 export function summarizeIntentHe(intent: StructuredSearchIntent): string {
   const parts: string[] = [];
   if (intent.make?.target || intent.model?.target) {
-    parts.push(
-      `${intent.make?.target ?? ""} ${intent.model?.target ?? ""}`.trim()
-    );
+    parts.push(`${intent.make?.target ?? ""} ${intent.model?.target ?? ""}`.trim());
   }
   if (intent.year?.flexibility?.hardMin != null || intent.year?.target != null) {
-    const y =
-      intent.year.flexibility?.hardMin ??
-      intent.year.target ??
-      intent.year.flexibility?.comfortableMin;
-    if (y != null) {
-      parts.push(
-        intent.year.importance === "HARD"
-          ? `${y} ומעלה (חובה)`
-          : `סביב ${y}`
-      );
-    }
+    const y = intent.year.flexibility?.hardMin ?? intent.year.target ?? intent.year.flexibility?.comfortableMin;
+    if (y != null) parts.push(intent.year.importance === "HARD" ? `${y} ומעלה (חובה)` : `סביב ${y}`);
   }
   if (intent.price?.target != null || intent.price?.flexibility?.comfortableMax != null) {
     const p = intent.price.target ?? intent.price.flexibility?.comfortableMax;
     if (p != null) {
-      const flex =
-        intent.price.importance === "HARD"
-          ? "תקרה"
-          : intent.price.flexibility?.stretchMax
-            ? "גמיש מעט"
-            : "סביב";
+      const flex = intent.price.importance === "HARD" ? "תקרה" : intent.price.flexibility?.stretchMax ? "גמיש מעט" : "סביב";
       parts.push(`${flex} ${p.toLocaleString("he-IL")}`);
     }
   }
@@ -115,13 +99,11 @@ export function summarizeIntentHe(intent: StructuredSearchIntent): string {
     parts.push(`ק״מ סביב ${intent.mileage.target.toLocaleString("he-IL")}`);
   }
   if (intent.fuel?.target) parts.push(`דלק ${intent.fuel.target}`);
-  if (intent.engineDisplacementCc?.target != null) {
-    parts.push(`מנוע ${intent.engineDisplacementCc.target} סמ״ק`);
-  }
+  if (intent.engineDisplacementCc?.target != null) parts.push(`מנוע ${intent.engineDisplacementCc.target} סמ״ק`);
+  if (intent.hand?.target != null) parts.push(`עד יד ${intent.hand.target}`);
+  if (intent.ownershipSource?.target) parts.push(`מקוריות ${intent.ownershipSource.target}`);
   if (intent.color?.importance === "OPEN") parts.push("צבע לא משנה");
-  if (intent.color?.exclusions?.length) {
-    parts.push(`לא ${intent.color.exclusions.join("/")}`);
-  }
+  if (intent.color?.exclusions?.length) parts.push(`לא ${intent.color.exclusions.join("/")}`);
   if (intent.tradeOffNotes?.length) parts.push(intent.tradeOffNotes[0]!);
   return parts.filter(Boolean).join(", ") || "חיפוש בפיתוח";
 }
