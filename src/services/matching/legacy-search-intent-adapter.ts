@@ -14,6 +14,7 @@ import {
   canonicalizeVehicleIdentity,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
+import { canonicalizeVehicleFeature } from "@/services/exchange/vehicle-features";
 
 function numericConstraintValue(raw: unknown): number | null {
   const candidate = raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw
@@ -62,7 +63,7 @@ export function legacyToSearchIntent(
       flexibility: { target: confirmed.budgetMax, comfortableMax: confirmed.budgetMax, stretchMax: hardMax, hardMax },
       provenance: "legacy_adapter",
       confidence: 0.8,
-      notes: "Legacy soft +10% budget rule mapped into stretch/hardMax",
+      notes: "Commercial rule: seller may be at most +10% over buyer budget",
     };
   }
   if (confirmed.trimPreference) intent.trim = { importance: "PREFERENCE", target: confirmed.trimPreference, provenance: "legacy_adapter" };
@@ -114,6 +115,15 @@ export function legacyToSearchIntent(
       const ownership = canonicalizeOwnershipSource(stringConstraintValue(val));
       if (ownership) {
         intent.ownershipSource = { importance, target: ownership, provenance: "legacy_adapter" };
+      }
+    }
+    if (importance && ["feature", "features", "equipment", "option", "special_feature"].includes(field)) {
+      const feature = canonicalizeVehicleFeature(stringConstraintValue(val));
+      if (feature) {
+        intent.featureRequirements = [
+          ...(intent.featureRequirements ?? []),
+          { feature, importance, provenance: "legacy_adapter" },
+        ];
       }
     }
     if (importance === "HARD" && (field === "mileage" || field === "mileagemax" || field === "mileage_max")) {

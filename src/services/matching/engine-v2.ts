@@ -17,8 +17,14 @@ import {
   canonicalizeVehicleIdentity,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
+import {
+  canonicalizeVehicleFeature,
+  canonicalizeVehicleFeatures,
+  vehicleFeatureLabelHe,
+} from "@/services/exchange/vehicle-features";
 
-export const MATCH_ENGINE_VERSION = "matching-engine-2.0";
+export const MATCH_ENGINE_VERSION = "matching-engine-2.1";
+export const MAX_SELLER_OVER_BUYER_PRICE_RATIO = 1.1;
 
 export type MatchBandV2 = "STRONG" | "GOOD" | "ALTERNATIVE" | "NO_MATCH";
 export type CandidateResolutionState = "RESOLVED" | "NEEDS_INFORMATION";
@@ -220,6 +226,14 @@ function provenanceValue(vehicle: MatchVehicleInput, keys: string[]): string | n
   return null;
 }
 
+function provenanceArray(vehicle: MatchVehicleInput, key: string): string[] {
+  const prov = vehicle.fieldProvenance;
+  if (!prov || typeof prov !== "object" || Array.isArray(prov)) return [];
+  const raw = (prov as Record<string, unknown>)[key];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is string => typeof v === "string");
+}
+
 function readOptionalVehicleAttr(vehicle: MatchVehicleInput, field: string): string | null {
   if (field === "color") return vehicle.color;
   if (field === "trim") return vehicle.trim;
@@ -235,6 +249,18 @@ function readOptionalVehicleAttr(vehicle: MatchVehicleInput, field: string): str
 
 function readEngineCc(vehicle: MatchVehicleInput): number | null {
   return normalizeEngineDisplacementCc(provenanceValue(vehicle, ["engineDisplacementCc", "engine", "engineCapacity"]));
+}
+
+function buyerReferencePrice(intent: StructuredSearchIntent): number | null {
+  const values = [
+    intent.price?.target,
+    intent.price?.flexibility?.comfortableMax,
+    intent.price?.flexibility?.hardMax,
+  ];
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  }
+  return null;
 }
 
 function pushDimension(
@@ -269,6 +295,42 @@ export function evaluateMatchV2(params: {
   pushDimension(id, dimensions, fits, compromises, unknowns, criticalResults);
   if (id.status === "HARD_FAIL" || id.status === "MISMATCH") return noMatch(params.searchIntentVersionId, dimensions, hardChecks, [id.detail]);
 
+  // Commercial gate: a final match is impossible until BOTH sides supplied a price.
+  // Seller price is specifically the private B2B/dealer price; retail price is never substituted.
+  const buyerPrice = buyerReferencePrice(intent);
+  const sellerPrice = vehicle.b2bPrice;
+  if (buyerPrice == null) {
+    pushDimension(
+      { field: "buyerPrice", importance: "HIGH", fit: 0, status: "UNKNOWN", detail: "מחיר/תקציב המחפש חסר", critical: true },
+      dimensions, fits, compromises, unknowns, criticalResults
+    );
+  }
+  if (sellerPrice == null) {
+    pushDimension(
+      { field: "price", importance: "HIGH", fit: 0, status: "UNKNOWN", detail: "מחיר סוחר פרטי חסר ברכב", critical: true },
+      dimensions, fits, compromises, unknowns, criticalResults
+    );
+  }
+  if (buyerPrice != null && sellerPrice != null) {
+    const maxAllowed = Math.round(buyerPrice * MAX_SELLER_OVER_BUYER_PRICE_RATIO);
+    if (sellerPrice > maxAllowed) {
+      hardChecks.push(`price:seller=${sellerPrice}>buyer+10%=${maxAllowed}`);
+      return noMatch(params.searchIntentVersionId, dimensions, hardChecks, ["מחיר הסוחר גבוה ביותר מ־10% מתקציב המחפש"]);
+    }
+    const withinBudget = sellerPrice <= buyerPrice;
+    pushDimension(
+      {
+        field: "price",
+        importance: "HIGH",
+        fit: withinBudget ? 1 : 0.65,
+        status: withinBudget ? "MATCH" : "PARTIAL",
+        detail: withinBudget ? "מחיר הסוחר בתוך תקציב המחפש" : "מחיר הסוחר עד 10% מעל תקציב המחפש",
+        critical: true,
+      },
+      dimensions, fits, compromises, unknowns, criticalResults
+    );
+  }
+
   const numericDimensions: Array<{
     field: string;
     label: string;
@@ -278,7 +340,6 @@ export function evaluateMatchV2(params: {
     critical: boolean;
   }> = [
     { field: "year", label: "שנתון", value: vehicle.year, dim: intent.year, direction: "min", critical: true },
-    { field: "price", label: "מחיר", value: vehicle.b2bPrice ?? vehicle.retailPrice, dim: intent.price, direction: "max", critical: true },
     { field: "mileage", label: "ק״מ", value: vehicle.mileage, dim: intent.mileage, direction: "max", critical: false },
     { field: "hand", label: "יד", value: vehicle.ownershipHand, dim: intent.hand, direction: "max", critical: true },
   ];
@@ -355,6 +416,7 @@ export function evaluateMatchV2(params: {
     ["color", "צבע", intent.color, false, undefined],
     ["trim", "גימור", intent.trim, false, undefined],
     ["transmission", "גיר", intent.transmission, false, undefined],
+    ["drivetrain", "סוג הנעה", intent.drivetrain, false, undefined],
     ["region", "אזור", intent.region, false, undefined],
   ] as const) {
     const value = readOptionalVehicleAttr(vehicle, field);
@@ -365,6 +427,32 @@ export function evaluateMatchV2(params: {
       hardChecks.push(`${field}:${result.detail}`);
       return noMatch(params.searchIntentVersionId, dimensions, hardChecks, [result.detail]);
     }
+  }
+
+  const vehicleFeatures = new Set(canonicalizeVehicleFeatures(provenanceArray(vehicle, "features")));
+  for (const requirement of intent.featureRequirements ?? []) {
+    if (requirement.importance === "OPEN") continue;
+    const feature = canonicalizeVehicleFeature(requirement.feature);
+    if (!feature) continue;
+    const present = vehicleFeatures.has(feature);
+    const result: DimensionFitResult = present
+      ? {
+          field: `feature:${feature}`,
+          importance: requirement.importance,
+          fit: 1,
+          status: "MATCH",
+          detail: `${vehicleFeatureLabelHe(feature)} קיים ברכב`,
+          critical: requirement.importance === "HARD" || requirement.importance === "VERY_HIGH" || requirement.importance === "HIGH",
+        }
+      : {
+          field: `feature:${feature}`,
+          importance: requirement.importance,
+          fit: 0,
+          status: "UNKNOWN",
+          detail: `לא ידוע אם קיים ${vehicleFeatureLabelHe(feature)}`,
+          critical: requirement.importance === "HARD" || requirement.importance === "VERY_HIGH" || requirement.importance === "HIGH",
+        };
+    pushDimension(result, dimensions, fits, compromises, unknowns, criticalResults);
   }
 
   let weighted = 0;
@@ -417,7 +505,7 @@ export function evaluateMatchV2(params: {
   }
 
   let band: MatchBandV2 = "NO_MATCH";
-  if (score >= 88 && identity && identity.fit >= 0.85 && (!price || price.fit >= 0.65)) band = "STRONG";
+  if (score >= 88 && identity && identity.fit >= 0.85 && price && price.fit >= 0.65) band = "STRONG";
   else if (score >= 72) band = "GOOD";
   else if (score >= 55) band = "ALTERNATIVE";
   if (band === "NO_MATCH") return noMatch(params.searchIntentVersionId, dimensions, hardChecks, ["ציון כולל נמוך"]);

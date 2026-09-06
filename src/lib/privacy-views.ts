@@ -11,6 +11,14 @@ function provenanceValue(provenance: unknown, key: string): string | number | nu
   return null;
 }
 
+function provenanceArray(provenance: unknown, key: string): string[] {
+  if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) return [];
+  const value = (provenance as Record<string, unknown>)[key];
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
+}
+
 export function toBuyerMatchView(vehicle: {
   make: string | null;
   model: string | null;
@@ -42,6 +50,7 @@ export function toBuyerMatchView(vehicle: {
       (provenanceValue(vehicle.fieldProvenance, "fuelType") as string | null),
     engineDisplacementCc:
       (provenanceValue(vehicle.fieldProvenance, "engineDisplacementCc") as number | null) ?? null,
+    features: provenanceArray(vehicle.fieldProvenance, "features"),
     verifiedDealer: true,
     // Explicitly omit: b2bPrice, sellerFloor, dealerId, commercial internals
   };

@@ -8,6 +8,8 @@ import {
 import type { NormalizedVehicle } from "@/lib/schemas/ai";
 import { resolveVehicleThroughExchangeBrain } from "@/services/exchange/vehicle-intelligence";
 import { canonicalizeOwnershipSource } from "@/services/exchange/vehicle-identity";
+import { canonicalizeVehicleFeatures } from "@/services/exchange/vehicle-features";
+import { normalizeVehicleFeaturesWithAi } from "@/services/exchange/vehicle-feature-intelligence";
 
 /** Shared Prisma client (default) or interactive-transaction client */
 export type InventoryDbClient = typeof prisma;
@@ -33,6 +35,7 @@ export type VehicleCreateFields = {
   region: string | null;
   fuelType?: string | null;
   engineDisplacementCc?: number | null;
+  features?: string[];
   fieldProvenance?: unknown;
 };
 
@@ -68,6 +71,7 @@ export async function createVehicleForDealer(input: {
 }) {
   const db = input.db ?? prisma;
   const requireIdentity = input.requireIdentity !== false;
+  const rawFeatureInputs = [...(input.fields?.features ?? [])];
 
   let fields: VehicleCreateFields = {
     make: input.fields?.make ?? null,
@@ -83,6 +87,8 @@ export async function createVehicleForDealer(input: {
     region: input.fields?.region ?? null,
     fuelType: input.fields?.fuelType ?? null,
     engineDisplacementCc: input.fields?.engineDisplacementCc ?? null,
+    // Preserve raw source-language feature text until the AI semantic boundary.
+    features: rawFeatureInputs,
     fieldProvenance: input.fields?.fieldProvenance ?? null,
   };
 
@@ -103,6 +109,7 @@ export async function createVehicleForDealer(input: {
       region: mapped.region,
       fuelType: mapped.fuelType,
       engineDisplacementCc: mapped.engineDisplacementCc,
+      features: [...rawFeatureInputs, ...(mapped.features ?? [])],
       fieldProvenance: mapped.fieldProvenance,
     };
   }
@@ -112,6 +119,8 @@ export async function createVehicleForDealer(input: {
     model: fields.model,
     fuelType: fields.fuelType,
     engineDisplacementCc: fields.engineDisplacementCc,
+    ownershipHand: fields.ownershipHand,
+    ownershipType: fields.ownershipType,
     rawText: input.rawInput,
     userId: input.userId,
   });
@@ -119,7 +128,24 @@ export async function createVehicleForDealer(input: {
   fields.model = identity.model;
   fields.fuelType = identity.fuelType;
   fields.engineDisplacementCc = identity.engineDisplacementCc;
-  fields.ownershipType = canonicalizeOwnershipSource(fields.ownershipType);
+  fields.ownershipHand = identity.ownershipHand;
+  fields.ownershipType = identity.ownershipType ?? canonicalizeOwnershipSource(fields.ownershipType);
+
+  // AI owns semantic feature normalization on every inventory ingress.
+  // Deterministic code only validates/de-duplicates canonical AI output.
+  const featureSourceText = [
+    input.rawInput ?? "",
+    ...(fields.features ?? []),
+  ].filter(Boolean).join("\n");
+  if (featureSourceText) {
+    const normalizedFeatures = await normalizeVehicleFeaturesWithAi({
+      rawText: featureSourceText,
+      userId: input.userId,
+    });
+    fields.features = canonicalizeVehicleFeatures(normalizedFeatures.features);
+  } else {
+    fields.features = [];
+  }
 
   fields.fieldProvenance = {
     ...provenanceObject(fields.fieldProvenance),
@@ -135,14 +161,26 @@ export async function createVehicleForDealer(input: {
           },
         }
       : {}),
+    ...(identity.ownershipHand != null
+      ? {
+          ownershipHand: {
+            value: identity.ownershipHand,
+            status: "known",
+            source: identity.source,
+          },
+        }
+      : {}),
     ...(fields.ownershipType
       ? {
           ownershipType: {
             value: fields.ownershipType,
             status: "known",
-            source: "deterministic",
+            source: identity.source,
           },
         }
+      : {}),
+    ...(fields.features?.length
+      ? { features: fields.features }
       : {}),
     vehicleIdentity: {
       make: identity.make,
@@ -168,7 +206,13 @@ export async function createVehicleForDealer(input: {
     };
   }
 
-  const { fieldProvenance, fuelType: _fuelType, engineDisplacementCc: _engine, ...scalarFields } = fields;
+  const {
+    fieldProvenance,
+    fuelType: _fuelType,
+    engineDisplacementCc: _engine,
+    features: _features,
+    ...scalarFields
+  } = fields;
 
   const vehicle = await db.vehicle.create({
     data: {
@@ -199,6 +243,7 @@ export async function createVehicleForDealer(input: {
       engineDisplacementCc: identity.engineDisplacementCc,
       ownershipHand: vehicle.ownershipHand,
       ownershipType: vehicle.ownershipType,
+      features: fields.features,
       source: input.source ?? "domain",
     },
     idempotencyKey: `inventory-added:${vehicle.id}`,
@@ -246,6 +291,7 @@ export function fieldsFromNormalized(normalized: NormalizedVehicle): VehicleCrea
     region: mapped.region,
     fuelType: mapped.fuelType,
     engineDisplacementCc: mapped.engineDisplacementCc,
+    features: mapped.features,
     fieldProvenance: mapped.fieldProvenance,
   };
 }

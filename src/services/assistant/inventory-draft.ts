@@ -3,13 +3,13 @@ import {
   fuelTypeLabelHe,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
+import {
+  canonicalizeVehicleFeatures,
+  extractVehicleFeaturesFromText,
+  vehicleFeatureLabelHe,
+} from "@/services/exchange/vehicle-features";
 
-/**
- * Structured inventory draft for Agent accompaniment (v2.7).
- * Pure helpers — no DB. Create goes through createVehicleForDealer.
- * Conversational reasoning stays structured — not only in message text.
- */
-
+/** Structured inventory draft for Agent accompaniment. Pure helpers — no DB. */
 export type InventoryGapId =
   | "make"
   | "model"
@@ -41,6 +41,7 @@ export interface InventoryDraftFields {
   region: string | null;
   fuelType: string | null;
   engineDisplacementCc: number | null;
+  features: string[];
 }
 
 export interface PendingInventoryDraft {
@@ -72,6 +73,7 @@ export function emptyDraftFields(): InventoryDraftFields {
     region: null,
     fuelType: null,
     engineDisplacementCc: null,
+    features: [],
   };
 }
 
@@ -99,7 +101,7 @@ function missingIdentityGap(fields: InventoryDraftFields): InventoryGapId | null
 }
 
 function hasDealerPrice(fields: InventoryDraftFields): boolean {
-  return fields.b2bPrice != null || fields.retailPrice != null;
+  return fields.b2bPrice != null;
 }
 
 function hasOwnership(fields: InventoryDraftFields): boolean {
@@ -138,9 +140,7 @@ export function openCommercialGaps(draft: PendingInventoryDraft): InventoryGapId
     engineIsApplicable(f) &&
     f.engineDisplacementCc == null &&
     !wasResolved(draft, "engine_displacement")
-  ) {
-    gaps.push("engine_displacement");
-  }
+  ) gaps.push("engine_displacement");
   if (!hasDealerPrice(f) && !wasResolved(draft, "dealer_price")) gaps.push("dealer_price");
   if (!hasOwnership(f) && !wasResolved(draft, "ownership")) gaps.push("ownership");
   return gaps;
@@ -158,15 +158,12 @@ export function openGaps(fields: InventoryDraftFields): InventoryGapId[] {
 export function gapQuestion(gap: InventoryGapId, fields?: InventoryDraftFields): string {
   switch (gap) {
     case "make": return "חסר לי היצרן. מאיזה יצרן הרכב?";
-    case "model": {
-      const make = fields?.make;
-      return make ? `הבנתי ${make}${fields?.year ? ` ${fields.year}` : ""}. איזה דגם?` : "חסר לי הדגם. איזה דגם?";
-    }
+    case "model": return fields?.make ? `הבנתי ${fields.make}${fields?.year ? ` ${fields.year}` : ""}. איזה דגם?` : "חסר לי הדגם. איזה דגם?";
     case "year": return "חסר לי שנת ייצור. איזו שנה?";
     case "mileage": return "חסר לי קילומטראז׳. כמה יש על הרכב?";
     case "fuel_type": return "איזה סוג הנעה/דלק יש לרכב — בנזין, דיזל, היברידי, פלאג־אין או חשמלי?";
     case "engine_displacement": return "מה נפח המנוע בסמ״ק? למשל 1600. אפשר גם לכתוב 1.6 ליטר.";
-    case "dealer_price": return "באיזה מחיר תרצה להציע את הרכב? אפשר גם להמשיך בלי כרגע.";
+    case "dealer_price": return "באיזה מחיר תרצה להציע את הרכב לסוחר אחר? אפשר גם להמשיך בלי כרגע, אבל לא תיווצר התאמה סופית עד שיוגדר מחיר.";
     case "ownership": return "מה המקור של הרכב — פרטי, ליסינג, השכרה או חברה? ואם יש — איזו יד?";
     case "trim": return "יש רמת גימור שאתה יודע עליה, או להשאיר בלי?";
     case "color": return "יש צבע שכדאי לרשום, או נשאיר בלי?";
@@ -261,6 +258,8 @@ export function parseGapAnswer(
 
 export function parseAmendment(message: string): Partial<InventoryDraftFields> | null {
   const m = message.trim();
+  const features = extractVehicleFeaturesFromText(m);
+  if (features.length) return { features };
   if (
     !/בעצם|תקן|שנה|עדכן|actually|change/i.test(m) &&
     !/ק.?מ|קילומטר|מחיר|לסוחר|b2b|יד|צבע|גימור|בנזין|דיזל|היבריד|פלאג|חשמלי|מנוע|נפח/i.test(m)
@@ -311,7 +310,7 @@ function ownershipLabel(fields: InventoryDraftFields): string | null {
   const parts: string[] = [];
   if (fields.ownershipHand != null) parts.push(`יד ${fields.ownershipHand}`);
   if (fields.ownershipType) {
-    const map: Record<string, string> = { private: "פרטית", leasing: "ליסינג", rental: "השכרה", company: "חברה" };
+    const map: Record<string, string> = { private: "פרטית", PRIVATE: "פרטית", leasing: "ליסינג", LEASING: "ליסינג", rental: "השכרה", RENTAL: "השכרה", company: "חברה", COMPANY: "חברה" };
     parts.push(map[fields.ownershipType] ?? fields.ownershipType);
   }
   return parts.length ? parts.join(" ") : null;
@@ -327,7 +326,8 @@ export function buildStructuredSummary(draft: PendingInventoryDraft): string {
   if (f.engineDisplacementCc != null) lines.push(`מנוע ${fmtNum(f.engineDisplacementCc)} סמ״ק`);
   const own = ownershipLabel(f);
   if (own) lines.push(own);
-  if (f.b2bPrice != null) lines.push(`מחיר ${fmtNum(f.b2bPrice)} ₪`);
+  if (f.features.length) lines.push(`פיצ'רים: ${canonicalizeVehicleFeatures(f.features).map(vehicleFeatureLabelHe).join(", ")}`);
+  if (f.b2bPrice != null) lines.push(`מחיר לסוחר ${fmtNum(f.b2bPrice)} ₪`);
   else if (f.retailPrice != null) lines.push(`מחיר לקוח ${fmtNum(f.retailPrice)} ₪`);
   if (f.color) lines.push(`צבע ${f.color}`);
   return lines.join("\n");
@@ -341,6 +341,7 @@ export function buildCompactSummary(draft: PendingInventoryDraft): string {
   if (f.mileage != null) bits.push(`${fmtNum(f.mileage)} ק״מ`);
   if (f.fuelType) bits.push(fuelTypeLabelHe(f.fuelType) ?? f.fuelType);
   if (f.engineDisplacementCc != null) bits.push(`${fmtNum(f.engineDisplacementCc)} סמ״ק`);
+  if (f.features.length) bits.push(canonicalizeVehicleFeatures(f.features).map(vehicleFeatureLabelHe).join(", "));
   if (f.b2bPrice != null) bits.push(`מחיר ${fmtNum(f.b2bPrice)}`);
   return bits.join(" · ");
 }
@@ -350,7 +351,9 @@ export function canConfirm(draft: PendingInventoryDraft): boolean {
 }
 
 export function applyFields(draft: PendingInventoryDraft, patch: Partial<InventoryDraftFields>): PendingInventoryDraft {
-  return { ...draft, status: "DRAFT", fields: { ...draft.fields, ...patch } };
+  const merged = { ...draft.fields, ...patch };
+  if (patch.features) merged.features = canonicalizeVehicleFeatures([...(draft.fields.features ?? []), ...patch.features]);
+  return { ...draft, status: "DRAFT", fields: merged };
 }
 
 export function markGapAsked(draft: PendingInventoryDraft, gap: InventoryGapId): PendingInventoryDraft {
@@ -400,6 +403,7 @@ export function identityPartialMessage(fields: InventoryDraftFields): string {
   if (fields.mileage != null) known.push(`עם ${fmtNum(fields.mileage)} ק״מ`);
   if (fields.fuelType) known.push(fuelTypeLabelHe(fields.fuelType) ?? fields.fuelType);
   if (fields.engineDisplacementCc != null) known.push(`מנוע ${fmtNum(fields.engineDisplacementCc)} סמ״ק`);
+  if (fields.features.length) known.push(canonicalizeVehicleFeatures(fields.features).map(vehicleFeatureLabelHe).join(", "));
   if (fields.b2bPrice != null) known.push(`מחיר ${fmtNum(fields.b2bPrice)} ₪`);
   else if (fields.retailPrice != null) known.push(`מחיר ${fmtNum(fields.retailPrice)} ₪`);
   if (fields.color) known.push(`צבע ${fields.color}`);

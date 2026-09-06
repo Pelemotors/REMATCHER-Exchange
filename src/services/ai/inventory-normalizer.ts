@@ -20,6 +20,10 @@ import {
   canonicalizeFuelType,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
+import {
+  canonicalizeVehicleFeatures,
+  extractVehicleFeaturesFromText,
+} from "@/services/exchange/vehicle-features";
 
 const SYSTEM_PROMPT = `${INVENTORY_COMMERCIAL_PLAYBOOK}
 
@@ -33,6 +37,8 @@ Rules (CRITICAL):
 - ownershipType: private | leasing | rental | company when stated.
 - fuelType: return one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER only when stated.
 - engineDisplacementCc: integer cubic centimeters only when stated; 1.6L means 1600, 2.0 means 2000 in engine context.
+- features: include only explicitly stated special equipment / drivetrain features. Canonical examples: AWD_4X4, SUNROOF, PANORAMIC_ROOF, LEATHER_SEATS, ELECTRIC_SEATS, HEATED_SEATS, VENTILATED_SEATS, ADAPTIVE_CRUISE, LANE_ASSIST, BLIND_SPOT_MONITOR, PARKING_SENSORS, REAR_CAMERA, SURROUND_CAMERA, TOW_BAR.
+- 4x4 / AWD / 4WD / הנעה כפולה => AWD_4X4. חלון בגג / sunroof => SUNROOF. גג פנורמי => PANORAMIC_ROOF.
 - Return structured JSON only.`;
 
 const RESPONSE_SCHEMA = {
@@ -51,6 +57,7 @@ const RESPONSE_SCHEMA = {
     region: JSON_SCHEMA_STATUS_FIELD,
     fuelType: JSON_SCHEMA_STATUS_FIELD,
     engineDisplacementCc: JSON_SCHEMA_STATUS_FIELD,
+    features: { type: "array", items: { type: "string" } },
     ambiguities: { type: "array", items: { type: "string" } },
     rawSummary: { type: "string" },
   },
@@ -68,6 +75,7 @@ const RESPONSE_SCHEMA = {
     "region",
     "fuelType",
     "engineDisplacementCc",
+    "features",
     "ambiguities",
     "rawSummary",
   ],
@@ -151,6 +159,7 @@ export function normalizeVehicleFallback(rawInput: string): NormalizedVehicle {
     ownershipType: knownStr(ownershipType),
     fuelType: knownStr(parseFuelFromText(rawInput)),
     engineDisplacementCc: knownNum(parseEngineFromText(rawInput)),
+    features: extractVehicleFeaturesFromText(rawInput),
     ambiguities: [],
     rawSummary: rawInput,
   };
@@ -207,6 +216,10 @@ export async function normalizeVehicle(
         parsed.engineDisplacementCc,
         fb.engineDisplacementCc
       ),
+      features: canonicalizeVehicleFeatures([
+        ...(parsed.features ?? []),
+        ...(fb.features ?? []),
+      ]),
     });
   } catch {
     return normalizeVehicleFallback(rawInput);
@@ -228,6 +241,7 @@ export function normalizedToVehicleFields(normalized: NormalizedVehicle) {
     region: extractKnownString(normalized.region),
     fuelType: extractKnownString(normalized.fuelType),
     engineDisplacementCc: extractKnownNumber(normalized.engineDisplacementCc),
+    features: canonicalizeVehicleFeatures(normalized.features ?? []),
     fieldProvenance: normalized,
   };
 }

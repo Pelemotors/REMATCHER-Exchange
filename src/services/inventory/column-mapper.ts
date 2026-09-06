@@ -1,4 +1,7 @@
-/** Deterministic column header / content → vehicle field mapping */
+/** Deterministic column header / content → vehicle field mapping.
+ * Semantic normalization of vehicle features is intentionally NOT done here;
+ * raw feature text is forwarded to the Exchange AI brain at persistence time.
+ */
 import {
   canonicalizeFuelType,
   canonicalizeOwnershipSource,
@@ -9,7 +12,7 @@ import {
 export type VehicleImportField =
   | "make" | "model" | "trim" | "year" | "mileage" | "color"
   | "b2bPrice" | "retailPrice" | "region" | "ownershipHand" | "ownershipType"
-  | "fuelType" | "engineDisplacementCc" | "dealerRefId" | "licensePlate" | "vin";
+  | "fuelType" | "engineDisplacementCc" | "features" | "dealerRefId" | "licensePlate" | "vin";
 
 const ALIASES: Record<VehicleImportField, string[]> = {
   make:["make","manufacturer","brand","יצרן","יצר","מותג","תוצרת"],
@@ -25,6 +28,7 @@ const ALIASES: Record<VehicleImportField, string[]> = {
   ownershipType:["ownership type","ownership source","source","originality","מקוריות","מקור","סוג בעלות","בעלות קודמת"],
   fuelType:["fuel","fuel type","powertrain","propulsion","דלק","סוג דלק","הנעה","סוג הנעה"],
   engineDisplacementCc:["engine","engine cc","engine capacity","engine displacement","engine displacement cc","cc","נפח מנוע","סמק",'סמ"ק',"סמ״ק"],
+  features:["features","feature","equipment","extras","options","special equipment","אבזור","איבזור","תוספות","פיצרים","פיצ'רים","ציוד","אבזור מיוחד","תוספות מיוחדות","drivetrain","4x4"],
   dealerRefId:["id","ref","code","stock","stock id","מזהה","קוד","מספר פנימי","מס מלאי","מספר מלאי"],
   licensePlate:["plate","license","license plate","registration","מספר רישוי","מס רישוי","מספר רכב","לוחית","רישוי"],
   vin:["vin","chassis","מספר שלדה","מס שלדה","שלדה"],
@@ -68,10 +72,14 @@ export function parseNumber(v:unknown):number|null{
   const n=numeric(v);return n!=null?Math.round(n):null;
 }
 
-export function parseRow(row:unknown[],m:Partial<Record<VehicleImportField,number>>):Record<VehicleImportField,string|number|null>{
+export type ParsedImportRow = Record<Exclude<VehicleImportField,"features">,string|number|null> & { features:string[] };
+
+export function parseRow(row:unknown[],m:Partial<Record<VehicleImportField,number>>):ParsedImportRow{
   const get=(f:VehicleImportField)=>{const i=m[f];if(i===undefined)return null;const r=row[i];return r==null||cleanText(r)===""?null:r as string|number};
   const text=(f:VehicleImportField)=>get(f)!=null?cleanText(get(f)):null;
   const canonical=canonicalizeVehicleIdentity({make:text("make"),model:text("model")});
+  const featureCell=text("features");
+  const features=featureCell?featureCell.split(/[,;|]+/).map(v=>v.trim()).filter(Boolean):[];
   return{
     make:canonical.make,
     model:canonical.model,
@@ -86,6 +94,7 @@ export function parseRow(row:unknown[],m:Partial<Record<VehicleImportField,numbe
     ownershipType:canonicalizeOwnershipSource(text("ownershipType")),
     fuelType:canonicalizeFuelType(text("fuelType")),
     engineDisplacementCc:normalizeEngineDisplacementCc(get("engineDisplacementCc")),
+    features,
     dealerRefId:text("dealerRefId"),
     licensePlate:text("licensePlate")?.replace(/[-\s]/g,"")??null,
     vin:text("vin")?.replace(/\s/g,"").toUpperCase()??null,

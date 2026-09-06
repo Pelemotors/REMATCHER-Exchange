@@ -14,22 +14,27 @@ import {
   canonicalizeOwnershipSource,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
+import {
+  canonicalizeVehicleFeatures,
+  extractVehicleFeaturesFromText,
+  vehicleFeatureLabelHe,
+} from "@/services/exchange/vehicle-features";
 
 const SYSTEM_PROMPT = `You parse Hebrew/English natural language vehicle demand for a B2B dealer exchange.
 Rules (CRITICAL):
 - NEVER invent constraints the user did not state (I-08). Knowledge about vehicles must NOT become mandatory constraints.
 - If information is not stated, mark field status as "unknown" or list in ambiguities.
-- Field status must be exactly one of: "known", "unknown", "ambiguous". Never use other status labels.
-- Normalize make/model to canonical international names, but the Exchange vehicle-intelligence layer will make the final identity decision.
-- fuelType: when explicitly stated return one of GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN, OTHER.
+- Field status must be exactly one of "known", "unknown", "ambiguous".
+- Normalize make/model to canonical international names, but the Exchange vehicle-intelligence layer makes the final identity decision.
+- fuelType: when explicitly stated return GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN or OTHER.
 - engineDisplacementCc: when explicitly stated return integer cc; 1.6L = 1600. Never infer engine size from model knowledge.
-- ownershipHand: when explicitly stated return integer hand number. "יד 2" = 2. Never infer it.
-- ownershipType: when explicitly stated normalize private/פרטי, leasing/ליסינג, rental/השכרה, company/חברה, trade-in/טרייד אין.
-- Explicit fuel/engine/hand/ownership requirements must also be represented in hardConstraints when the dealer says they are mandatory, otherwise softPreferences.
-- Color exclusions must use exclusions[] with field "color", description in Hebrew, value in English (e.g. red, white, black). Also list English value in colorExclusions.
-- Distinguish hardConstraints (explicit must-have), softPreferences (nice-to-have), exclusions (explicit not-wanted).
-- Budget in ILS unless stated otherwise.
-- Year "22" means 2022.
+- ownershipHand: when explicitly stated return integer hand number. Never infer it.
+- ownershipType: normalize private/פרטי, leasing/ליסינג, rental/השכרה, company/חברה, trade-in/טרייד אין.
+- features: include only explicitly requested special equipment/drivetrain features. Canonical examples: AWD_4X4, SUNROOF, PANORAMIC_ROOF, LEATHER_SEATS, ELECTRIC_SEATS, HEATED_SEATS, VENTILATED_SEATS, ADAPTIVE_CRUISE, LANE_ASSIST, BLIND_SPOT_MONITOR, PARKING_SENSORS, REAR_CAMERA, SURROUND_CAMERA, TOW_BAR.
+- Explicit fuel/engine/hand/ownership/feature requirements must also be represented in hardConstraints when mandatory, otherwise softPreferences.
+- Color exclusions must use exclusions[] with field "color" and canonical English value.
+- Distinguish hardConstraints, softPreferences and exclusions.
+- Budget in ILS unless stated otherwise. Year "22" means 2022.
 - Return structured JSON only.`;
 
 const RESPONSE_SCHEMA = {
@@ -47,6 +52,7 @@ const RESPONSE_SCHEMA = {
     engineDisplacementCc: JSON_SCHEMA_STATUS_FIELD,
     ownershipHand: JSON_SCHEMA_STATUS_FIELD,
     ownershipType: JSON_SCHEMA_STATUS_FIELD,
+    features: { type: "array", items: { type: "string" } },
     colorExclusions: { type: "array", items: { type: "string" } },
     colorPreferences: { type: "array", items: { type: "string" } },
     hardConstraints: { type: "array", items: JSON_SCHEMA_CONSTRAINT_ITEM },
@@ -58,7 +64,7 @@ const RESPONSE_SCHEMA = {
   required: [
     "make", "model", "yearMin", "yearMax", "budgetMax", "trimPreference",
     "mileageMax", "seatsMin", "fuelType", "engineDisplacementCc", "ownershipHand",
-    "ownershipType", "colorExclusions", "colorPreferences", "hardConstraints",
+    "ownershipType", "features", "colorExclusions", "colorPreferences", "hardConstraints",
     "softPreferences", "exclusions", "ambiguities", "rawSummary",
   ],
   additionalProperties: false,
@@ -67,6 +73,12 @@ const RESPONSE_SCHEMA = {
 function maybePushSoftConstraint(result: ParsedDemand, field: string, value: unknown, description: string) {
   if (result.softPreferences.some((x) => x.field === field) || result.hardConstraints.some((x) => x.field === field)) return;
   result.softPreferences.push({ field, value, description });
+}
+
+function featureIsMandatory(rawText: string, label: string): boolean {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(?:חייב|חובה|רק|must|required)[^,.]{0,24}${escaped}|${escaped}[^,.]{0,24}(?:חייב|חובה|must|required)`, "i");
+  return re.test(rawText);
 }
 
 /** Fallback parser when OpenAI unavailable — minimal, bilingual, no invented constraints */
@@ -106,7 +118,7 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     result.yearMin = { value: y < 100 ? 2000 + y : y, status: "known" };
   }
 
-  const budgetMatch = text.match(/(?:עד|max|up to)\s*(\d+)/);
+  const budgetMatch = text.match(/(?:עד|max|up to|תקציב)\s*[:=]?\s*(\d+)/);
   if (budgetMatch) {
     let budget = parseInt(budgetMatch[1], 10);
     if (budget < 1000) budget *= 1000;
@@ -151,6 +163,16 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     }
   }
 
+  const features = extractVehicleFeaturesFromText(rawText);
+  if (features.length) {
+    result.features = features;
+    for (const feature of features) {
+      const label = vehicleFeatureLabelHe(feature);
+      const target = featureIsMandatory(rawText, label) ? result.hardConstraints : result.softPreferences;
+      target.push({ field: "feature", description: `${label}${target === result.hardConstraints ? " חובה" : ""}`, value: feature });
+    }
+  }
+
   if (text.includes("לא אדום") || text.includes("not red")) {
     result.exclusions.push({ field: "color", description: "לא אדום", value: "red" });
   }
@@ -176,6 +198,11 @@ const COLOR_CANONICAL: Record<string, string> = {
 
 async function sanitizeParsedDemand(data: unknown, rawText: string, userId?: string): Promise<ParsedDemand> {
   const copy = { ...(data as ParsedDemand) };
+  copy.hardConstraints = copy.hardConstraints ?? [];
+  copy.softPreferences = copy.softPreferences ?? [];
+  copy.exclusions = copy.exclusions ?? [];
+  copy.ambiguities = copy.ambiguities ?? [];
+
   const fields = [
     "make", "model", "yearMin", "yearMax", "budgetMax", "trimPreference", "mileageMax", "seatsMin",
     "fuelType", "engineDisplacementCc", "ownershipHand", "ownershipType",
@@ -190,6 +217,8 @@ async function sanitizeParsedDemand(data: unknown, rawText: string, userId?: str
     model: copy.model?.status === "known" ? String(copy.model.value ?? "") : null,
     fuelType: copy.fuelType?.status === "known" ? String(copy.fuelType.value ?? "") : null,
     engineDisplacementCc: copy.engineDisplacementCc?.status === "known" ? copy.engineDisplacementCc.value as number | string | null : null,
+    ownershipHand: copy.ownershipHand?.status === "known" ? copy.ownershipHand.value as number | string | null : null,
+    ownershipType: copy.ownershipType?.status === "known" ? String(copy.ownershipType.value ?? "") : null,
     rawText,
     userId,
   });
@@ -197,33 +226,33 @@ async function sanitizeParsedDemand(data: unknown, rawText: string, userId?: str
   if (identity.model) copy.model = { value: identity.model, status: "known", source: "ai" };
   if (identity.fuelType) copy.fuelType = { value: identity.fuelType, status: "known", source: "ai" };
   if (identity.engineDisplacementCc != null) copy.engineDisplacementCc = { value: identity.engineDisplacementCc, status: "known", source: "ai" };
-
-  if (copy.ownershipType?.status === "known") {
-    const ownership = canonicalizeOwnershipSource(String(copy.ownershipType.value ?? ""));
-    if (ownership) copy.ownershipType = { value: ownership, status: "known", source: "ai" };
-  }
-  if (copy.ownershipHand?.status === "known") {
-    const hand = Number(copy.ownershipHand.value);
-    if (Number.isFinite(hand) && hand >= 1 && hand <= 9) {
-      copy.ownershipHand = { value: hand, status: "known", source: copy.ownershipHand.source as "user" | "ai" | "inferred" | undefined };
-    } else {
-      copy.ownershipHand = { value: null, status: "unknown" };
-    }
-  }
+  if (identity.ownershipHand != null) copy.ownershipHand = { value: identity.ownershipHand, status: "known", source: "ai" };
+  if (identity.ownershipType) copy.ownershipType = { value: identity.ownershipType, status: "known", source: "ai" };
 
   const colorExclusions = (copy.colorExclusions ?? []).map((c) => {
     const lower = c.toLowerCase();
     return COLOR_CANONICAL[c] ?? COLOR_CANONICAL[lower] ?? c;
   });
   copy.colorExclusions = colorExclusions;
-  if (colorExclusions.length > 0 && (!copy.exclusions || copy.exclusions.length === 0)) {
+  if (colorExclusions.length > 0 && copy.exclusions.length === 0) {
     copy.exclusions = colorExclusions.map((c) => ({ field: "color", description: `לא ${c}`, value: c }));
   }
+
+  copy.features = canonicalizeVehicleFeatures([
+    ...(copy.features ?? []),
+    ...extractVehicleFeaturesFromText(rawText),
+  ]);
 
   if (copy.fuelType?.status === "known") maybePushSoftConstraint(copy, "fuel", copy.fuelType.value, `סוג דלק/הנעה ${copy.fuelType.value}`);
   if (copy.engineDisplacementCc?.status === "known") maybePushSoftConstraint(copy, "engineDisplacementCc", copy.engineDisplacementCc.value, `נפח מנוע ${copy.engineDisplacementCc.value} סמ״ק`);
   if (copy.ownershipHand?.status === "known") maybePushSoftConstraint(copy, "hand", copy.ownershipHand.value, `יד ${copy.ownershipHand.value}`);
   if (copy.ownershipType?.status === "known") maybePushSoftConstraint(copy, "ownershipSource", copy.ownershipType.value, `מקוריות ${copy.ownershipType.value}`);
+  for (const feature of copy.features ?? []) {
+    if (!copy.hardConstraints.some((x) => x.field === "feature" && x.value === feature) &&
+        !copy.softPreferences.some((x) => x.field === "feature" && x.value === feature)) {
+      maybePushSoftConstraint(copy, "feature", feature, vehicleFeatureLabelHe(feature));
+    }
+  }
 
   return parsedDemandSchema.parse(copy);
 }

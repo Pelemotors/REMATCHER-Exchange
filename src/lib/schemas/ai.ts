@@ -19,6 +19,7 @@ export const parsedDemandSchema = z.object({
   engineDisplacementCc: fieldValueSchema.optional(),
   ownershipHand: fieldValueSchema.optional(),
   ownershipType: fieldValueSchema.optional(),
+  features: z.array(z.string()).optional(),
   colorExclusions: z.array(z.string()).optional(),
   colorPreferences: z.array(z.string()).optional(),
   hardConstraints: z.array(
@@ -62,6 +63,7 @@ export const normalizedVehicleSchema = z.object({
   region: fieldValueSchema.optional(),
   fuelType: fieldValueSchema.optional(),
   engineDisplacementCc: fieldValueSchema.optional(),
+  features: z.array(z.string()).optional(),
   ambiguities: z.array(z.string()),
   rawSummary: z.string().optional(),
 });

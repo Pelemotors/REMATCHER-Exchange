@@ -6,6 +6,7 @@ import {
   mapHeaders,
   parseRow,
   type VehicleImportField,
+  type ParsedImportRow,
 } from "./column-mapper";
 import { createVehicleForDealer } from "./create-vehicle";
 import { updateVehicleForDealer } from "./update-vehicle";
@@ -13,7 +14,7 @@ import { markVehicleSoldForDealer } from "./mark-sold";
 
 export interface ImportRowPreview {
   rowIndex: number;
-  fields: Record<VehicleImportField, string | number | null>;
+  fields: ParsedImportRow;
   valid: boolean;
   warnings: string[];
   duplicateOfVehicleId: string | null;
@@ -135,6 +136,7 @@ export async function buildImportPreview(params: {
     if (fields.fuelType !== "ELECTRIC" && fields.fuelType !== "HYDROGEN" && !fields.engineDisplacementCc) {
       warnings.push("נפח מנוע חסר — הסוכן ישלים לפי צורך");
     }
+    if (!fields.b2bPrice) warnings.push("מחיר סוחר חסר — לא תיווצר התאמה סופית עד שיושלם");
     const dup = findDuplicate(fields, existing);
     if (dup?.confidence === "low") warnings.push("ייתכן כפילות — ייווצר רכב חדש");
     const valid = rowHasMinimum(fields);
@@ -228,6 +230,7 @@ export async function confirmImport(params: {
       ownershipType: (row.fields.ownershipType as string | null) ?? null,
       fuelType: (row.fields.fuelType as string | null) ?? null,
       engineDisplacementCc: (row.fields.engineDisplacementCc as number | null) ?? null,
+      features: row.fields.features ?? [],
     };
 
     if (row.duplicateOfVehicleId && row.duplicateConfidence !== "low") {
