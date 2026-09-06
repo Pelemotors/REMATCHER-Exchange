@@ -24,16 +24,28 @@ export async function requireVerifiedDealer() {
   if ("error" in result) return result;
 
   const { session } = result;
-  if (!session.user.emailVerifiedAt) {
-    return { error: "Email not verified" as const, status: 403 as const };
-  }
+  const dealerId = session.user.dealerId!;
 
-  const dealer = await prisma.dealer.findUnique({
-    where: { id: session.user.dealerId! },
-    select: { verificationStatus: true, isActive: true },
+  const membership = await prisma.dealerMembership.findUnique({
+    where: {
+      userId_dealerId: {
+        userId: session.user.id,
+        dealerId,
+      },
+    },
+    select: {
+      user: { select: { emailVerifiedAt: true } },
+      dealer: { select: { verificationStatus: true, isActive: true } },
+    },
   });
 
-  if (!dealer || dealer.verificationStatus !== "VERIFIED" || !dealer.isActive) {
+  if (!membership?.user.emailVerifiedAt) {
+    return { error: "Email not verified" as const, status: 403 as const };
+  }
+  if (
+    membership.dealer.verificationStatus !== "VERIFIED" ||
+    !membership.dealer.isActive
+  ) {
     return { error: "Dealer not verified" as const, status: 403 as const };
   }
   return { session };
