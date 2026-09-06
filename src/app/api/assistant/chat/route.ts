@@ -3,52 +3,31 @@ import { requireVerifiedDealer } from "@/lib/auth-guards";
 import { runExchangeAssistantV2 } from "@/services/assistant/v2-orchestrator";
 import { logAppEvent } from "@/services/notifications";
 import type { ConversationState } from "@/services/assistant/conversation-state";
+import { isConfirmation, isRejection } from "@/services/assistant/conversation-state";
+import { prisma } from "@/lib/prisma";
+import { toPrismaJson } from "@/lib/prisma-json";
+import { confirmImport } from "@/services/inventory/import";
 
-export async function POST(req: Request) {
-  const authResult = await requireVerifiedDealer();
-  if ("error" in authResult) {
-    return NextResponse.json(
-      { error: authResult.error },
-      { status: authResult.status }
-    );
-  }
+const TOPIC = "agent_conversation_state_v1";
+async function loadState(dealerId:string):Promise<ConversationState|undefined>{const row=await prisma.dealerMemoryItem.findFirst({where:{dealerId,topicKey:TOPIC,status:"ACTIVE"},orderBy:{updatedAt:"desc"}});return (row?.details as {state?:ConversationState}|null)?.state;}
+async function saveState(dealerId:string,state:ConversationState|undefined){if(!state)return;const existing=await prisma.dealerMemoryItem.findFirst({where:{dealerId,topicKey:TOPIC,status:"ACTIVE"},orderBy:{updatedAt:"desc"}});const details=toPrismaJson({state});if(existing)await prisma.dealerMemoryItem.update({where:{id:existing.id},data:{summary:"Operational personal-agent conversation state",details,confidence:1}});else await prisma.dealerMemoryItem.create({data:{dealerId,topicKey:TOPIC,kind:"TEMPORARY",status:"ACTIVE",provenance:"SYSTEM_DERIVED",summary:"Operational personal-agent conversation state",details,confidence:1}});}
 
-  const { message, context, conversation } = (await req.json()) as {
-    message?: string;
-    context?: {
-      route: string;
-      entityType?: string;
-      entityId?: string;
-      entityLabel?: string;
-      surface?: string;
-      mode?: "inventory_management";
-      vehicleId?: string;
-      demandId?: string;
-      matchId?: string;
-    };
-    conversation?: ConversationState;
-  };
+export async function GET(){const a=await requireVerifiedDealer();if("error" in a)return NextResponse.json({error:a.error},{status:a.status});const state=await loadState(a.session.user.dealerId!);return NextResponse.json({conversation:state??{},recentTurns:state?.recentTurns??[]});}
 
-  if (!message?.trim()) {
-    return NextResponse.json({ error: "Message required" }, { status: 400 });
-  }
-
-  await logAppEvent({
-    eventType: "assistant_opened",
-    dealerId: authResult.session.user.dealerId!,
-    metadata: { userId: authResult.session.user.id },
-  });
-
-  const response = await runExchangeAssistantV2({
-    dealerId: authResult.session.user.dealerId!,
-    userId: authResult.session.user.id,
-    message: message.trim(),
-    context: context ?? { route: "/" },
-    conversation,
-  });
-
-  return NextResponse.json({
-    ...response,
-    agentVersion: response.meta?.agentVersion ?? "2.3",
-  });
+export async function POST(req:Request){
+ const a=await requireVerifiedDealer();if("error" in a)return NextResponse.json({error:a.error},{status:a.status});const dealerId=a.session.user.dealerId!;
+ const {message,context,conversation}=await req.json() as {message?:string;context?:{route:string;entityType?:string;entityId?:string;entityLabel?:string;surface?:string;mode?:"inventory_management";vehicleId?:string;demandId?:string;matchId?:string};conversation?:ConversationState};
+ if(!message?.trim())return NextResponse.json({error:"Message required"},{status:400});
+ const stored=await loadState(dealerId);const active=conversation&&Object.keys(conversation).length?conversation:stored;
+ await logAppEvent({eventType:"assistant_opened",dealerId,metadata:{userId:a.session.user.id}});
+ if(/בדוק את קובץ המלאי שהעליתי|בדיקת קובץ מלאי/i.test(message.trim())){
+  const job=await prisma.inventoryImport.findFirst({where:{dealerId,status:"PREVIEW"},orderBy:{createdAt:"desc"}});if(!job)return NextResponse.json({intent:"UPDATE_INVENTORY",message:"לא מצאתי קובץ מלאי שממתין לבדיקה.",conversation:active??{},agentVersion:"2.4"});
+  const p=job.previewJson as unknown as {rows?:Array<{valid?:boolean;warnings?:string[];duplicateOfVehicleId?:string|null}>};const rows=p.rows??[];const valid=rows.filter(r=>r.valid).length;const attention=rows.filter(r=>(r.warnings?.length??0)>0).length;const duplicates=rows.filter(r=>r.duplicateOfVehicleId).length;const text=`קלטתי ${rows.length} שורות: ${valid} תקינות, ${attention} דורשות תשומת לב${duplicates?`, ${duplicates} מזוהות כעדכון קיים`:""}. רק שורות תקינות ייקלטו. לא אסמן רכבים חסרים כנמכרו. לאשר את הקליטה?`;
+  const next:ConversationState={...(active??{}),pendingConfirmation:{action:"confirm_inventory_import",label:"אשר קליטת מלאי",payload:{importId:job.id}},goal:"inventory_import_review",recentTurns:[...((active?.recentTurns)??[]),{role:"user",text:"בדיקת קובץ מלאי"},{role:"assistant",text}].slice(-12)};await saveState(dealerId,next);return NextResponse.json({intent:"UPDATE_INVENTORY",message:text,requiresConfirmation:next.pendingConfirmation,conversation:next,agentVersion:"2.4"});
+ }
+ if(active?.pendingConfirmation?.action==="confirm_inventory_import"){
+  if(isRejection(message)){const next:ConversationState={...active,pendingConfirmation:undefined,goal:undefined};await saveState(dealerId,next);return NextResponse.json({intent:"UPDATE_INVENTORY",message:"ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.",conversation:next,agentVersion:"2.4"});}
+  if(isConfirmation(message)){const importId=String(active.pendingConfirmation.payload.importId??"");const result=await confirmImport({dealerId,importId,markMissingAsSold:false});const text=`בוצע. ${result.created} רכבים חדשים נקלטו ו-${result.updated} עודכנו. המלאי כבר זמין ל-matching ולסוכן האישי.`;const next:ConversationState={...active,pendingConfirmation:undefined,goal:undefined,recentTurns:[...(active.recentTurns??[]),{role:"user",text:message},{role:"assistant",text}].slice(-12)};await saveState(dealerId,next);return NextResponse.json({intent:"UPDATE_INVENTORY",message:text,conversation:next,agentVersion:"2.4"});}
+ }
+ const response=await runExchangeAssistantV2({dealerId,userId:a.session.user.id,message:message.trim(),context:context??{route:"/"},conversation:active});await saveState(dealerId,response.conversation);return NextResponse.json({...response,agentVersion:response.meta?.agentVersion??"2.4"});
 }
