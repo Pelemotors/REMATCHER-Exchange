@@ -28,9 +28,9 @@ export interface InventoryDraftFields {
   /** Canonical legacy storage slot for the one asking price. */
   b2bPrice: number | null;
   region: string | null;
-  fuelType: string | null;
-  engineDisplacementCc: number | null;
-  features: string[];
+  fuelType?: string | null;
+  engineDisplacementCc?: number | null;
+  features?: string[];
 }
 
 export interface PendingInventoryDraft {
@@ -226,7 +226,7 @@ export function buildStructuredSummary(draft: PendingInventoryDraft): string {
   if (f.fuelType) lines.push(fuelTypeLabelHe(f.fuelType) ?? f.fuelType);
   if (f.engineDisplacementCc != null) lines.push(`מנוע ${fmtNum(f.engineDisplacementCc)} סמ״ק`);
   const own = ownershipLabel(f); if (own) lines.push(own);
-  if (f.features.length) lines.push(`פיצ'רים: ${canonicalizeVehicleFeatures(f.features).map(vehicleFeatureLabelHe).join(", ")}`);
+  if ((f.features ?? []).length) lines.push(`פיצ'רים: ${canonicalizeVehicleFeatures(f.features ?? []).map(vehicleFeatureLabelHe).join(", ")}`);
   const price = askingPrice(f); if (price != null) lines.push(`מחיר מבוקש ${fmtNum(price)} ₪`);
   if (f.color) lines.push(`צבע ${f.color}`);
   return lines.join("\n");
@@ -238,7 +238,7 @@ export function buildCompactSummary(draft: PendingInventoryDraft): string {
   if (f.mileage != null) bits.push(`${fmtNum(f.mileage)} ק״מ`);
   if (f.fuelType) bits.push(fuelTypeLabelHe(f.fuelType) ?? f.fuelType);
   if (f.engineDisplacementCc != null) bits.push(`${fmtNum(f.engineDisplacementCc)} סמ״ק`);
-  if (f.features.length) bits.push(canonicalizeVehicleFeatures(f.features).map(vehicleFeatureLabelHe).join(", "));
+  if ((f.features ?? []).length) bits.push(canonicalizeVehicleFeatures(f.features ?? []).map(vehicleFeatureLabelHe).join(", "));
   const price = askingPrice(f); if (price != null) bits.push(`מחיר מבוקש ${fmtNum(price)}`);
   return bits.join(" · ");
 }
@@ -288,7 +288,7 @@ export function identityPartialMessage(fields: InventoryDraftFields): string {
   if (fields.mileage != null) known.push(`עם ${fmtNum(fields.mileage)} ק״מ`);
   if (fields.fuelType) known.push(fuelTypeLabelHe(fields.fuelType) ?? fields.fuelType);
   if (fields.engineDisplacementCc != null) known.push(`מנוע ${fmtNum(fields.engineDisplacementCc)} סמ״ק`);
-  if (fields.features.length) known.push(canonicalizeVehicleFeatures(fields.features).map(vehicleFeatureLabelHe).join(", "));
+  if ((fields.features ?? []).length) known.push(canonicalizeVehicleFeatures(fields.features ?? []).map(vehicleFeatureLabelHe).join(", "));
   const price = askingPrice(fields); if (price != null) known.push(`מחיר מבוקש ${fmtNum(price)} ₪`);
   if (fields.color) known.push(`צבע ${fields.color}`);
   const prefix = known.length > 0 ? `הבנתי ${known.join(", ")}. ` : "הבנתי חלק מהפרטים. ";

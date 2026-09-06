@@ -39,7 +39,7 @@ export type DimensionFitResult = {
 };
 
 export type MatchEvaluationV2 = {
-  engineVersion: typeof MATCH_ENGINE_VERSION;
+  engineVersion: string;
   band: MatchBandV2 | null;
   resolutionState: CandidateResolutionState;
   score: number;
