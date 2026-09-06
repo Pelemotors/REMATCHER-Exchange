@@ -10,6 +10,7 @@ import {
   fuelTypeLabelHe,
   ownershipSourceLabelHe,
 } from "@/services/exchange/vehicle-identity";
+import { vehicleFeatureLabelHe } from "@/services/exchange/vehicle-features";
 import styles from "./match-card-v2.module.css";
 
 export interface MatchCardV2Props {
@@ -29,6 +30,7 @@ export interface MatchCardV2Props {
     ownershipType?: string | null;
     fuelType?: string | null;
     engineDisplacementCc?: number | null;
+    features?: string[];
   };
   band?: "STRONG" | "GOOD" | "ALTERNATIVE" | null;
   onInterested?: () => void;
@@ -71,6 +73,7 @@ export function MatchCardV2({
 }: MatchCardV2Props) {
   const isStrong = band === "STRONG";
   const displayHeadline = headline || COPY.matchPossible;
+  const features = (vehicle.features ?? []).map(vehicleFeatureLabelHe);
 
   return (
     <Surface depth="raised" as="article" className={cn(styles.card,isStrong && styles.cardStrong,loading && styles.loadingOverlay)}>
@@ -78,6 +81,11 @@ export function MatchCardV2({
         <div className={styles.vehicleBlock}>
           <h3 className={styles.vehicleTitle}>{[vehicle.make, vehicle.model].filter(Boolean).join(" ") || "רכב"}</h3>
           <p className="mt-1 text-small text-v2-text-secondary">{vehicleMetaLine(vehicle)}</p>
+          {features.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {features.map((feature) => <BadgeV2 key={feature} variant="neutral">{feature}</BadgeV2>)}
+            </div>
+          )}
           <div className={cn(styles.metaRow, "mt-2")}>
             <StatusBadgeV2 band={band} />
             {!isStrong && displayHeadline !== COPY.matchPossible && <BadgeV2 variant="neutral">{displayHeadline}</BadgeV2>}
