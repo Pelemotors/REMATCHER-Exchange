@@ -10,8 +10,28 @@ import { toPrismaJson } from "@/lib/prisma-json";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import { notifyDealerUsers } from "@/services/notifications";
 import { COPY } from "@/config/brand";
+import {
+  canonicalizeVehicleFeature,
+  vehicleFeatureLabelHe,
+} from "@/services/exchange/vehicle-features";
 
 const ENRICHMENT_NOTIFY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+// Only fields owned by the seller/inventory may ever be requested from the seller.
+// Buyer budget is deliberately excluded: it is a buyer-side completeness issue and
+// must never leak through enrichment, notifications, events or labels.
+function isSellerOwnedBlockingField(field: string): boolean {
+  if (field === "buyerPrice") return false;
+  return field === "price" ||
+    field === "fuel" || field === "fuelType" ||
+    field === "engineDisplacementCc" ||
+    field === "mileage" || field === "year" || field === "color" || field === "trim" ||
+    field === "transmission" || field === "drivetrain" ||
+    field === "hand" || field === "ownershipHand" ||
+    field === "ownershipSource" || field === "ownershipType" ||
+    field === "region" || field === "seats" || field === "vehicleIdentity" ||
+    field === "features" || field.startsWith("feature:");
+}
 
 export function hashRequestedFields(fields: string[]): string {
   const normalized = [...new Set(fields.map((f) => f.trim().toLowerCase()))]
@@ -21,8 +41,12 @@ export function hashRequestedFields(fields: string[]): string {
 }
 
 export function fieldLabelHe(field: string): string {
+  if (field.startsWith("feature:")) {
+    const feature = canonicalizeVehicleFeature(field.slice("feature:".length));
+    return feature ? vehicleFeatureLabelHe(feature) : "אבזור מיוחד";
+  }
   const map: Record<string, string> = {
-    price: "מחיר",
+    price: "מחיר סוחר",
     fuel: "סוג דלק/הנעה",
     fuelType: "סוג דלק/הנעה",
     engineDisplacementCc: "נפח מנוע",
@@ -39,6 +63,7 @@ export function fieldLabelHe(field: string): string {
     region: "אזור",
     seats: "מושבים",
     vehicleIdentity: "זהות רכב",
+    features: "אבזור מיוחד",
   };
   return map[field] ?? field;
 }
@@ -55,9 +80,14 @@ export async function ensureExchangeInitiatedEnrichment(params: {
   if (match.vehicle.status !== "ACTIVE") return { ok: false as const, error: "vehicle_unavailable" as const };
   if (match.demand.status !== "ACTIVE") return { ok: false as const, error: "demand_inactive" as const };
 
-  const fields = params.fieldsOverride ??
+  const blockingFields = params.fieldsOverride ??
     (Array.isArray(match.decisionBlockingUnknowns) ? (match.decisionBlockingUnknowns as string[]) : []);
-  if (fields.length === 0) return { ok: false as const, error: "no_blocking_fields" as const };
+  const fields = [...new Set(blockingFields.filter(isSellerOwnedBlockingField))];
+  if (fields.length === 0) {
+    // Example: only buyerPrice is missing. The candidate remains unresolved, but
+    // no seller enrichment is created and no buyer commercial data is exposed.
+    return { ok: false as const, error: "no_seller_blocking_fields" as const };
+  }
 
   const result = await upsertOpenEnrichmentRequest({ requesterDealerId: match.demand.dealerId, match, fields });
   await notifySellerEnrichmentAggregated({
@@ -161,9 +191,10 @@ async function notifySellerEnrichmentAggregated(params: {
   const fieldSet = new Set<string>();
   for (const r of open) {
     const arr = Array.isArray(r.requestedFields) ? (r.requestedFields as string[]) : [];
-    for (const f of arr) fieldSet.add(f);
+    for (const f of arr) if (isSellerOwnedBlockingField(f)) fieldSet.add(f);
   }
   const fields = [...fieldSet];
+  if (fields.length === 0) return;
   const count = open.length;
 
   const since = new Date(Date.now() - ENRICHMENT_NOTIFY_COOLDOWN_MS);
@@ -206,7 +237,9 @@ export async function getOpenEnrichmentForVehicle(params: { dealerId: string; ve
   });
   const fields = new Set<string>();
   for (const r of open) {
-    for (const f of Array.isArray(r.requestedFields) ? (r.requestedFields as string[]) : []) fields.add(f);
+    for (const f of Array.isArray(r.requestedFields) ? (r.requestedFields as string[]) : []) {
+      if (isSellerOwnedBlockingField(f)) fields.add(f);
+    }
   }
   return {
     vehicleId: vehicle.id,
@@ -327,6 +360,12 @@ function provenancePresent(provenance: unknown, keys: string[]): boolean {
   return false;
 }
 
+function provenanceFeatures(provenance: unknown): string[] {
+  if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) return [];
+  const raw = (provenance as Record<string, unknown>).features;
+  return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
+}
+
 function remainingBlockingFields(
   vehicle: {
     b2bPrice: number | null;
@@ -341,7 +380,9 @@ function remainingBlockingFields(
   requested: string[]
 ): string[] {
   const remaining: string[] = [];
+  const features = new Set(provenanceFeatures(vehicle.fieldProvenance));
   for (const f of requested) {
+    if (!isSellerOwnedBlockingField(f)) continue;
     if (f === "price") {
       if (vehicle.b2bPrice == null) remaining.push(f);
       continue;
@@ -362,9 +403,21 @@ function remainingBlockingFields(
       if (!provenancePresent(vehicle.fieldProvenance, ["fuel", "fuelType"])) remaining.push(f);
       continue;
     }
+    if (f.startsWith("feature:")) {
+      const feature = canonicalizeVehicleFeature(f.slice("feature:".length));
+      if (!feature || !features.has(feature)) remaining.push(f);
+      continue;
+    }
+    if (f === "features") {
+      if (features.size === 0) remaining.push(f);
+      continue;
+    }
     if (f === "transmission" || f === "drivetrain") {
       if (!provenancePresent(vehicle.fieldProvenance, [f])) remaining.push(f);
+      continue;
     }
+    // Other seller-owned fields that are not modeled as stored values remain blocking.
+    remaining.push(f);
   }
   return remaining;
 }
