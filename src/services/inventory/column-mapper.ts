@@ -1,14 +1,13 @@
-/** Deterministic column header / content → vehicle field mapping */
+/** Deterministic column header / content → vehicle field mapping.
+ * Semantic normalization of vehicle features is intentionally NOT done here;
+ * raw feature text is forwarded to the Exchange AI brain at persistence time.
+ */
 import {
   canonicalizeFuelType,
   canonicalizeOwnershipSource,
   canonicalizeVehicleIdentity,
   normalizeEngineDisplacementCc,
 } from "@/services/exchange/vehicle-identity";
-import {
-  canonicalizeVehicleFeatures,
-  extractVehicleFeaturesFromText,
-} from "@/services/exchange/vehicle-features";
 
 export type VehicleImportField =
   | "make" | "model" | "trim" | "year" | "mileage" | "color"
@@ -79,12 +78,8 @@ export function parseRow(row:unknown[],m:Partial<Record<VehicleImportField,numbe
   const get=(f:VehicleImportField)=>{const i=m[f];if(i===undefined)return null;const r=row[i];return r==null||cleanText(r)===""?null:r as string|number};
   const text=(f:VehicleImportField)=>get(f)!=null?cleanText(get(f)):null;
   const canonical=canonicalizeVehicleIdentity({make:text("make"),model:text("model")});
-  const fullRowText=row.map(cleanText).filter(Boolean).join(" | ");
   const featureCell=text("features");
-  const features=canonicalizeVehicleFeatures([
-    ...extractVehicleFeaturesFromText(fullRowText),
-    ...(featureCell?featureCell.split(/[,;|/]+/).map(v=>v.trim()):[]),
-  ]);
+  const features=featureCell?featureCell.split(/[,;|]+/).map(v=>v.trim()).filter(Boolean):[];
   return{
     make:canonical.make,
     model:canonical.model,
