@@ -44,6 +44,13 @@ export type DimensionIntent<T = unknown> = {
   notes?: string | null;
 };
 
+export type FeatureRequirement = {
+  feature: string;
+  importance: IntentImportance;
+  provenance?: "user_stated" | "agent_inferred" | "legacy_adapter" | "system";
+  notes?: string | null;
+};
+
 export type StructuredSearchIntent = {
   schemaVersion: 2;
   make?: DimensionIntent<string>;
@@ -63,6 +70,7 @@ export type StructuredSearchIntent = {
   hand?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
   region?: DimensionIntent<string>;
   seats?: DimensionIntent<number>;
+  featureRequirements?: FeatureRequirement[];
   freeFormRequirements?: string[];
   tradeOffNotes?: string[];
 };
@@ -102,6 +110,13 @@ export function summarizeIntentHe(intent: StructuredSearchIntent): string {
   if (intent.engineDisplacementCc?.target != null) parts.push(`מנוע ${intent.engineDisplacementCc.target} סמ״ק`);
   if (intent.hand?.target != null) parts.push(`עד יד ${intent.hand.target}`);
   if (intent.ownershipSource?.target) parts.push(`מקוריות ${intent.ownershipSource.target}`);
+  if (intent.featureRequirements?.length) {
+    parts.push(
+      `פיצ'רים ${intent.featureRequirements
+        .map((r) => `${r.feature}${r.importance === "HARD" ? " (חובה)" : ""}`)
+        .join(", ")}`
+    );
+  }
   if (intent.color?.importance === "OPEN") parts.push("צבע לא משנה");
   if (intent.color?.exclusions?.length) parts.push(`לא ${intent.color.exclusions.join("/")}`);
   if (intent.tradeOffNotes?.length) parts.push(intent.tradeOffNotes[0]!);
