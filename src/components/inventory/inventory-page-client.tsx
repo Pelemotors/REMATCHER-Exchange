@@ -75,6 +75,10 @@ function vehicleName(v: InventoryVehicle) {
   return [v.make, v.model, v.year].filter(Boolean).join(" ") || "רכב";
 }
 
+function askingPrice(v: InventoryVehicle): number | null {
+  return v.b2bPrice ?? v.retailPrice;
+}
+
 export function InventoryPageClient({
   initialData,
   initialFilter,
@@ -199,6 +203,7 @@ export function InventoryPageClient({
   }
 
   function beginEdit(v: InventoryVehicle) {
+    const price = askingPrice(v);
     setEditVehicle(v);
     setEditForm({
       make: v.make ?? "",
@@ -207,8 +212,7 @@ export function InventoryPageClient({
       year: v.year != null ? String(v.year) : "",
       mileage: v.mileage != null ? String(v.mileage) : "",
       color: v.color ?? "",
-      retailPrice: v.retailPrice != null ? String(v.retailPrice) : "",
-      b2bPrice: v.b2bPrice != null ? String(v.b2bPrice) : "",
+      b2bPrice: price != null ? String(price) : "",
     });
   }
 
@@ -228,9 +232,6 @@ export function InventoryPageClient({
             year: editForm.year ? parseInt(editForm.year, 10) : null,
             mileage: editForm.mileage ? parseInt(editForm.mileage, 10) : null,
             color: editForm.color || null,
-            retailPrice: editForm.retailPrice
-              ? parseInt(editForm.retailPrice.replace(/,/g, ""), 10)
-              : null,
             b2bPrice: editForm.b2bPrice
               ? parseInt(editForm.b2bPrice.replace(/,/g, ""), 10)
               : null,
@@ -277,7 +278,7 @@ export function InventoryPageClient({
             (v.freshnessState === "STALE" ||
               v.freshnessState === "VALIDATION_REQUIRED" ||
               v.pendingValidationCount > 0 ||
-              (v.b2bPrice == null && v.retailPrice == null))
+              askingPrice(v) == null)
         )
         .map((v) => ({
           id: v.id,
@@ -415,8 +416,7 @@ export function InventoryPageClient({
                 ["year", "שנה"],
                 ["mileage", "ק״מ"],
                 ["color", "צבע"],
-                ["retailPrice", "מחיר קמעונאי"],
-                ["b2bPrice", "מחיר"],
+                ["b2bPrice", "מחיר מבוקש"],
               ] as const
             ).map(([key, label]) => (
               <div key={key}>
@@ -498,11 +498,12 @@ export function InventoryPageClient({
         ) : (
           <div className={styles.grid}>
             {vehicles.map((v) => {
+              const price = askingPrice(v);
               const state = vehiclePrimaryState({
                 status: v.status,
                 freshnessState: v.freshnessState,
                 hasInterest: v.openInterestCount > 0,
-                missingB2b: v.b2bPrice == null,
+                missingB2b: price == null,
               });
               return (
                 <div key={v.id} id={`vehicle-${v.id}`}>
@@ -515,7 +516,7 @@ export function InventoryPageClient({
                         <h3 className="font-bold text-v2-text-primary">{vehicleName(v)}</h3>
                         <p className="text-sm text-v2-text-secondary">
                           {formatNumber(v.mileage)} ק״מ
-                          {v.b2bPrice != null ? ` · ${formatCurrency(v.b2bPrice)}` : ""}
+                          {price != null ? ` · ${formatCurrency(price)}` : ""}
                         </p>
                       </div>
                       <BadgeV2

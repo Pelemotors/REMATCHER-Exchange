@@ -31,7 +31,9 @@ Rules (CRITICAL):
 - ownershipHand: when explicitly stated return integer hand number. Never infer it.
 - ownershipType: normalize private/פרטי, leasing/ליסינג, rental/השכרה, company/חברה, trade-in/טרייד אין.
 - features: include only explicitly requested special equipment/drivetrain features. Canonical examples: AWD_4X4, SUNROOF, PANORAMIC_ROOF, LEATHER_SEATS, ELECTRIC_SEATS, HEATED_SEATS, VENTILATED_SEATS, ADAPTIVE_CRUISE, LANE_ASSIST, BLIND_SPOT_MONITOR, PARKING_SENSORS, REAR_CAMERA, SURROUND_CAMERA, TOW_BAR.
-- Explicit fuel/engine/hand/ownership/feature requirements must also be represented in hardConstraints when mandatory, otherwise softPreferences.
+- IMPORTANT PRODUCT RULE: if the dealer explicitly mentions a special feature as part of the requested vehicle, treat it as a hard requirement by default, even if they did not literally say "חובה". Example: "סופרב 4x4", "קודיאק 4x4", "קורולה עם חלון בגג" => the mentioned feature belongs in hardConstraints.
+- Only classify an explicitly mentioned feature as a softPreference when the dealer clearly frames it as optional/preferred, e.g. "עדיף", "רצוי", "אם יש", "בונוס", "לא חובה", "nice to have", "preferably", "if available".
+- Explicit fuel/engine/hand/ownership requirements should be represented in hardConstraints when mandatory, otherwise softPreferences.
 - Color exclusions must use exclusions[] with field "color" and canonical English value.
 - Distinguish hardConstraints, softPreferences and exclusions.
 - Budget in ILS unless stated otherwise. Year "22" means 2022.
@@ -250,7 +252,11 @@ async function sanitizeParsedDemand(data: unknown, rawText: string, userId?: str
   for (const feature of copy.features ?? []) {
     if (!copy.hardConstraints.some((x) => x.field === "feature" && x.value === feature) &&
         !copy.softPreferences.some((x) => x.field === "feature" && x.value === feature)) {
-      maybePushSoftConstraint(copy, "feature", feature, vehicleFeatureLabelHe(feature));
+      copy.hardConstraints.push({
+        field: "feature",
+        value: feature,
+        description: `${vehicleFeatureLabelHe(feature)} — נדרש כי הסוחר ציין את הפיצ'ר בחיפוש`,
+      });
     }
   }
 
