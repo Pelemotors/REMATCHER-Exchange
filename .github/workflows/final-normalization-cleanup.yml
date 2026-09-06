@@ -10,7 +10,7 @@ permissions:
 jobs:
   cleanup-and-validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,36 +25,31 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
+          import re
 
           p = Path('src/services/assistant/agent-tools.ts')
           s = p.read_text()
-          old_desc = 'Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user\'s message. Conversation state only — does NOT write to the database and does NOT require confirmation. Use when describing/correcting an unsaved vehicle. Only include facts actually stated or clearly corrected. Do not invent model/year/mileage/price.'
-          new_desc = 'Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user\'s message. Conversation state only — does NOT write to the database and does NOT require confirmation. Use for initial facts AND follow-up corrections such as also has 4x4. Product semantics have ONE seller price: asking price. For features, use only canonical feature identifiers from the product vocabulary. Only include facts actually stated or clearly corrected.'
-          if old_desc in s:
-              s = s.replace(old_desc, new_desc)
-          old_fields = '''            ownershipHand: nullableNumber,
-            ownershipType: nullableString,
-            retailPrice: nullableNumber,
-            b2bPrice: nullableNumber,
-            region: nullableString,'''
-          new_fields = '''            ownershipHand: nullableNumber,
-            ownershipType: nullableString,
-            b2bPrice: nullableNumber,
-            region: nullableString,
-            fuelType: nullableString,
-            engineDisplacementCc: nullableNumber,
-            features: {
-              type: ["array", "null"],
-              items: { type: "string" },
-            },'''
-          if old_fields not in s:
-              raise SystemExit('agent-tools expected inventory draft field block not found')
-          s = s.replace(old_fields, new_fields)
+          s = re.sub(
+            r'"Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user.s message\.[^"]*Do not invent model/year/mileage/price\."',
+            '"Update the CURRENT conversational inventory draft with structured vehicle facts you understood from the user message. Conversation state only — does NOT write to the database and does NOT require confirmation. Use for initial facts AND follow-up corrections such as also has 4x4. Product semantics have ONE seller price: asking price. For features, use only canonical feature identifiers from the product vocabulary. Only include facts actually stated or clearly corrected."',
+            s,
+            count=1,
+          )
+          s, n = re.subn(
+            r'(\s+ownershipHand: nullableNumber,\n\s+ownershipType: nullableString,\n)\s+retailPrice: nullableNumber,\n\s+b2bPrice: nullableNumber,\n\s+region: nullableString,',
+            r'\1            b2bPrice: nullableNumber,\n            region: nullableString,\n            fuelType: nullableString,\n            engineDisplacementCc: nullableNumber,\n            features: {\n              type: ["array", "null"],\n              items: { type: "string" },\n            },',
+            s,
+            count=1,
+          )
+          if n != 1:
+              raise SystemExit('agent-tools inventory draft schema replacement failed')
           p.write_text(s)
 
           p = Path('src/services/inventory/import.ts')
-          s = p.read_text()
-          s = s.replace('מחיר סוחר חסר — לא תיווצר התאמה סופית עד שיושלם', 'מחיר מבוקש חסר — לא תיווצר התאמה סופית עד שיושלם')
+          s = p.read_text().replace(
+            'מחיר סוחר חסר — לא תיווצר התאמה סופית עד שיושלם',
+            'מחיר מבוקש חסר — לא תיווצר התאמה סופית עד שיושלם',
+          )
           p.write_text(s)
           PY
 
