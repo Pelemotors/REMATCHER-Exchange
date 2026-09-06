@@ -71,6 +71,7 @@ export async function createVehicleForDealer(input: {
 }) {
   const db = input.db ?? prisma;
   const requireIdentity = input.requireIdentity !== false;
+  const rawFeatureInputs = [...(input.fields?.features ?? [])];
 
   let fields: VehicleCreateFields = {
     make: input.fields?.make ?? null,
@@ -86,7 +87,8 @@ export async function createVehicleForDealer(input: {
     region: input.fields?.region ?? null,
     fuelType: input.fields?.fuelType ?? null,
     engineDisplacementCc: input.fields?.engineDisplacementCc ?? null,
-    features: canonicalizeVehicleFeatures(input.fields?.features ?? []),
+    // Preserve raw source-language feature text until the AI semantic boundary.
+    features: rawFeatureInputs,
     fieldProvenance: input.fields?.fieldProvenance ?? null,
   };
 
@@ -107,7 +109,7 @@ export async function createVehicleForDealer(input: {
       region: mapped.region,
       fuelType: mapped.fuelType,
       engineDisplacementCc: mapped.engineDisplacementCc,
-      features: mapped.features,
+      features: [...rawFeatureInputs, ...(mapped.features ?? [])],
       fieldProvenance: mapped.fieldProvenance,
     };
   }
