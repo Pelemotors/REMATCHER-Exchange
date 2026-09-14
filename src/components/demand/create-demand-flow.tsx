@@ -181,7 +181,7 @@ export function CreateDemandFlow({
 
     if (isHome) {
       return (
-        <Surface depth="raised" className={cn(styles.panel, styles.successPanel)}>
+        <div className={cn(styles.panelLight, styles.successPanel)}>
           <p className={styles.successTitle}>החיפוש יצא לרשת</p>
           {title ? <p className={styles.successVehicle}>{title}</p> : null}
           <p className={styles.successBody}>
@@ -190,14 +190,14 @@ export function CreateDemandFlow({
             נעדכן אותך כשנמצא משהו מתאים.
           </p>
           <div className={styles.actionsStack}>
-            <ButtonV2 variant="signal" href="/demand" className="w-full">
+            <ButtonV2 variant="signal" href="/demand" className={cn("w-full", styles.primaryCta)}>
               לחיפושים שלי
             </ButtonV2>
             <ButtonV2 variant="secondary" className="w-full" onClick={clearToInput}>
               חיפוש נוסף
             </ButtonV2>
           </div>
-        </Surface>
+        </div>
       );
     }
 
@@ -391,11 +391,11 @@ export function CreateDemandFlow({
   if (isHome) {
     return (
       <div className={styles.confirmWrap}>
-        <Surface depth="raised" className={styles.panel}>
+        <div className={styles.panelLight}>
           <p className={styles.confirmTitle}>הבנתי, זה מה שחיפשת:</p>
-          <Surface depth="secondary" className={styles.rawQuote}>
+          <div className={styles.rawQuote}>
             <p className={styles.rawQuoteText}>&ldquo;{rawText}&rdquo;</p>
-          </Surface>
+          </div>
           <div className={styles.confirmSummary}>
             <p className={styles.confirmVehicle}>
               {[confirmed.make, confirmed.model].filter(Boolean).join(" ") ||
@@ -498,12 +498,12 @@ export function CreateDemandFlow({
             </div>
           )}
           {confirmError && <p className={styles.error}>{confirmError}</p>}
-        </Surface>
+        </div>
 
         <div className={styles.actionsStack}>
           <ButtonV2
             variant="signal"
-            className="w-full"
+            className={cn("w-full", styles.primaryCta)}
             onClick={handleConfirm}
             disabled={loading}
           >
@@ -514,7 +514,7 @@ export function CreateDemandFlow({
             className="w-full"
             onClick={() => setHomeEditing((v) => !v)}
           >
-            {homeEditing ? "סיום עריכה" : "ערוך"}
+            {homeEditing ? "סיום עריכה" : "ערוך חיפוש"}
           </ButtonV2>
           <button
             type="button"

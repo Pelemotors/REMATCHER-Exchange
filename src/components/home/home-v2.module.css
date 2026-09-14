@@ -2,9 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  max-width: 36rem;
+  max-width: 26rem;
   margin-inline: auto;
-  padding-block: 0.5rem 1.5rem;
+  padding-inline: 20px;
+  padding-block: 0.75rem 1.75rem;
 }
 
 .hero {
@@ -12,7 +13,7 @@
   flex-direction: column;
   gap: 0.75rem;
   text-align: center;
-  padding-block: 0.5rem 0.25rem;
+  padding-block: 0.75rem 0.25rem;
 }
 
 .brandRow {
@@ -36,16 +37,18 @@
 
 .title {
   margin: 0;
-  font-size: clamp(1.625rem, 5.5vw, 2rem);
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: clamp(2rem, 7vw, 2.35rem);
+  font-weight: 800;
+  line-height: 1.08;
   color: var(--rm2-warm-white);
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
   margin: 0;
-  font-size: 1.0625rem;
-  line-height: 1.55;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  font-weight: 400;
   color: var(--rm2-text-secondary);
 }
 
@@ -69,13 +72,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.875rem 1rem;
   border-radius: 12px;
   border: 1px solid rgba(45, 120, 168, 0.28);
+  min-height: 44px;
 }
 
 .noticeLabel {
-  font-size: 0.9375rem;
+  font-size: 0.975rem;
   font-weight: 500;
   color: var(--rm2-text-primary);
 }
@@ -107,16 +111,17 @@
 
 @media (min-width: 768px) {
   .page {
+    max-width: 28rem;
     gap: 1.5rem;
-    padding-block: 1.25rem 2rem;
+    padding-block: 1.5rem 2.25rem;
   }
 
   .hero {
     gap: 0.875rem;
-    padding-block: 1rem 0.5rem;
+    padding-block: 1.25rem 0.5rem;
   }
 
   .subtitle {
-    font-size: 1.125rem;
+    font-size: 1.1875rem;
   }
 }

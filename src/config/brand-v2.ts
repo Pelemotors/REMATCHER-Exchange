@@ -36,12 +36,22 @@ export const TOKENS_V2 = {
   },
   typography: {
     display: { size: "2.5rem", lineHeight: "1.15", weight: 700 },
-    title: { size: "1.75rem", lineHeight: "1.25", weight: 600 },
-    section: { size: "1.125rem", lineHeight: "1.4", weight: 600 },
-    body: { size: "0.9375rem", lineHeight: "1.55", weight: 400 },
+    /** Search-first hero ~34–38px */
+    hero: { size: "2.25rem", lineHeight: "1.05", weight: 700 },
+    title: { size: "1.75rem", lineHeight: "1.25", weight: 700 },
+    section: { size: "1.25rem", lineHeight: "1.35", weight: 700 },
+    body: { size: "1.0625rem", lineHeight: "1.55", weight: 400 },
+    secondary: { size: "0.9375rem", lineHeight: "1.45", weight: 400 },
     label: { size: "0.75rem", lineHeight: "1.3", weight: 600 },
     data: { size: "1.75rem", lineHeight: "1.1", weight: 600 },
     dataSm: { size: "1.25rem", lineHeight: "1.2", weight: 600 },
+  },
+  spacing: {
+    scale: [4, 8, 12, 16, 20, 24, 32, 40, 48] as const,
+    pagePadX: "20px",
+    touchMin: "44px",
+    ctaHeight: "56px",
+    rowMin: "76px",
   },
   motion: {
     fast: "150ms",
@@ -51,9 +61,10 @@ export const TOKENS_V2 = {
     searchLoop: "2s",
   },
   radius: {
-    sm: "6px",
-    md: "10px",
+    sm: "8px",
+    md: "12px",
     lg: "14px",
+    xl: "16px",
   },
   shadow: {
     surface: "0 1px 0 rgba(201, 206, 211, 0.06) inset",
