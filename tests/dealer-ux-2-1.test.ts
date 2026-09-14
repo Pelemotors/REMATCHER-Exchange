@@ -150,12 +150,20 @@ describe("dealer UX 2.1 product-flow guards", () => {
     expect(src).toContain("/matches");
   });
 
-  it("home deep-links into filtered opportunity surfaces", () => {
-    const src = readFileSync(
+  it("home is search-first and reuses demand composer", () => {
+    const home = readFileSync(
       join(root, "src/components/home/home-v2.tsx"),
       "utf8"
     );
-    expect(src).toContain("/matches?tab=action");
-    expect(src).toContain("/opportunities?source=inventory");
+    const flow = readFileSync(
+      join(root, "src/components/demand/create-demand-flow.tsx"),
+      "utf8"
+    );
+    expect(home).toContain("יש לך לקוח שמחפש רכב?");
+    expect(home).toContain('variant="home"');
+    expect(home).toContain("CreateDemandFlow");
+    expect(flow).toContain('variant === "home"');
+    expect(flow).toContain("/api/demands/parse");
+    expect(flow).toContain("/api/demands/confirm");
   });
 });

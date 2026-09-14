@@ -16,19 +16,18 @@ async function HomeContent() {
     redirect("/onboarding");
   }
 
+  const blockers = snapshot.actionItems.filter(
+    (item) =>
+      item.urgent ||
+      item.href.startsWith("/account") ||
+      item.href.startsWith("/validations") ||
+      item.href.startsWith("/activity")
+  );
+
   return (
     <HomeV2
-      userName={session!.user!.name ?? ""}
       dealerName={session!.user!.dealerName ?? null}
-      actionItems={snapshot.actionItems}
-      activeDemands={snapshot.activeDemands}
-      inventoryCount={snapshot.inventoryCount}
-      matches={snapshot.matches}
-      opportunities={snapshot.opportunities}
-      pendingOutcomes={snapshot.pendingOutcomes}
-      connectionsLabel={snapshot.connectionsLabel}
-      connectionsSecondary={snapshot.connectionsSecondary}
-      notifications={snapshot.notifications}
+      blockers={blockers}
       setupStatus={snapshot.setupStatus}
     />
   );
