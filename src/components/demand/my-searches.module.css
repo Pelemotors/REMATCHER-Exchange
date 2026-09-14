@@ -222,6 +222,16 @@
   border: 1px solid var(--rm2-border);
 }
 
+.thumbImg {
+  flex-shrink: 0;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--rm2-border);
+  background: var(--rm2-graphite-navy, #111a26);
+}
+
 .matchBody {
   flex: 1;
   min-width: 0;

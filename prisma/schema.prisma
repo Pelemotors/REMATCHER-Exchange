@@ -240,12 +240,48 @@ model Vehicle {
   exchangeEvents  ExchangeEvent[]
   exchangeCases   ExchangeCase[]
   informationRequests InformationRequest[]
+  media           VehicleMedia[]
+
+  /** Grandfathered inventory defaults true; new manual vehicles start false until EXTERIOR+INTERIOR */
+  mediaReady      Boolean       @default(true)
 }
 
 enum VehicleStatus {
   ACTIVE
   SOLD
   ARCHIVED
+}
+
+enum VehicleMediaType {
+  IMAGE
+}
+
+enum VehicleMediaCategory {
+  EXTERIOR
+  INTERIOR
+  OTHER
+}
+
+model VehicleMedia {
+  id         String               @id @default(cuid())
+  vehicleId  String
+  type       VehicleMediaType     @default(IMAGE)
+  category   VehicleMediaCategory
+  storageKey String
+  mimeType   String
+  width      Int?
+  height     Int?
+  bytes      Int?
+  sortOrder  Int                  @default(0)
+  isPrimary  Boolean              @default(false)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  vehicle    Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, category])
+  @@index([vehicleId, isPrimary])
+  @@unique([storageKey])
 }
 
 enum FreshnessState {

@@ -226,6 +226,9 @@ export async function createVehicleForDealer(input: {
       fieldProvenance: fieldProvenance ? toPrismaJson(fieldProvenance) : undefined,
       freshnessState: "FRESH",
       lastInventoryUpdate: new Date(),
+      // New vehicles require EXTERIOR+INTERIOR before network matching.
+      // Existing inventory remains mediaReady=true via migration default.
+      mediaReady: input.source === "import",
       ...(input.lastAvailabilityConfirmedAt !== undefined
         ? { lastAvailabilityConfirmedAt: input.lastAvailabilityConfirmedAt }
         : {}),
@@ -271,7 +274,7 @@ export async function createVehicleForDealer(input: {
     }).catch(() => undefined);
   }
 
-  if (!input.skipRematch) {
+  if (!input.skipRematch && vehicle.mediaReady) {
     const { rematchAfterInventoryMutation } = await import("@/services/matching/inventory-rematch");
     await rematchAfterInventoryMutation({ vehicleId: vehicle.id, sellerDealerId: input.dealerId });
   }

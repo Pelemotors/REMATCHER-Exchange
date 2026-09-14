@@ -54,3 +54,4 @@ next-env.d.ts
 .env*
 .qa-dealer-credentials.local
 .admin-bootstrap-credentials.local
+.media/

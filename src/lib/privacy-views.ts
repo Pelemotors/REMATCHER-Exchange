@@ -32,6 +32,8 @@ export function toBuyerMatchView(vehicle: {
   ownershipType?: string | null;
   dealerId: string;
   fieldProvenance?: unknown;
+  /** Safe public/API media URL — never a filesystem path */
+  imageUrl?: string | null;
 }) {
   return {
     make: vehicle.make,
@@ -52,7 +54,8 @@ export function toBuyerMatchView(vehicle: {
       (provenanceValue(vehicle.fieldProvenance, "engineDisplacementCc") as number | null) ?? null,
     features: provenanceArray(vehicle.fieldProvenance, "features"),
     verifiedDealer: true,
-    // Explicitly omit: b2bPrice, sellerFloor, dealerId, commercial internals
+    imageUrl: vehicle.imageUrl ?? null,
+    // Explicitly omit: b2bPrice, sellerFloor, dealerId, commercial internals, score
   };
 }
 

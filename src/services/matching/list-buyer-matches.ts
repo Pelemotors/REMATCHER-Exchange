@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { toBuyerMatchView } from "@/lib/privacy-views";
 import type { MatchExplanation } from "@/lib/schemas/ai";
+import { publicThumbUrlForDisplayKey } from "@/lib/media/storage";
 import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
 
 export interface BuyerMatchListItem {
@@ -30,7 +31,15 @@ export async function listBuyerMatches(
       ...BUYER_VISIBLE_MATCH_WHERE,
     },
     include: {
-      vehicle: true,
+      vehicle: {
+        include: {
+          media: {
+            where: { isPrimary: true },
+            take: 1,
+            select: { storageKey: true },
+          },
+        },
+      },
       buyerInterests: { where: { dealerId } },
       sellerOpportunities: {
         include: {
@@ -49,18 +58,24 @@ export async function listBuyerMatches(
     take: limit,
   });
 
-  return matches.map((m) => ({
-    id: m.id,
-    demandId: m.demandId,
-    status: m.status,
-    scoreBand: m.scoreBand,
-    explanation: m.explanationJson as MatchExplanation,
-    vehicle: toBuyerMatchView(m.vehicle),
-    interest: m.buyerInterests[0]
-      ? { status: m.buyerInterests[0].status }
-      : null,
-    revealId:
-      m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
-      null,
-  }));
+  return matches.map((m) => {
+    const primaryKey = m.vehicle.media[0]?.storageKey ?? null;
+    return {
+      id: m.id,
+      demandId: m.demandId,
+      status: m.status,
+      scoreBand: m.scoreBand,
+      explanation: m.explanationJson as MatchExplanation,
+      vehicle: toBuyerMatchView({
+        ...m.vehicle,
+        imageUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,
+      }),
+      interest: m.buyerInterests[0]
+        ? { status: m.buyerInterests[0].status }
+        : null,
+      revealId:
+        m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
+        null,
+    };
+  });
 }

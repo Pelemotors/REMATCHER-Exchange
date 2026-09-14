@@ -118,19 +118,33 @@ export async function getInventoryList({
         color: true,
         status: true,
         freshnessState: true,
+        mediaReady: true,
         updatedAt: true,
         createdAt: true,
+        media: {
+          where: { isPrimary: true },
+          take: 1,
+          select: { storageKey: true },
+          orderBy: { sortOrder: "asc" },
+        },
       },
     }),
   ]);
 
-  const enriched = vehicles.map((v) => ({
-    ...v,
-    updatedAt: v.updatedAt.toISOString(),
-    createdAt: v.createdAt.toISOString(),
-    openInterestCount: oppByVehicle.get(v.id) ?? 0,
-    pendingValidationCount: valByVehicle.get(v.id) ?? 0,
-  }));
+  const { publicThumbUrlForDisplayKey } = await import("@/lib/media/storage");
+
+  const enriched = vehicles.map((v) => {
+    const primaryKey = v.media[0]?.storageKey ?? null;
+    const { media: _media, ...rest } = v;
+    return {
+      ...rest,
+      updatedAt: v.updatedAt.toISOString(),
+      createdAt: v.createdAt.toISOString(),
+      openInterestCount: oppByVehicle.get(v.id) ?? 0,
+      pendingValidationCount: valByVehicle.get(v.id) ?? 0,
+      thumbUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,
+    };
+  });
 
   return {
     vehicles: enriched,

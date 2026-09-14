@@ -147,6 +147,16 @@
   border: 1px solid var(--rm2-border);
 }
 
+.thumbImg {
+  flex-shrink: 0;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--rm2-border);
+  background: var(--rm2-graphite-navy);
+}
+
 .chevron {
   flex-shrink: 0;
   color: var(--rm2-text-muted);

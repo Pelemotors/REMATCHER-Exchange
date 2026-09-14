@@ -9,6 +9,7 @@ import {
   Surface,
 } from "@/components/ui/brand-v2";
 import { InventoryAgentWorkspace } from "@/components/inventory/inventory-agent-workspace";
+import { VehicleMediaPanel } from "@/components/inventory/vehicle-media-panel";
 import { useSetAgentPageContext } from "@/components/assistant/agent-workspace-provider";
 import { EMPTY_COPY } from "@/lib/commercial-ux";
 import { formatCurrency, formatNumber } from "@/lib/utils";
@@ -26,6 +27,8 @@ export interface InventoryVehicle {
   color?: string | null;
   status: string;
   freshnessState: string;
+  mediaReady?: boolean;
+  thumbUrl?: string | null;
   updatedAt: string;
   openInterestCount: number;
   pendingValidationCount: number;
@@ -75,6 +78,9 @@ function humanVehicleState(v: InventoryVehicle): {
     return { label: "נמכר", tone: "muted" };
   }
   if (v.status !== "ACTIVE") return null;
+  if (v.mediaReady === false) {
+    return { label: "חסרות תמונות", tone: "warning" };
+  }
   if (
     v.freshnessState === "STALE" ||
     v.freshnessState === "VALIDATION_REQUIRED" ||
@@ -419,6 +425,7 @@ export function InventoryPageClient({
               ביטול
             </ButtonV2>
           </div>
+          <VehicleMediaPanel vehicleId={editVehicle.id} />
         </Surface>
       )}
 
@@ -482,7 +489,16 @@ export function InventoryPageClient({
 
             const content = (
               <>
-                <div className={styles.thumb} aria-hidden />
+                {v.thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={v.thumbUrl}
+                    alt=""
+                    className={styles.thumbImg}
+                  />
+                ) : (
+                  <div className={styles.thumb} aria-hidden />
+                )}
                 <div className={styles.rowMain}>
                   <p className={styles.rowTitle}>{vehicleName(v)}</p>
                   {meta && <p className={styles.rowMeta}>{meta}</p>}

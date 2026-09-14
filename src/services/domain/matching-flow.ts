@@ -55,6 +55,7 @@ export async function runMatchingForDemand(demandId: string) {
   const vehicles = await prisma.vehicle.findMany({
     where: {
       status: "ACTIVE",
+      mediaReady: true,
       dealerId: { not: demand.dealerId },
     },
   });

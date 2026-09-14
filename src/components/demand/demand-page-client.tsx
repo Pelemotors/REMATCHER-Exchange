@@ -82,6 +82,7 @@ export function DemandPageClient({
   const [detailDemand, setDetailDemand] = useState<EnrichedDemand | null>(null);
   const [matches, setMatches] = useState<BuyerMatchListItem[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesError, setMatchesError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [editDemand, setEditDemand] = useState<EnrichedDemand | null>(null);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
@@ -100,14 +101,20 @@ export function DemandPageClient({
 
   const loadMatchesForDemand = useCallback(async (demandId: string) => {
     setMatchesLoading(true);
+    setMatchesError(null);
     try {
       const res = await fetch(
         `/api/matches?demandId=${encodeURIComponent(demandId)}`,
         { cache: "no-store" }
       );
-      if (!res.ok) return;
+      if (!res.ok) {
+        setMatchesError("לא הצלחנו לטעון תוצאות. ננסה שוב אוטומטית.");
+        return;
+      }
       const data = await res.json();
       setMatches(Array.isArray(data) ? data : []);
+    } catch {
+      setMatchesError("לא הצלחנו לטעון תוצאות. בדוק את החיבור.");
     } finally {
       setMatchesLoading(false);
     }
@@ -447,6 +454,19 @@ export function DemandPageClient({
 
         {matchesLoading && matches.length === 0 ? (
           <SkeletonBlockV2 lines={4} className="mt-6" />
+        ) : matchesError && matches.length === 0 ? (
+          <div className={styles.empty}>
+            <p className={styles.emptyTitle}>{matchesError}</p>
+            <ButtonV2
+              variant="secondary"
+              className="mt-3"
+              onClick={() =>
+                detailDemand && void loadMatchesForDemand(detailDemand.id)
+              }
+            >
+              נסה שוב
+            </ButtonV2>
+          </div>
         ) : matches.length > 0 ? (
           <>
             <h2 className={styles.resultsHeading}>
@@ -468,7 +488,16 @@ export function DemandPageClient({
                 const showActions = lane === "action" && !connected;
                 return (
                   <div key={m.id} className={styles.matchRow}>
-                    <div className={styles.thumb} aria-hidden />
+                    {m.vehicle.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={m.vehicle.imageUrl}
+                        alt=""
+                        className={styles.thumbImg}
+                      />
+                    ) : (
+                      <div className={styles.thumb} aria-hidden />
+                    )}
                     <div className={styles.matchBody}>
                       <p className={styles.matchTitle}>
                         {vehicleTitle(m.vehicle)}
