@@ -98,11 +98,11 @@ describe("Universal Agent Workspace — presentation architecture", () => {
 
 describe("Universal Agent Workspace — inventory integration", () => {
   it("inventory page opens universal agent CTA without inline chat history", () => {
-    const page = read("src/app/(dealer)/inventory/page.tsx");
+    const page = read("src/components/inventory/inventory-page-client.tsx");
     const workspace = read(
       "src/components/inventory/inventory-agent-workspace.tsx"
     );
-    expect(page).toContain("דבר עם ה-Agent");
+    expect(page).toContain("openInventoryAssistant");
     expect(page).toContain('mode: "inventory_management"');
     expect(page).toContain('surface: "inventory"');
     expect(workspace).toContain("דבר עם ה-Agent");
@@ -126,10 +126,10 @@ describe("Universal Agent Workspace — inventory integration", () => {
   });
 
   it("matches/demand report page surfaces", () => {
-    expect(read("src/app/(dealer)/matches/page.tsx")).toContain(
+    expect(read("src/components/matches/matches-page-client.tsx")).toContain(
       'surface: "matches"'
     );
-    expect(read("src/app/(dealer)/demand/page.tsx")).toContain(
+    expect(read("src/components/demand/demand-page-client.tsx")).toContain(
       'surface: "demand"'
     );
   });

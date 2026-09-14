@@ -142,13 +142,14 @@ describe("shared domain mutation path guards", () => {
 describe("embedded inventory workspace UX guards", () => {
   it("inventory page uses universal agent CTA and compact manage panel", () => {
     const src = readFileSync(
-      join(root, "src/app/(dealer)/inventory/page.tsx"),
+      join(root, "src/components/inventory/inventory-page-client.tsx"),
       "utf8"
     );
     expect(src).toContain("InventoryAgentWorkspace");
-    expect(src).toContain("דבר עם ה-Agent");
+    expect(src).toContain("openInventoryAssistant");
     expect(src).toContain("סמן כנמכר");
     expect(src).toContain("כן, נמכרה");
+    expect(src).toContain("+ הוסף רכב");
     expect(src).not.toContain("הוסף ונרמל");
     expect(src).not.toContain("openAgentInventory");
   });

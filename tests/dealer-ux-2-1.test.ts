@@ -92,14 +92,18 @@ describe("dealer UX 2.1 product-flow guards", () => {
   });
 
   it("matches page defaults to action queue tabs", () => {
-    const src = readFileSync(
+    const page = readFileSync(
       join(root, "src/app/(dealer)/matches/page.tsx"),
       "utf8"
     );
-    expect(src).toContain('get("tab")');
-    expect(src).toContain('"action"');
-    expect(src).toContain("interestLane");
-    expect(src).toContain("ממתין לצד השני");
+    const client = readFileSync(
+      join(root, "src/components/matches/matches-page-client.tsx"),
+      "utf8"
+    );
+    expect(page).toContain("params.tab");
+    expect(page).toContain('"action"');
+    expect(client).toContain("interestLane");
+    expect(client).toContain("ממתין לצד השני");
   });
 
   it("reveal de-emphasizes immediate outcome and prioritizes WhatsApp", () => {

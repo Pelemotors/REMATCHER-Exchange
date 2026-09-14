@@ -59,7 +59,7 @@ async function login(): Promise<string> {
 
 async function waitForDeployment(cookies: string, maxWaitMs = 300000): Promise<boolean> {
   const start = Date.now();
-  const markers = ["החיפושים שלי", "Exchange Assistant", "MySearchesPanel"];
+  const markers = ["יש לך לקוח שמחפש רכב", "חפש ברשת", "החיפושים שלי"];
   while (Date.now() - start < maxWaitMs) {
     try {
       const [homeRes, demandsRes] = await Promise.all([

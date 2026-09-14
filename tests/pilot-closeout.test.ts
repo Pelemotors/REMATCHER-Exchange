@@ -50,11 +50,12 @@ describe("Pilot closeout — confirmed bugs", () => {
   });
 
   it("Inventory filter all is not forced to ACTIVE-only client-side", () => {
-    const page = read("src/app/(dealer)/inventory/page.tsx");
+    const page = read("src/components/inventory/inventory-page-client.tsx");
     expect(page).not.toMatch(
       /else \{\s*list = list\.filter\(\(v\) => v\.status === "ACTIVE"\)/
     );
-    expect(page).toContain('id: "all"');
+    expect(page).toContain('setFilter("all")');
+    expect(page).toContain("הכל");
     expect(page).not.toContain('href: "#"');
   });
 

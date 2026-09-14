@@ -55,7 +55,7 @@ describe("Deep Links", () => {
   it("pages consume focus params", () => {
     expect(read("src/app/(dealer)/matches/page.tsx")).toContain("focusId");
     expect(read("src/app/(dealer)/opportunities/page.tsx")).toContain("focusId");
-    expect(read("src/app/(dealer)/inventory/page.tsx")).toContain(
+    expect(read("src/components/inventory/inventory-page-client.tsx")).toContain(
       'searchParams.get("focus")'
     );
     expect(read("src/app/(dealer)/validations/page.tsx")).toContain("focusId");
