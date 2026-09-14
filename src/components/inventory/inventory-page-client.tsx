@@ -1,29 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import {
-  BadgeV2,
   ButtonV2,
-  EmptyStateV2,
-  PageHeaderV2,
   SkeletonBlockV2,
   Surface,
 } from "@/components/ui/brand-v2";
 import { InventoryAgentWorkspace } from "@/components/inventory/inventory-agent-workspace";
 import { useSetAgentPageContext } from "@/components/assistant/agent-workspace-provider";
-import {
-  AttentionList,
-  FilterPills,
-  SnapshotBar,
-  WorkspaceSection,
-} from "@/components/ux/snapshot-attention";
-import {
-  commercialStateLabel,
-  EMPTY_COPY,
-  relativeDaysAgo,
-  vehiclePrimaryState,
-} from "@/lib/commercial-ux";
+import { EMPTY_COPY } from "@/lib/commercial-ux";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import styles from "@/app/(dealer)/inventory/inventory.module.css";
 
@@ -77,6 +64,51 @@ function vehicleName(v: InventoryVehicle) {
 
 function askingPrice(v: InventoryVehicle): number | null {
   return v.b2bPrice ?? v.retailPrice;
+}
+
+function humanVehicleState(v: InventoryVehicle): {
+  label: string;
+  tone: "signal" | "warning" | "muted";
+} | null {
+  const price = askingPrice(v);
+  if (v.status === "SOLD" || v.status === "ARCHIVED") {
+    return { label: "נמכר", tone: "muted" };
+  }
+  if (v.status !== "ACTIVE") return null;
+  if (
+    v.freshnessState === "STALE" ||
+    v.freshnessState === "VALIDATION_REQUIRED" ||
+    v.pendingValidationCount > 0
+  ) {
+    return { label: "דורש עדכון", tone: "warning" };
+  }
+  if (v.openInterestCount > 0) {
+    return { label: "יש עניין", tone: "signal" };
+  }
+  if (price == null) {
+    return { label: "חסר מחיר", tone: "warning" };
+  }
+  return null;
+}
+
+function vehicleMetaLine(v: InventoryVehicle): string {
+  const price = askingPrice(v);
+  const parts: string[] = [];
+  if (price != null) parts.push(formatCurrency(price));
+  if (v.mileage != null) parts.push(`${formatNumber(v.mileage)} ק״מ`);
+  return parts.join(" · ");
+}
+
+function openInventoryAssistant() {
+  window.dispatchEvent(
+    new CustomEvent("rematcher:open-assistant", {
+      detail: {
+        mode: "inventory_management",
+        preferFocusOnMobile: true,
+        presentation: "focus",
+      },
+    })
+  );
 }
 
 export function InventoryPageClient({
@@ -167,15 +199,7 @@ export function InventoryPageClient({
       const detail = (e as CustomEvent<{ tab?: "agent" | "import" }>).detail;
       const tab = detail?.tab ?? "agent";
       if (tab === "agent") {
-        window.dispatchEvent(
-          new CustomEvent("rematcher:open-assistant", {
-            detail: {
-              mode: "inventory_management",
-              preferFocusOnMobile: true,
-              presentation: "focus",
-            },
-          })
-        );
+        openInventoryAssistant();
         return;
       }
       setWorkspaceTab("import");
@@ -269,93 +293,78 @@ export function InventoryPageClient({
     }
   }
 
-  const attentionItems = useMemo(
-    () =>
-      vehicles
-        .filter(
-          (v) =>
-            v.status === "ACTIVE" &&
-            (v.freshnessState === "STALE" ||
-              v.freshnessState === "VALIDATION_REQUIRED" ||
-              v.pendingValidationCount > 0 ||
-              askingPrice(v) == null)
-        )
-        .map((v) => ({
-          id: v.id,
-          title: vehicleName(v),
-          body:
-            v.pendingValidationCount > 0 || v.freshnessState !== "FRESH"
-              ? "צריך לאמת זמינות"
-              : "חסר מחיר",
-          href:
-            v.pendingValidationCount > 0 || v.freshnessState !== "FRESH"
-              ? `/validations?focus=${encodeURIComponent(v.id)}`
-              : `/inventory?focus=${v.id}&enrich=1&filter=active`,
-          badge:
-            v.pendingValidationCount > 0 || v.freshnessState !== "FRESH"
-              ? "דורש אימות"
-              : "מידע חסר",
-          urgent: true,
-        })),
-    [vehicles]
-  );
+  const segmentFilter =
+    filter === "sold" ? "sold" : filter === "all" ? "all" : "active";
 
   return (
     <div className={styles.page}>
-      <PageHeaderV2
-        title="המלאי שלי"
-        subtitle="מרכז המלאי שלך ברשת"
-        action={
-          <div className="flex flex-wrap gap-2">
-            <ButtonV2
-              variant="signal"
-              onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent("rematcher:open-assistant", {
-                    detail: {
-                      mode: "inventory_management",
-                      preferFocusOnMobile: true,
-                      presentation: "focus",
-                    },
-                  })
-                )
-              }
-            >
-              דבר עם ה-Agent
-            </ButtonV2>
-            <ButtonV2
-              variant="secondary"
-              onClick={() => {
-                setWorkspaceTab("import");
-                setWorkspaceOpen(true);
-              }}
-            >
-              העלאת קובץ
-            </ButtonV2>
-          </div>
-        }
+      <div className={styles.headerRow}>
+        <h1 className={styles.title}>המלאי שלי</h1>
+        <ButtonV2 variant="signal" onClick={openInventoryAssistant}>
+          + הוסף רכב
+        </ButtonV2>
+      </div>
+
+      <p className={styles.lede}>
+        יש לך רכב? זרוק אותו לרשת — REMATCHER תחפש לו קונה.
+      </p>
+
+      <button
+        type="button"
+        className={styles.importLink}
+        onClick={() => {
+          setWorkspaceTab("import");
+          setWorkspaceOpen(true);
+        }}
+      >
+        ייבוא
+      </button>
+
+      <input
+        className="input"
+        placeholder="חיפוש: יצרן, דגם, שנה..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
       />
 
-      <SnapshotBar
-        metrics={[
-          { label: "רכבים", value: snapshot.total },
-          {
-            label: "דורשים טיפול",
-            value: snapshot.needsAttention,
-            href: "/inventory?filter=attention",
-            emphasize: snapshot.needsAttention > 0,
-          },
-          {
-            label: "עם עניין",
-            value: snapshot.withInterest,
-            href: "/opportunities?source=inventory",
-            emphasize: snapshot.withInterest > 0,
-          },
-        ]}
-      />
+      <div className={styles.segment} role="tablist" aria-label="סינון מלאי">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={segmentFilter === "active"}
+          className={`${styles.segmentBtn} ${
+            segmentFilter === "active" ? styles.segmentBtnActive : ""
+          }`}
+          onClick={() => setFilter("active")}
+        >
+          פעילים
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={segmentFilter === "sold"}
+          className={`${styles.segmentBtn} ${
+            segmentFilter === "sold" ? styles.segmentBtnActive : ""
+          }`}
+          onClick={() => setFilter("sold")}
+        >
+          נמכרו
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={segmentFilter === "all"}
+          className={`${styles.segmentBtn} ${
+            segmentFilter === "all" ? styles.segmentBtnActive : ""
+          }`}
+          onClick={() => setFilter("all")}
+        >
+          הכל
+        </button>
+      </div>
 
       {toast && (
-        <Surface depth="secondary" className="mb-3 border border-v2-signal/30 px-3 py-2 text-sm">
+        <Surface depth="secondary" className="border border-v2-signal/30 px-3 py-2 text-sm">
           {toast}
         </Surface>
       )}
@@ -374,38 +383,8 @@ export function InventoryPageClient({
         }}
       />
 
-      {attentionItems.length > 0 && filter === "active" && !workspaceOpen && (
-        <AttentionList title="דורש טיפול" items={attentionItems.slice(0, 5)} />
-      )}
-
-      <input
-        className="input mb-3"
-        placeholder="חיפוש: יצרן, דגם, שנה..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-
-      <FilterPills
-        value={filter}
-        onChange={(id) => setFilter(id as InventoryFilterId)}
-        options={[
-          { id: "active", label: "פעיל" },
-          { id: "attention", label: "דורש טיפול" },
-          { id: "interest", label: "עם עניין" },
-          { id: "missing_price", label: "חסר מחיר" },
-          { id: "sold", label: "נמכר" },
-          { id: "all", label: "הכל" },
-        ]}
-      />
-
-      <p className="mb-2 text-xs text-v2-text-muted">
-        מציג {vehicles.length} מתוך {pagination.totalCount || snapshot.total} · פעילים במלאי: {snapshot.total}
-      </p>
-
-      {loading && <SkeletonBlockV2 lines={3} className="mb-4" />}
-
       {editVehicle && (
-        <Surface depth="raised" className="mb-4 space-y-3 p-4">
+        <Surface depth="raised" className="space-y-3 p-4">
           <h3 className="font-semibold text-v2-text-primary">עריכת {vehicleName(editVehicle)}</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {(
@@ -444,7 +423,7 @@ export function InventoryPageClient({
       )}
 
       {soldConfirm && (
-        <Surface depth="raised" className="mb-4 space-y-3 border border-v2-signal/30 p-4">
+        <Surface depth="raised" className="space-y-3 border border-v2-signal/30 p-4">
           <p className="text-sm text-v2-text-primary">
             לסמן את {vehicleName(soldConfirm)} כנמכרה?
             <br />
@@ -461,130 +440,97 @@ export function InventoryPageClient({
         </Surface>
       )}
 
-      <WorkspaceSection>
-        {!loading && vehicles.filter((v) => v.status === "ACTIVE").length === 0 && filter !== "sold" ? (
-          <EmptyStateV2
-            title={EMPTY_COPY.inventory.title}
-            description={EMPTY_COPY.inventory.description}
-            action={
-              <ButtonV2
-                variant="signal"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent("rematcher:open-assistant", {
-                      detail: {
-                        mode: "inventory_management",
-                        preferFocusOnMobile: true,
-                        presentation: "focus",
-                      },
-                    })
-                  )
-                }
-              >
-                דבר עם ה-Agent
-              </ButtonV2>
-            }
-          />
-        ) : !loading && vehicles.length === 0 ? (
-          <EmptyStateV2
-            title={EMPTY_COPY.inventoryFilter.title}
-            description={EMPTY_COPY.inventoryFilter.description}
-            action={
-              <ButtonV2 variant="secondary" onClick={() => setFilter("active")}>
-                נקה סינון
-              </ButtonV2>
-            }
-          />
-        ) : (
-          <div className={styles.grid}>
-            {vehicles.map((v) => {
-              const price = askingPrice(v);
-              const state = vehiclePrimaryState({
-                status: v.status,
-                freshnessState: v.freshnessState,
-                hasInterest: v.openInterestCount > 0,
-                missingB2b: price == null,
-              });
-              return (
-                <div key={v.id} id={`vehicle-${v.id}`}>
-                  <Surface
-                    depth="raised"
-                    className={`${styles.card} ${highlightId === v.id ? "ring-2 ring-v2-signal" : ""}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-bold text-v2-text-primary">{vehicleName(v)}</h3>
-                        <p className="text-sm text-v2-text-secondary">
-                          {formatNumber(v.mileage)} ק״מ
-                          {price != null ? ` · ${formatCurrency(price)}` : ""}
-                        </p>
-                      </div>
-                      <BadgeV2
-                        variant={
-                          state.primary === "needs_validation" || state.primary === "has_interest"
-                            ? "signal"
-                            : state.primary === "missing_info"
-                              ? "warning"
-                              : "neutral"
-                        }
-                      >
-                        {commercialStateLabel(state.primary)}
-                      </BadgeV2>
-                    </div>
-                    <p className="mt-2 text-xs text-v2-text-muted">
-                      {state.secondary ?? `עודכן ${relativeDaysAgo(v.updatedAt) ?? ""}`}
-                    </p>
-                    {v.openInterestCount > 0 && (
-                      <p className="mt-2 text-sm text-v2-signal">{v.openInterestCount} עם עניין</p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {(v.pendingValidationCount > 0 || v.freshnessState !== "FRESH") && v.status === "ACTIVE" && (
-                        <ButtonV2
-                          variant="signal"
-                          href={`/validations?focus=${encodeURIComponent(v.id)}`}
-                          className="text-sm"
-                        >
-                          אמת זמינות
-                        </ButtonV2>
-                      )}
-                      {v.openInterestCount > 0 && (
-                        <ButtonV2 variant="secondary" href="/opportunities?source=inventory" className="text-sm">
-                          יש עניין
-                        </ButtonV2>
-                      )}
-                      {v.status === "ACTIVE" && (
-                        <>
-                          <ButtonV2 variant="secondary" className="text-sm" onClick={() => beginEdit(v)}>
-                            ערוך
-                          </ButtonV2>
-                          <ButtonV2 variant="ghost" className="text-sm" onClick={() => setSoldConfirm(v)}>
-                            סמן כנמכר
-                          </ButtonV2>
-                        </>
-                      )}
-                    </div>
-                  </Surface>
-                </div>
-              );
-            })}
-          </div>
-        )}
+      {loading && vehicles.length === 0 && <SkeletonBlockV2 lines={3} />}
 
-        {pagination.hasMore && vehicles.length > 0 && (
-          <div className="mt-4 flex justify-center">
-            <ButtonV2
-              variant="secondary"
-              disabled={loading}
-              onClick={() => {
-                setLoading(true);
-                void load({ page: pagination.page + 1, filter, q: query });
-              }}
-            >
-              {loading ? "טוען..." : "טען עוד"}
-            </ButtonV2>
-          </div>
-        )}
-      </WorkspaceSection>
+      {!loading &&
+      vehicles.filter((v) => v.status === "ACTIVE").length === 0 &&
+      filter !== "sold" ? (
+        <div className={styles.empty}>
+          <p className={styles.emptyTitle}>{EMPTY_COPY.inventory.title}</p>
+          <p className={styles.emptyBody}>{EMPTY_COPY.inventory.description}</p>
+          <ButtonV2 variant="signal" className="mt-4" onClick={openInventoryAssistant}>
+            + הוסף רכב
+          </ButtonV2>
+        </div>
+      ) : !loading && vehicles.length === 0 ? (
+        <div className={styles.empty}>
+          <p className={styles.emptyTitle}>{EMPTY_COPY.inventoryFilter.title}</p>
+          <p className={styles.emptyBody}>{EMPTY_COPY.inventoryFilter.description}</p>
+          <ButtonV2 variant="secondary" className="mt-4" onClick={() => setFilter("active")}>
+            נקה סינון
+          </ButtonV2>
+        </div>
+      ) : (
+        <div className={styles.list}>
+          {vehicles.map((v) => {
+            const state = humanVehicleState(v);
+            const meta = vehicleMetaLine(v);
+            const rowClass = [
+              styles.row,
+              highlightId === v.id ? styles.rowHighlight : "",
+              v.status !== "ACTIVE" ? styles.rowStatic : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const stateClass = [
+              styles.rowState,
+              state?.tone === "warning" ? styles.rowStateWarning : "",
+              state?.tone === "muted" ? styles.rowStateMuted : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            const content = (
+              <>
+                <div className={styles.thumb} aria-hidden />
+                <div className={styles.rowMain}>
+                  <p className={styles.rowTitle}>{vehicleName(v)}</p>
+                  {meta && <p className={styles.rowMeta}>{meta}</p>}
+                  {state && <p className={stateClass}>{state.label}</p>}
+                </div>
+                {v.status === "ACTIVE" && (
+                  <ChevronLeft className={styles.chevron} size={18} aria-hidden />
+                )}
+              </>
+            );
+
+            if (v.status === "ACTIVE") {
+              return (
+                <button
+                  key={v.id}
+                  id={`vehicle-${v.id}`}
+                  type="button"
+                  className={rowClass}
+                  onClick={() => beginEdit(v)}
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            return (
+              <div key={v.id} id={`vehicle-${v.id}`} className={rowClass}>
+                {content}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {pagination.hasMore && vehicles.length > 0 && (
+        <div className={styles.loadMore}>
+          <ButtonV2
+            variant="secondary"
+            disabled={loading}
+            onClick={() => {
+              setLoading(true);
+              void load({ page: pagination.page + 1, filter, q: query });
+            }}
+          >
+            {loading ? "טוען..." : "טען עוד"}
+          </ButtonV2>
+        </div>
+      )}
     </div>
   );
 }

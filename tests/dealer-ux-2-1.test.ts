@@ -114,13 +114,13 @@ describe("dealer UX 2.1 product-flow guards", () => {
   });
 
   it("inventory embeds management workspace", () => {
-    const src = readFileSync(
-      join(root, "src/app/(dealer)/inventory/page.tsx"),
+    const client = readFileSync(
+      join(root, "src/components/inventory/inventory-page-client.tsx"),
       "utf8"
     );
-    expect(src).toContain("InventoryAgentWorkspace");
-    expect(src).toContain("דבר עם ה-Agent");
-    expect(src).toContain("העלאת קובץ");
+    expect(client).toContain("InventoryAgentWorkspace");
+    expect(client).toContain("המלאי שלי");
+    expect(client).toContain("+ הוסף רכב");
   });
 
   it("validations explain why now commercially", () => {
