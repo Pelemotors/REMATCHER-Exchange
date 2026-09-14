@@ -2,15 +2,17 @@ import {
   Home,
   Package,
   Search,
-  Link2,
   Bell,
 } from "lucide-react";
 
-/** Canonical mobile bottom + desktop sidebar primary destinations. */
+/** Canonical mobile bottom + desktop sidebar primary destinations (3 core jobs). */
 export const MOBILE_BOTTOM_NAV_ITEMS = [
   { href: "/home", label: "בית", icon: Home },
-  { href: "/inventory", label: "מלאי", icon: Package },
-  { href: "/demand", label: "חיפושים", icon: Search },
-  { href: "/matches", label: "התאמות", icon: Link2 },
+  { href: "/demand", label: "החיפושים שלי", icon: Search },
+  { href: "/inventory", label: "המלאי שלי", icon: Package },
+] as const;
+
+/** Secondary destinations — reachable via account/menu, not primary nav. */
+export const SECONDARY_NAV_ITEMS = [
   { href: "/activity", label: "פעילות", icon: Bell },
 ] as const;

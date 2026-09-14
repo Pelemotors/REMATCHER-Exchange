@@ -9,7 +9,7 @@ import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
 import { AgentWorkspaceProvider } from "@/components/assistant/agent-workspace-provider";
 import { useAgentShellFlags } from "@/components/layout/agent-shell-chrome";
 import { BRAND } from "@/config/brand";
-import { MOBILE_BOTTOM_NAV_ITEMS } from "@/config/mobile-nav";
+import { MOBILE_BOTTOM_NAV_ITEMS, SECONDARY_NAV_ITEMS } from "@/config/mobile-nav";
 import { cn } from "@/lib/utils";
 import styles from "./app-shell-v2.module.css";
 
@@ -31,8 +31,8 @@ const PushOnboardingPrompt = dynamic(
 
 const pageTitles: Record<string, string> = {
   "/home": "בית",
-  "/inventory": "מלאי",
-  "/demand": "חיפושים",
+  "/inventory": "המלאי שלי",
+  "/demand": "החיפושים שלי",
   "/matches": "התאמות",
   "/activity": "פעילות",
   "/account": "חשבון",
@@ -87,6 +87,15 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className={styles.sidebarFooter}>
+          {SECONDARY_NAV_ITEMS.map((item) => (
+            <NavItemV2
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              icon={item.icon}
+              active={pathname.startsWith(item.href)}
+            />
+          ))}
           <NavItemV2
             href="/account"
             label="חשבון"

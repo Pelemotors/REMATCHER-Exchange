@@ -73,13 +73,11 @@ describe("PWA navigate wiring", () => {
 });
 
 describe("mobile bottom nav", () => {
-  it("keeps 5 primary destinations", () => {
+  it("keeps 3 primary destinations", () => {
     expect(MOBILE_BOTTOM_NAV_ITEMS.map((i) => i.href)).toEqual([
       "/home",
-      "/inventory",
       "/demand",
-      "/matches",
-      "/activity",
+      "/inventory",
     ]);
   });
 
