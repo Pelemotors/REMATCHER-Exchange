@@ -76,14 +76,19 @@ describe("dealer UX 2.1 product-flow guards", () => {
   });
 
   it("does not concatenate demand reflections into a summary block", () => {
-    const src = readFileSync(
+    const page = readFileSync(
       join(root, "src/app/(dealer)/demand/page.tsx"),
       "utf8"
     );
-    expect(src).not.toContain("סיכום החיפושים הפעילים");
-    expect(src).not.toContain(".map((d) => d.reflection).join");
-    expect(src).toContain("SnapshotBar");
-    expect(src).toContain("דורשים תשומת לב");
+    const client = readFileSync(
+      join(root, "src/components/demand/demand-page-client.tsx"),
+      "utf8"
+    );
+    expect(page).not.toContain("סיכום החיפושים הפעילים");
+    expect(page).not.toContain(".map((d) => d.reflection).join");
+    expect(client).toContain("החיפושים שלי");
+    expect(client).toContain("/api/matches?demandId=");
+    expect(client).not.toContain("SnapshotBar");
   });
 
   it("matches page defaults to action queue tabs", () => {

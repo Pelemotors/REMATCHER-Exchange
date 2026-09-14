@@ -12,7 +12,7 @@ async function DemandContent({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const showNew = (Array.isArray(params.new) ? params.new[0] : params.new) === "1";
   const editId = Array.isArray(params.edit) ? params.edit[0] : params.edit;
-  const filter = Array.isArray(params.filter) ? params.filter[0] : params.filter;
+  const openId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const demands = await getEnrichedDemandsForDealer(dealerId, {
     includeHistory: true,
@@ -27,7 +27,7 @@ async function DemandContent({ searchParams }: { searchParams: SearchParams }) {
       initialActive={active}
       initialEnded={ended}
       initialMode={showNew ? "create" : editId ? "edit" : "list"}
-      initialAttentionOnly={filter === "attention"}
+      initialOpenId={openId ?? null}
     />
   );
 }

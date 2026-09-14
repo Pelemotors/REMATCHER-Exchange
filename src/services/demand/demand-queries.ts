@@ -11,6 +11,7 @@ import {
   demandTitle,
   type DemandUxStatus,
 } from "@/lib/demand-display";
+import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
 
 export interface EnrichedDemand {
   id: string;
@@ -52,8 +53,7 @@ export async function getEnrichedDemandsForDealer(
       by: ["demandId"],
       where: {
         demandId: { in: demands.map((d) => d.id) },
-        status: "VALIDATED",
-        buyerInterests: { none: { dealerId } },
+        ...BUYER_VISIBLE_MATCH_WHERE,
       },
       _count: { _all: true },
     });

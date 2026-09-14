@@ -5,6 +5,7 @@ import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
 
 export interface BuyerMatchListItem {
   id: string;
+  demandId: string;
   status: string;
   scoreBand: string | null;
   explanation: MatchExplanation;
@@ -13,10 +14,19 @@ export interface BuyerMatchListItem {
   revealId: string | null;
 }
 
-export async function listBuyerMatches(dealerId: string): Promise<BuyerMatchListItem[]> {
+export async function listBuyerMatches(
+  dealerId: string,
+  options?: { demandId?: string; limit?: number }
+): Promise<BuyerMatchListItem[]> {
+  const demandId = options?.demandId?.trim() || undefined;
+  const limit = options?.limit ?? (demandId ? 40 : 12);
+
   const matches = await prisma.candidateMatch.findMany({
     where: {
-      demand: { dealerId },
+      demand: {
+        dealerId,
+        ...(demandId ? { id: demandId } : {}),
+      },
       ...BUYER_VISIBLE_MATCH_WHERE,
     },
     include: {
@@ -36,16 +46,21 @@ export async function listBuyerMatches(dealerId: string): Promise<BuyerMatchList
       },
     },
     orderBy: { score: "desc" },
-    take: 12,
+    take: limit,
   });
 
   return matches.map((m) => ({
     id: m.id,
+    demandId: m.demandId,
     status: m.status,
     scoreBand: m.scoreBand,
     explanation: m.explanationJson as MatchExplanation,
     vehicle: toBuyerMatchView(m.vehicle),
-    interest: m.buyerInterests[0] ? { status: m.buyerInterests[0].status } : null,
-    revealId: m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ?? null,
+    interest: m.buyerInterests[0]
+      ? { status: m.buyerInterests[0].status }
+      : null,
+    revealId:
+      m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
+      null,
   }));
 }

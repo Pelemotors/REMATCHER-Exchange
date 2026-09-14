@@ -4,13 +4,18 @@ import { recordBuyerInterest } from "@/services/domain/matching-flow";
 import { canDealerReveal } from "@/services/commercial/reveal-usage";
 import { listBuyerMatches } from "@/services/matching/list-buyer-matches";
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.dealerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json(await listBuyerMatches(session.user.dealerId));
+  const { searchParams } = new URL(req.url);
+  const demandId = searchParams.get("demandId") ?? undefined;
+
+  return NextResponse.json(
+    await listBuyerMatches(session.user.dealerId, { demandId })
+  );
 }
 
 export async function POST(req: Request) {
