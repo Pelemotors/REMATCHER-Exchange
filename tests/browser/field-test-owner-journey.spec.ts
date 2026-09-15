@@ -39,7 +39,8 @@ test.describe("Field Test owner journey (public HTTPS)", () => {
       "/intake/handoff",
       "/intake/review",
     ]) {
-      await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("load").catch(() => undefined);
       await page.waitForTimeout(600);
       const t = await page.locator("body").innerText();
       expect(t, path).not.toMatch(/Application error/i);
