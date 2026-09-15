@@ -1,0 +1,23 @@
+# REMATCHER Exchange — Field Test Postgres (NOT Production)
+# Isolated volume + dedicated port. Do not point Production env here.
+services:
+  field-test-db:
+    image: postgres:16-alpine
+    container_name: rematcher-exchange-field-test-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: exchange_ft
+      POSTGRES_PASSWORD: exchange_ft_dev_only_change_me
+      POSTGRES_DB: rematcher_exchange_field_test
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - exchange_ft_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exchange_ft -d rematcher_exchange_field_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  exchange_ft_pgdata:

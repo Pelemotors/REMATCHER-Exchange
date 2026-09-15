@@ -22,8 +22,32 @@ export async function GET(_req: Request, { params }: Params) {
 
   const parts = (await params).key ?? [];
   const storageKey = parts.map((p) => decodeURIComponent(p)).join("/");
-  if (!storageKey.startsWith("vehicles/")) {
+  if (!storageKey.startsWith("vehicles/") && !storageKey.startsWith("intake/")) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Intake media: owner-only (not buyer-visible until committed to VehicleMedia)
+  if (storageKey.startsWith("intake/")) {
+    const parts = storageKey.split("/");
+    const ownerDealerId = parts[1];
+    if (!ownerDealerId || ownerDealerId !== session.user.dealerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    try {
+      const abs = resolveMediaAbsolutePath(storageKey);
+      const info = await stat(abs);
+      const stream = createReadStream(abs);
+      const webStream = Readable.toWeb(stream) as unknown as ReadableStream;
+      return new NextResponse(webStream, {
+        headers: {
+          "Content-Type": "image/webp",
+          "Content-Length": String(info.size),
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   }
 
   const media = await prisma.vehicleMedia.findFirst({

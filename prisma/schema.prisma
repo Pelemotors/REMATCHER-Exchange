@@ -88,6 +88,8 @@ model Dealer {
   privacyAiOnboarding PrivacyAiOnboardingState[]
   accountDeletionRequests AccountDeletionRequest[]
   exchangeLearnings ExchangeLearning[]
+  intakeBatches     IntakeBatch[]
+  vehicleCandidates VehicleCandidate[]
 
   @@index([cohort])
 }
@@ -241,8 +243,9 @@ model Vehicle {
   exchangeCases   ExchangeCase[]
   informationRequests InformationRequest[]
   media           VehicleMedia[]
+  intakeCandidates VehicleCandidate[]
 
-  /** Grandfathered inventory defaults true; new manual vehicles start false until EXTERIOR+INTERIOR */
+  /** Grandfathered inventory defaults true; new vehicles start false until EXTERIOR+INTERIOR */
   mediaReady      Boolean       @default(true)
 }
 
@@ -1175,3 +1178,159 @@ model RateLimitEntry {
   @@id([bucket, key])
   @@index([resetAt])
 }
+
+// ─── Inventory Intake (Share / bulk capture) ─────────────────────
+
+enum IntakeSource {
+  IOS_SHARE
+  ANDROID_SHARE
+  WEB_UPLOAD
+  MANUAL
+  IMPORT
+}
+
+enum IntakeBatchStatus {
+  RECEIVING
+  RECEIVED
+  PROCESSING
+  NEEDS_REVIEW
+  READY
+  COMMITTED
+  FAILED
+}
+
+enum IntakeMediaProcessingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum VehicleCandidateStatus {
+  DETECTED
+  IDENTIFYING
+  NEEDS_INFO
+  NEEDS_CONFIRMATION
+  READY
+  COMMITTED
+  REJECTED
+}
+
+enum VehicleCandidateReviewStatus {
+  NONE
+  PENDING
+  RESOLVED
+}
+
+model IntakeBatch {
+  id                    String            @id @default(cuid())
+  dealerId              String
+  source                IntakeSource
+  status                IntakeBatchStatus @default(RECEIVING)
+  clientBatchId         String
+  receivedAt            DateTime          @default(now())
+  processingStartedAt   DateTime?
+  processingCompletedAt DateTime?
+  failureCode           String?
+  failureMessage        String?
+  /** Safe OS/share metadata only — never secrets or raw FS paths */
+  sourceMetadata        Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  dealer     Dealer             @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  media      IntakeMedia[]
+  texts      IntakeText[]
+  candidates VehicleCandidate[]
+
+  @@unique([dealerId, clientBatchId])
+  @@index([dealerId, status, receivedAt])
+  @@index([status, updatedAt])
+}
+
+model IntakeMedia {
+  id               String                      @id @default(cuid())
+  batchId          String
+  storageKey       String                      @unique
+  mimeType         String
+  bytes            Int?
+  width            Int?
+  height           Int?
+  checksum         String?
+  originalOrder    Int                         @default(0)
+  processingStatus IntakeMediaProcessingStatus @default(PENDING)
+  /** Suggested EXTERIOR/INTERIOR/OTHER + confidence — not VehicleMedia until commit */
+  categoryHint     VehicleMediaCategory?
+  categoryConfidence Float?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  batch      IntakeBatch                 @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  candidates VehicleCandidateMedia[]
+
+  @@index([batchId, originalOrder])
+  @@index([processingStatus])
+}
+
+model IntakeText {
+  id         String   @id @default(cuid())
+  batchId    String
+  text       String
+  provenance String   @default("WHATSAPP_TEXT")
+  createdAt  DateTime @default(now())
+
+  batch IntakeBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+}
+
+model VehicleCandidate {
+  id                 String                       @id @default(cuid())
+  batchId            String
+  dealerId           String
+  status             VehicleCandidateStatus       @default(DETECTED)
+  reviewStatus       VehicleCandidateReviewStatus @default(NONE)
+  detectedPlate      String?
+  plateConfidence    Float?
+  plateNormalized    String?
+  /** Canonical identity fields from GOV (and only those) */
+  govIdentityJson    Json?
+  govState           String?
+  govLookedUpAt      DateTime?
+  /** Commercial / current fields — not overridden by GOV */
+  commercialJson     Json?
+  fieldProvenance    Json?
+  confidenceBand     String?
+  missingFields      Json?
+  conflictsJson      Json?
+  existingVehicleId  String?
+  committedVehicleId String?                      @unique
+  failureCode        String?
+  failureMessage     String?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  batch            IntakeBatch             @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  dealer           Dealer                  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  existingVehicle  Vehicle?                @relation(fields: [existingVehicleId], references: [id], onDelete: SetNull)
+  media            VehicleCandidateMedia[]
+
+  @@index([batchId, status])
+  @@index([dealerId, status, updatedAt])
+  @@index([dealerId, plateNormalized])
+  @@index([existingVehicleId])
+}
+
+model VehicleCandidateMedia {
+  id          String @id @default(cuid())
+  candidateId String
+  mediaId     String
+  sortOrder   Int    @default(0)
+
+  candidate VehicleCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  media     IntakeMedia      @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, mediaId])
+  @@index([mediaId])
+}
+
