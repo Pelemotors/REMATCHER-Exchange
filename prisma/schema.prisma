@@ -141,6 +141,7 @@ model DealerMemoryItem {
 
   @@index([dealerId, status])
   @@index([dealerId, topicKey, status])
+  @@index([dealerId, topicKey, status, updatedAt(sort: Desc)])
   @@index([dealerId, expiresAt])
 }
 
@@ -247,6 +248,9 @@ model Vehicle {
 
   /** Grandfathered inventory defaults true; new vehicles start false until EXTERIOR+INTERIOR */
   mediaReady      Boolean       @default(true)
+
+  @@index([dealerId, status, updatedAt(sort: Desc)])
+  @@index([dealerId, status, freshnessState])
 }
 
 enum VehicleStatus {
@@ -344,6 +348,9 @@ model Demand {
   searchIntentVersions SearchIntentVersion[]
   activeSearchIntentVersion SearchIntentVersion? @relation("DemandActiveIntent", fields: [activeSearchIntentVersionId], references: [id], onDelete: SetNull)
   informationRequests InformationRequest[]
+
+  @@index([dealerId, status, updatedAt(sort: Desc)])
+  @@index([dealerId, status, expiresAt])
 }
 
 enum DemandStatus {
@@ -441,6 +448,7 @@ model CandidateMatch {
   informationRequests InformationRequest[]
 
   @@unique([demandId, vehicleId])
+  @@index([demandId, status])
   @@index([searchIntentVersionId])
   @@index([resolutionState, status])
 }
@@ -483,6 +491,8 @@ model ValidationEvent {
   vehicle         Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   dealer          Dealer          @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   candidateMatch  CandidateMatch? @relation(fields: [candidateMatchId], references: [id], onDelete: SetNull)
+
+  @@index([dealerId, status, vehicleId])
 }
 
 enum ValidationType {
@@ -538,6 +548,8 @@ model SellerOpportunity {
   buyerInterest   BuyerInterest   @relation(fields: [buyerInterestId], references: [id], onDelete: Cascade)
   vehicle         Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   sellerInterest  SellerInterest?
+
+  @@index([vehicleId, status])
 }
 
 enum OpportunityStatus {
@@ -1229,6 +1241,8 @@ model IntakeBatch {
   status                IntakeBatchStatus @default(RECEIVING)
   clientBatchId         String
   receivedAt            DateTime          @default(now())
+  /** Durable ACK timestamp — client may show קיבלנו after this is set */
+  acknowledgedAt        DateTime?
   processingStartedAt   DateTime?
   processingCompletedAt DateTime?
   failureCode           String?
