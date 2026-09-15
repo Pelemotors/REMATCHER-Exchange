@@ -34,6 +34,8 @@ export function getRetentionPolicy() {
     exchangeEventsCasesYears: 5,
     consentHistoryYearsAfterAccountEnd: 3,
     backupCycleDaysMax: 90,
+    /** Committed/failed intake media retained this many days before eligible cleanup */
+    intakeMediaDaysAfterTerminal: 30,
     dealerMemory: "while_relevant_and_account_active",
     exchangeLearnings: "while_relevant_with_lifecycle",
   } as const;

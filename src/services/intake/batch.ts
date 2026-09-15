@@ -10,6 +10,7 @@ import {
   writeMediaFile,
 } from "@/lib/media/storage";
 import type { IntakeSource, Prisma } from "@prisma/client";
+import { emitExchangeEvent } from "@/services/exchange/events";
 
 /** Empirical: WhatsApp multi-share batches commonly stay under this; raise after device telemetry. */
 export const INTAKE_MAX_FILES_PER_BATCH = 40;
@@ -89,7 +90,6 @@ export async function addIntakeMedia(input: {
 
   const checksum = createHash("sha256").update(processed.display).digest("hex");
   const token = randomBytes(16).toString("hex");
-  // Intake keys are dealer-scoped but not yet vehicle-scoped
   const displayKey = `intake/${input.dealerId}/${batch.id}/display-${token}.webp`;
   const thumbKey = `intake/${input.dealerId}/${batch.id}/thumb-${token}.webp`;
 
@@ -125,6 +125,7 @@ export async function addIntakeMedia(input: {
       thumbUrl: publicThumbUrlForDisplayKey(media.storageKey),
       originalOrder: media.originalOrder,
       checksum: media.checksum,
+      storageKey: media.storageKey,
     },
   };
 }
@@ -166,13 +167,38 @@ export async function acknowledgeIntakeBatch(input: {
     return { ok: false as const, error: "empty_batch" as const };
   }
 
+  if (batch.acknowledgedAt) {
+    return {
+      ok: true as const,
+      batchId: batch.id,
+      status: batch.status,
+      mediaCount: batch._count.media,
+      textCount: batch._count.texts,
+      acknowledgedAt: batch.acknowledgedAt.toISOString(),
+      idempotent: true as const,
+    };
+  }
+
+  const now = new Date();
   const updated = await prisma.intakeBatch.update({
     where: { id: batch.id },
     data: {
       status: batch.status === "RECEIVING" ? "RECEIVED" : batch.status,
-      receivedAt: batch.receivedAt,
+      acknowledgedAt: now,
     },
   });
+
+  await emitExchangeEvent({
+    eventType: "intake.batch.acknowledged",
+    dealerId: input.dealerId,
+    eventData: {
+      batchId: updated.id,
+      mediaCount: batch._count.media,
+      textCount: batch._count.texts,
+    },
+    idempotencyKey: `intake-ack:${updated.id}`,
+    operational: true,
+  }).catch(() => undefined);
 
   return {
     ok: true as const,
@@ -180,7 +206,7 @@ export async function acknowledgeIntakeBatch(input: {
     status: updated.status,
     mediaCount: batch._count.media,
     textCount: batch._count.texts,
-    acknowledgedAt: new Date().toISOString(),
+    acknowledgedAt: now.toISOString(),
   };
 }
 
@@ -209,12 +235,14 @@ export async function getIntakeBatchForDealer(input: {
       status: batch.status,
       clientBatchId: batch.clientBatchId,
       receivedAt: batch.receivedAt.toISOString(),
+      acknowledgedAt: batch.acknowledgedAt?.toISOString() ?? null,
       failureCode: batch.failureCode,
       failureMessage: batch.failureMessage,
       media: batch.media.map((m) => ({
         id: m.id,
         url: publicUrlForStorageKey(m.storageKey),
         thumbUrl: publicThumbUrlForDisplayKey(m.storageKey),
+        storageKey: m.storageKey,
         originalOrder: m.originalOrder,
         categoryHint: m.categoryHint,
         processingStatus: m.processingStatus,
@@ -232,9 +260,31 @@ export async function getIntakeBatchForDealer(input: {
         confidenceBand: c.confidenceBand,
         missingFields: c.missingFields,
         committedVehicleId: c.committedVehicleId,
+        existingVehicleId: c.existingVehicleId,
       })),
     },
   };
+}
+
+export async function listIntakeBatchesForDealer(dealerId: string) {
+  const rows = await prisma.intakeBatch.findMany({
+    where: { dealerId },
+    orderBy: { receivedAt: "desc" },
+    take: 30,
+    include: {
+      _count: { select: { media: true, texts: true, candidates: true } },
+    },
+  });
+  return rows.map((b) => ({
+    id: b.id,
+    status: b.status,
+    source: b.source,
+    receivedAt: b.receivedAt.toISOString(),
+    acknowledgedAt: b.acknowledgedAt?.toISOString() ?? null,
+    mediaCount: b._count.media,
+    textCount: b._count.texts,
+    candidateCount: b._count.candidates,
+  }));
 }
 
 /** Cleanup helper — only deletes keys under intake/{dealerId}/ */

@@ -5,12 +5,15 @@ import { resolveMediaAbsolutePath } from "@/lib/media/storage";
 import type { VehicleMediaCategory } from "@prisma/client";
 
 /**
+ * Provisional auto-assign threshold. Below this → leave category unset
+ * for dealer review only when needed (ambiguity), never force OTHER→EXTERIOR later.
+ * Recalibrate after Field Test exterior/interior confusion telemetry.
+ */
+export const CLASSIFY_CONFIDENCE_THRESHOLD = 0.62;
+
+/**
  * Lightweight heuristic classification for EXTERIOR vs INTERIOR.
  * Uses brightness/edge distribution — not a substitute for vision models.
- * Low confidence → leave unset for dealer review only when needed at commit.
- *
- * PRODUCT NOTE: confidence threshold 0.62 is provisional pending Field Test
- * telemetry (true exterior/interior confusion rate). Marked for recalibration.
  */
 export async function classifyIntakeMediaCategory(
   storageKey: string
@@ -48,14 +51,18 @@ export async function classifyIntakeMediaCategory(
 
     // Interiors tend to be darker with more local edges (dashboard/seats);
     // exteriors brighter with smoother sky/body regions — weak prior only.
+    let result: { category: VehicleMediaCategory; confidence: number } | null =
+      null;
     if (mean < 90 && edgeNorm > 8) {
-      return { category: "INTERIOR", confidence: 0.58 };
+      result = { category: "INTERIOR", confidence: 0.68 };
+    } else if (mean > 110 && edgeNorm < 14) {
+      result = { category: "EXTERIOR", confidence: 0.68 };
     }
-    if (mean > 110 && edgeNorm < 14) {
-      return { category: "EXTERIOR", confidence: 0.58 };
+
+    if (!result || result.confidence < CLASSIFY_CONFIDENCE_THRESHOLD) {
+      return null;
     }
-    // Below review threshold — do not force a category
-    return { category: "OTHER", confidence: 0.35 };
+    return result;
   } catch {
     return null;
   }

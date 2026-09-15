@@ -6,34 +6,55 @@ export type ExtractedField<T> = {
   confidence: number;
 };
 
+const PLATE_RE =
+  /\b(\d{2,3}[-\s]?\d{2,3}[-\s]?\d{2,3}|\d{7,8})\b/g;
+
+function plateFromMatch(raw: string): ExtractedField<string> | null {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 8) return null;
+  return {
+    value: digits,
+    source: "WHATSAPP_TEXT",
+    confidence: digits.length === 7 || digits.length === 8 ? 0.75 : 0.55,
+  };
+}
+
+/** All distinct Israeli-looking plates in text (for multi-vehicle batches). */
+export function extractAllPlatesFromText(text: string): ExtractedField<string>[] {
+  if (!text?.trim()) return [];
+  const seen = new Set<string>();
+  const out: ExtractedField<string>[] = [];
+  for (const m of text.matchAll(PLATE_RE)) {
+    const plate = plateFromMatch(m[1]);
+    if (plate && !seen.has(plate.value)) {
+      seen.add(plate.value);
+      out.push(plate);
+    }
+  }
+  return out;
+}
+
 /**
  * Deterministic Hebrew commercial extraction from share text.
  * Does not invent plates — only regex evidence with confidence.
  */
 export function extractCommercialFromText(text: string): {
   plate?: ExtractedField<string>;
+  plates: ExtractedField<string>[];
   fields: Record<string, unknown>;
   provenance: Record<string, unknown>;
 } {
   const fields: Record<string, unknown> = {};
   const provenance: Record<string, unknown> = {};
-  let plate: ExtractedField<string> | undefined;
+  const plates = extractAllPlatesFromText(text);
+  const plate = plates[0];
 
-  if (!text?.trim()) return { fields, provenance };
+  if (!text?.trim()) return { fields, provenance, plates };
 
-  // Israeli plates often appear as 12-345-67 / 123-45-678 / 12345678
-  const plateMatch = text.match(
-    /\b(\d{2,3}[-\s]?\d{2,3}[-\s]?\d{2,3}|\d{7,8})\b/
-  );
-  if (plateMatch) {
-    const digits = plateMatch[1].replace(/\D/g, "");
-    if (digits.length >= 7 && digits.length <= 8) {
-      plate = {
-        value: digits,
-        source: "WHATSAPP_TEXT",
-        confidence: digits.length === 7 || digits.length === 8 ? 0.75 : 0.55,
-      };
-      provenance.detectedPlate = plate;
+  if (plate) {
+    provenance.detectedPlate = plate;
+    if (plates.length > 1) {
+      provenance.detectedPlates = plates;
     }
   }
 
@@ -99,5 +120,5 @@ export function extractCommercialFromText(text: string): {
     }
   }
 
-  return { plate, fields, provenance };
+  return { plate, plates, fields, provenance };
 }

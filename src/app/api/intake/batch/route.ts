@@ -6,7 +6,9 @@ import {
   addIntakeText,
   createOrResumeIntakeBatch,
   getIntakeBatchForDealer,
+  listIntakeBatchesForDealer,
 } from "@/services/intake/batch";
+import { checkIntakeRateLimit } from "@/services/intake/rate-limit";
 import type { IntakeSource } from "@prisma/client";
 
 const SOURCES = new Set([
@@ -25,15 +27,14 @@ export async function GET(req: Request) {
       { status: authResult.status }
     );
   }
-
-  const batchId = new URL(req.url).searchParams.get("batchId");
+  const dealerId = authResult.session.user.dealerId!;
+  const url = new URL(req.url);
+  const batchId = url.searchParams.get("batchId");
   if (!batchId) {
-    return NextResponse.json({ error: "batchId required" }, { status: 400 });
+    const list = await listIntakeBatchesForDealer(dealerId);
+    return NextResponse.json({ batches: list });
   }
-  const result = await getIntakeBatchForDealer({
-    dealerId: authResult.session.user.dealerId!,
-    batchId,
-  });
+  const result = await getIntakeBatchForDealer({ dealerId, batchId });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 404 });
   }
@@ -53,6 +54,18 @@ export async function POST(req: Request) {
 
   const contentType = req.headers.get("content-type") || "";
   if (contentType.includes("multipart/form-data")) {
+    const limited = checkIntakeRateLimit({ dealerId, kind: "upload" });
+    if (limited.blocked) {
+      return NextResponse.json(
+        { error: "rate_limited" },
+        {
+          status: 429,
+          headers: limited.retryAfterMs
+            ? { "Retry-After": String(Math.ceil(limited.retryAfterMs / 1000)) }
+            : undefined,
+        }
+      );
+    }
     const form = await req.formData();
     const batchId = String(form.get("batchId") ?? "");
     const file = form.get("file");
@@ -91,6 +104,10 @@ export async function POST(req: Request) {
   };
 
   if (body.action === "ack" && body.batchId) {
+    const limited = checkIntakeRateLimit({ dealerId, kind: "ack" });
+    if (limited.blocked) {
+      return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    }
     const result = await acknowledgeIntakeBatch({
       dealerId,
       batchId: body.batchId,
@@ -101,7 +118,9 @@ export async function POST(req: Request) {
     }
     void import("@/services/intake/process-batch")
       .then((m) => m.processIntakeBatch(dealerId, result.batchId))
-      .catch(() => undefined);
+      .catch((err) => {
+        console.error("[intake] processIntakeBatch failed", err);
+      });
     return NextResponse.json(result);
   }
 
@@ -123,6 +142,10 @@ export async function POST(req: Request) {
     body.source &&
     SOURCES.has(body.source)
   ) {
+    const limited = checkIntakeRateLimit({ dealerId, kind: "create" });
+    if (limited.blocked) {
+      return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    }
     const result = await createOrResumeIntakeBatch({
       dealerId,
       clientBatchId: body.clientBatchId,

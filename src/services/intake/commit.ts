@@ -6,7 +6,10 @@ import { readFile } from "node:fs/promises";
 import { resolveMediaAbsolutePath } from "@/lib/media/storage";
 import { refreshVehicleMediaReady } from "@/services/inventory/media-readiness";
 import type { GovVehicleIdentity } from "@/services/identity/gov-vehicle";
-import type { VehicleMediaCategory } from "@prisma/client";
+import type { VehicleMediaCategory, Prisma } from "@prisma/client";
+import { emitExchangeEvent } from "@/services/exchange/events";
+import { refreshBatchStatus } from "@/services/intake/status";
+import { toPrismaJson } from "@/lib/prisma-json";
 
 /**
  * Commit each READY candidate independently.
@@ -39,7 +42,11 @@ export async function commitReadyCandidates(
   }
 }
 
-export async function commitOneCandidate(dealerId: string, candidateId: string) {
+export async function commitOneCandidate(
+  dealerId: string,
+  candidateId: string,
+  opts?: { confirmExistingVehicleId?: string; skipDedupe?: boolean }
+) {
   const c = await prisma.vehicleCandidate.findFirst({
     where: { id: candidateId, dealerId },
     include: {
@@ -48,14 +55,21 @@ export async function commitOneCandidate(dealerId: string, candidateId: string) 
   });
   if (!c) return { ok: false as const, error: "not_found" as const };
   if (c.status === "COMMITTED" && c.committedVehicleId) {
-    return { ok: true as const, vehicleId: c.committedVehicleId, idempotent: true };
+    return {
+      ok: true as const,
+      vehicleId: c.committedVehicleId,
+      idempotent: true as const,
+    };
   }
 
   const gov = c.govIdentityJson as GovVehicleIdentity | null;
   const commercial = (c.commercialJson ?? {}) as Record<string, unknown>;
 
-  // Dedupe by plate within dealer
-  if (c.plateNormalized) {
+  // Dedupe by plate within dealer:
+  // - ACTIVE + additive/non-conflicting → idempotent merge (attach media)
+  // - ACTIVE + material conflict → NEEDS_CONFIRMATION
+  // - SOLD/ARCHIVED → create NEW vehicle (no auto-reactivation)
+  if (c.plateNormalized && !opts?.skipDedupe) {
     const existing = await prisma.vehicle.findFirst({
       where: {
         dealerId,
@@ -72,18 +86,80 @@ export async function commitOneCandidate(dealerId: string, candidateId: string) 
       },
       orderBy: { updatedAt: "desc" },
     });
+
     if (existing) {
-      await attachMediaToExisting(dealerId, existing.id, c.media.map((m) => m.media));
-      await prisma.vehicleCandidate.update({
-        where: { id: c.id },
-        data: {
-          status: "COMMITTED",
-          existingVehicleId: existing.id,
-          committedVehicleId: existing.id,
-          reviewStatus: "RESOLVED",
-        },
-      });
-      return { ok: true as const, vehicleId: existing.id, deduped: true };
+      if (existing.status === "SOLD" || existing.status === "ARCHIVED") {
+        // Fall through to create a new ACTIVE vehicle
+      } else if (existing.status === "ACTIVE") {
+        const conflict = detectMaterialConflict(existing, commercial, gov);
+        const confirmed =
+          opts?.confirmExistingVehicleId &&
+          opts.confirmExistingVehicleId === existing.id;
+
+        if (conflict && !confirmed) {
+          await prisma.vehicleCandidate.update({
+            where: { id: c.id },
+            data: {
+              status: "NEEDS_CONFIRMATION",
+              reviewStatus: "PENDING",
+              existingVehicleId: existing.id,
+              missingFields: toPrismaJson([
+                "confirmExistingVehicle",
+                ...conflict,
+              ]) as Prisma.InputJsonValue,
+              conflictsJson: toPrismaJson({ fields: conflict }),
+            },
+          });
+          await refreshBatchStatus(c.batchId);
+          await emitExchangeEvent({
+            eventType: "intake.candidate.needs_confirmation",
+            dealerId,
+            vehicleId: existing.id,
+            eventData: {
+              candidateId: c.id,
+              existingVehicleId: existing.id,
+              conflicts: conflict,
+            },
+            operational: true,
+          }).catch(() => undefined);
+          return {
+            ok: false as const,
+            error: "needs_confirmation" as const,
+            existingVehicleId: existing.id,
+          };
+        }
+
+        // Additive merge / explicit confirm
+        await attachMediaToExisting(
+          dealerId,
+          existing.id,
+          c.media.map((m) => m.media)
+        );
+        await applyAdditiveCommercial(existing.id, commercial);
+        await refreshVehicleMediaReady(existing.id);
+        await prisma.vehicleCandidate.update({
+          where: { id: c.id },
+          data: {
+            status: "COMMITTED",
+            existingVehicleId: existing.id,
+            committedVehicleId: existing.id,
+            reviewStatus: "RESOLVED",
+          },
+        });
+        await emitExchangeEvent({
+          eventType: "intake.candidate.committed_existing",
+          dealerId,
+          vehicleId: existing.id,
+          eventData: {
+            candidateId: c.id,
+            deduped: true,
+            confirmed: Boolean(confirmed),
+          },
+          operational: true,
+        }).catch(() => undefined);
+        await refreshBatchStatus(c.batchId);
+        return { ok: true as const, vehicleId: existing.id, deduped: true };
+      }
     }
   }
 
@@ -143,7 +219,102 @@ export async function commitOneCandidate(dealerId: string, candidateId: string) 
     },
   });
 
+  await emitExchangeEvent({
+    eventType: "intake.candidate.committed_new",
+    dealerId,
+    vehicleId: created.vehicle.id,
+    eventData: { candidateId: c.id },
+    operational: true,
+  }).catch(() => undefined);
+  await refreshBatchStatus(c.batchId);
+
   return { ok: true as const, vehicleId: created.vehicle.id };
+}
+
+type MaterialConflict = "price" | "mileage" | "identity";
+
+/** Material conflicts only — additive fills (null→value) are not conflicts. */
+function detectMaterialConflict(
+  existing: {
+    make: string | null;
+    model: string | null;
+    year: number | null;
+    mileage: number | null;
+    retailPrice: number | null;
+    b2bPrice: number | null;
+  },
+  commercial: Record<string, unknown>,
+  gov: GovVehicleIdentity | null
+): MaterialConflict[] {
+  const conflicts: MaterialConflict[] = [];
+  const existingPrice = existing.b2bPrice ?? existing.retailPrice;
+  const incomingPrice =
+    typeof commercial.askingPrice === "number" ? commercial.askingPrice : null;
+  if (
+    existingPrice != null &&
+    incomingPrice != null &&
+    existingPrice !== incomingPrice
+  ) {
+    conflicts.push("price");
+  }
+  const incomingKm =
+    typeof commercial.mileage === "number" ? commercial.mileage : null;
+  if (
+    existing.mileage != null &&
+    incomingKm != null &&
+    existing.mileage !== incomingKm
+  ) {
+    conflicts.push("mileage");
+  }
+  if (gov) {
+    const makeClash =
+      existing.make &&
+      gov.make &&
+      existing.make.toLowerCase() !== gov.make.toLowerCase();
+    const modelClash =
+      existing.model &&
+      gov.model &&
+      existing.model.toLowerCase() !== gov.model.toLowerCase();
+    const yearClash =
+      existing.year != null && gov.year != null && existing.year !== gov.year;
+    if (makeClash || modelClash || yearClash) {
+      conflicts.push("identity");
+    }
+  }
+  return conflicts;
+}
+
+/** Fill null commercial fields only; never overwrite existing values. */
+async function applyAdditiveCommercial(
+  vehicleId: string,
+  commercial: Record<string, unknown>
+) {
+  const existing = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+  if (!existing) return;
+  const data: Prisma.VehicleUpdateInput = {};
+  if (
+    existing.mileage == null &&
+    typeof commercial.mileage === "number"
+  ) {
+    data.mileage = commercial.mileage;
+  }
+  if (
+    existing.b2bPrice == null &&
+    existing.retailPrice == null &&
+    typeof commercial.askingPrice === "number"
+  ) {
+    data.b2bPrice = commercial.askingPrice;
+    data.retailPrice = commercial.askingPrice;
+  }
+  if (
+    existing.ownershipHand == null &&
+    typeof commercial.ownershipHand === "number"
+  ) {
+    data.ownershipHand = commercial.ownershipHand;
+  }
+  if (Object.keys(data).length > 0) {
+    await prisma.vehicle.update({ where: { id: vehicleId }, data });
+  }
 }
 
 async function attachMediaToExisting(
@@ -156,10 +327,11 @@ async function attachMediaToExisting(
   }>
 ) {
   for (const row of mediaRows) {
-    const category: VehicleMediaCategory =
-      row.categoryHint && row.categoryHint !== "OTHER"
-        ? row.categoryHint
-        : "EXTERIOR";
+    // Never invent EXTERIOR from OTHER/null — skip until dealer sets category
+    if (!row.categoryHint || row.categoryHint === "OTHER") {
+      continue;
+    }
+    const category: VehicleMediaCategory = row.categoryHint;
     try {
       const abs = resolveMediaAbsolutePath(row.storageKey);
       const buf = await readFile(abs);

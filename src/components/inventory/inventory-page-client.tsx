@@ -306,9 +306,17 @@ export function InventoryPageClient({
     <div className={styles.page}>
       <div className={styles.headerRow}>
         <h1 className={styles.title}>המלאי שלי</h1>
-        <ButtonV2 variant="signal" onClick={openInventoryAssistant}>
-          + הוסף רכב
-        </ButtonV2>
+        <div className="flex flex-wrap gap-2">
+          <ButtonV2 variant="ghost" href="/intake/review">
+            סקירת קליטה
+          </ButtonV2>
+          <ButtonV2 variant="ghost" href="/intake/handoff">
+            קליטה מהירה
+          </ButtonV2>
+          <ButtonV2 variant="signal" onClick={openInventoryAssistant}>
+            + הוסף רכב
+          </ButtonV2>
+        </div>
       </div>
 
       <p className={styles.lede}>
