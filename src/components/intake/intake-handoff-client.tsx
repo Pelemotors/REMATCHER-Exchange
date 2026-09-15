@@ -37,7 +37,7 @@ async function getShareStaging(): Promise<ShareStagingPlugin | null> {
 
 /**
  * Deep-link landing after OS Share handoff.
- * On Android Capacitor: consumes durable staged files → authenticated upload → ACK.
+ * On Capacitor (Android / iOS): consumes durable staged files → authenticated upload → ACK.
  * Web upload path also uses this for Field Test without native builds.
  */
 export function IntakeHandoffClient() {
@@ -54,6 +54,8 @@ export function IntakeHandoffClient() {
       : "WEB_UPLOAD";
   const shareText = params.get("text") || "";
   const staged = params.get("staged") === "1";
+  const isNativeShare =
+    staged || source === "ANDROID_SHARE" || source === "IOS_SHARE";
 
   const [batchId, setBatchId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("ממתין");
@@ -66,7 +68,7 @@ export function IntakeHandoffClient() {
   useEffect(() => {
     void (async () => {
       const plugin = await getShareStaging();
-      if (plugin && (staged || source === "ANDROID_SHARE")) {
+      if (plugin && isNativeShare) {
         setNativeReady(true);
         setStatus("מעבד שיתוף מהמכשיר…");
         setUploading(true);
@@ -129,7 +131,7 @@ export function IntakeHandoffClient() {
         setError("שגיאת רשת");
       }
     })();
-  }, [clientBatchId, source, shareText, staged]);
+  }, [clientBatchId, source, shareText, isNativeShare]);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length || !batchId || uploading) return;

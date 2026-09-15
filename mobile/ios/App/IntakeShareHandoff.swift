@@ -1,60 +1,103 @@
+import Foundation
 import UIKit
 
 /**
  * Containing-app intake handoff for iOS Share Extension.
- * Reads App Group staging written by ShareViewController, then the Capacitor
- * WebView opens /intake/handoff with clientBatchId — upload uses web session.
+ *
+ * 1. Share Extension writes App Group staging + pending.json
+ * 2. Opens rematcher-exchange://intake?clientBatchId=…&source=IOS_SHARE&staged=1
+ * 3. AppDelegate calls `IntakeShareHandoff.handleOpenURL` → loads web /intake/handoff
+ * 4. Web calls Capacitor ShareStaging.consumeAndUpload → Intake Engine ACK
  *
  * Requires App Group `group.co.rematcher.exchange` + URL scheme `rematcher-exchange`.
- * Signing / TestFlight are external Owner actions (see docs/IOS_TESTFLIGHT_OWNER_ACTIONS.md).
  */
 enum IntakeShareHandoff {
-  static let appGroupId = "group.co.rematcher.exchange"
+  static let appGroupId = ShareStagingStore.appGroupId
   static let urlScheme = "rematcher-exchange"
 
+  static var intakeBaseURL: String {
+    if let fromPlist = Bundle.main.object(forInfoDictionaryKey: "RematcherIntakeBaseURL") as? String,
+       !fromPlist.isEmpty {
+      return fromPlist.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+    return "https://field-test-exchange.rematcher.co.il"
+  }
+
   static func stagingDirectory(clientBatchId: String) -> URL? {
-    guard let container = FileManager.default.containerURL(
-      forSecurityApplicationGroupIdentifier: appGroupId
-    ) else { return nil }
-    return container.appendingPathComponent("intake-staging/\(clientBatchId)", isDirectory: true)
+    ShareStagingStore.batchDirectory(clientBatchId: clientBatchId)
   }
 
   static func readMeta(clientBatchId: String) -> [String: String]? {
-    guard let dir = stagingDirectory(clientBatchId: clientBatchId) else { return nil }
-    let metaUrl = dir.appendingPathComponent("meta.json")
-    guard let data = try? Data(contentsOf: metaUrl),
-          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String]
-    else { return nil }
-    return obj
+    guard let meta = ShareStagingStore.loadMeta(clientBatchId: clientBatchId) else { return nil }
+    var out: [String: String] = [:]
+    for (k, v) in meta {
+      if let s = v as? String { out[k] = s }
+    }
+    return out
   }
 
   static func stagedImageURLs(clientBatchId: String) -> [URL] {
-    guard let dir = stagingDirectory(clientBatchId: clientBatchId),
-          let files = try? FileManager.default.contentsOfDirectory(
-            at: dir,
-            includingPropertiesForKeys: nil
-          )
-    else { return [] }
-    return files
-      .filter { ["jpg", "jpeg", "png", "webp", "heic"].contains($0.pathExtension.lowercased()) }
-      .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    ShareStagingStore.listImageFiles(clientBatchId: clientBatchId)
   }
 
-  /// Deep link into Field Test / Production web handoff after native staging.
-  static func handoffURL(clientBatchId: String, source: String = "IOS_SHARE") -> URL? {
+  static func handoffURL(clientBatchId: String, source: String = "IOS_SHARE", text: String? = nil) -> URL? {
     var components = URLComponents()
     components.scheme = urlScheme
     components.host = "intake"
-    components.queryItems = [
+    var items = [
       URLQueryItem(name: "clientBatchId", value: clientBatchId),
       URLQueryItem(name: "source", value: source),
       URLQueryItem(name: "staged", value: "1"),
     ]
+    if let text, !text.isEmpty {
+      let clipped = text.count > 1500 ? String(text.prefix(1500)) : text
+      items.append(URLQueryItem(name: "text", value: clipped))
+    }
+    components.queryItems = items
     return components.url
   }
 
+  /// Web handoff URL loaded inside Capacitor WKWebView.
+  static func webHandoffURL(from openURL: URL) -> URL? {
+    guard let comps = URLComponents(url: openURL, resolvingAgainstBaseURL: false) else { return nil }
+    let host = comps.host ?? ""
+    let isIntake = host == "intake" || comps.path.contains("intake")
+    guard openURL.scheme == urlScheme, isIntake else { return nil }
+
+    var web = URLComponents(string: intakeBaseURL + "/intake/handoff")
+    web?.queryItems = comps.queryItems
+    if web?.queryItems?.contains(where: { $0.name == "staged" }) != true {
+      var items = web?.queryItems ?? []
+      items.append(URLQueryItem(name: "staged", value: "1"))
+      if items.contains(where: { $0.name == "source" }) != true {
+        items.append(URLQueryItem(name: "source", value: "IOS_SHARE"))
+      }
+      web?.queryItems = items
+    }
+    return web?.url
+  }
+
   static func clearStaging(clientBatchId: String) {
-    guard let dir = stagingDirectory(clientBatchId: clientBatchId) else { return }
-    try? FileManager.default.removeItem(at: dir)
+    ShareStagingStore.deleteBatch(clientBatchId: clientBatchId)
+  }
+}
+
+/**
+ * Drop into Capacitor `AppDelegate` (or SceneDelegate):
+ *
+ * ```
+ * func application(_ app: UIApplication, open url: URL, options: …) -> Bool {
+ *   if IntakeShareAppBridge.handle(url: url, bridge: bridge) { return true }
+ *   return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+ * }
+ * ```
+ */
+enum IntakeShareAppBridge {
+  /// Returns true when the URL was an intake deep link and navigation was requested.
+  @discardableResult
+  static func handle(url: URL, loadInWebView: (URL) -> Void) -> Bool {
+    guard let webURL = IntakeShareHandoff.webHandoffURL(from: url) else { return false }
+    loadInWebView(webURL)
+    return true
   }
 }

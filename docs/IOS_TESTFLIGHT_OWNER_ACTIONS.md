@@ -18,16 +18,20 @@ Adapters (Share Extension + App Group) קיימים בקוד תחת `mobile/ios/
 
 ## מה כבר מוכן בקוד
 
-- `mobile/ios/App/ShareExtension/ShareViewController.swift`
-- `Info.plist` ל־Extension
-- חוזה deep link: `rematcher-exchange://intake?clientBatchId=…&source=IOS_SHARE`
+- Share Extension אמיתי: `mobile/ios/App/ShareExtension/` (images ≤40 + text, App Group staging)
+- Capacitor iOS `ShareStaging` plugin: `mobile/ios/App/ShareStaging/` (upload + ACK כמו Android)
+- Deep link: `rematcher-exchange://intake?clientBatchId=…&source=IOS_SHARE&staged=1`
+- Web: `/intake/handoff` קורא ל־`ShareStaging` גם עבור `IOS_SHARE`
+- עזרה ל־Mac: `mobile/ios/apply-share-sources.sh` + `AppDelegate+IntakeShare.swift.example`
 - Field Test URL ל־Web: `https://field-test-exchange.rematcher.co.il`
 
 ## מה לא ניתן בשרת הזה
 
-- אין Xcode / macOS → אין build/IPA מכאן
+- אין Xcode / macOS → אין `.xcodeproj` / IPA מכאן
 - אין Apple credentials בשרת (בכוונה)
+- **לא ניתן להכריז PASS על Share Sheet בלי iPhone + build חתום**
 
 ## אחרי ש־1–8 בוצעו
 
-הנדסה תחבר את ה־Extension לפרויקט Capacitor iOS, תבנה מול `MOBILE_WEB_URL` של Field Test, ותעלה ל־TestFlight.
+על Mac: `npx cap add ios` → `bash mobile/ios/apply-share-sources.sh` → Xcode target/signing → TestFlight.  
+רק אז לבדוק: Photos/WhatsApp → Share → REMATCHER Exchange → Intake.

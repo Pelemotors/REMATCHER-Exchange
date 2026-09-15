@@ -7,7 +7,8 @@ Capacitor shell + Android Share Receiver + iOS Share Extension.
 | Layer | Status |
 |-------|--------|
 | Android Share Receiver (in real app) | Wired in `android/` Capacitor project |
-| ShareStaging → authenticated Intake → ACK | `ShareStagingPlugin` |
+| ShareStaging → authenticated Intake → ACK | Android plugin + **iOS plugin sources** under `mobile/ios/App/ShareStaging/` |
+| iOS Share Extension sources | Complete under `mobile/ios/` — needs Xcode target on Mac |
 | Signed Field Test APK (direct HTTPS) | See `docs/ANDROID_FIELD_TEST_INSTALL.md` |
 | Google Play | Not required for Field Test |
 | iOS TestFlight | Owner actions: `docs/IOS_TESTFLIGHT_OWNER_ACTIONS.md` |

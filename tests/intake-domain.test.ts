@@ -155,6 +155,35 @@ describe("intake domain surface", () => {
       )
     ).toContain("add_text");
   });
+
+  it("iOS Share Extension + ShareStaging adapter sources are present", () => {
+    const ext = readFileSync(
+      join(root, "mobile/ios/App/ShareExtension/ShareViewController.swift"),
+      "utf8"
+    );
+    expect(ext).toContain("group.co.rematcher.exchange");
+    expect(ext).toContain("pending.json");
+    expect(ext).toContain("IOS_SHARE");
+    const plist = readFileSync(
+      join(root, "mobile/ios/App/ShareExtension/Info.plist"),
+      "utf8"
+    );
+    expect(plist).toContain("NSExtensionActivationSupportsImageWithMaxCount");
+    expect(plist).toContain("NSExtensionActivationSupportsText");
+    expect(plist).toContain("com.apple.share-services");
+    const plugin = readFileSync(
+      join(root, "mobile/ios/App/ShareStaging/ShareStagingPlugin.swift"),
+      "utf8"
+    );
+    expect(plugin).toContain("consumeAndUpload");
+    expect(plugin).toContain("/api/intake/batch");
+    const handoff = readFileSync(
+      join(root, "src/components/intake/intake-handoff-client.tsx"),
+      "utf8"
+    );
+    expect(handoff).toContain("IOS_SHARE");
+    expect(handoff).toContain("isNativeShare");
+  });
 });
 
 describe("intake rate limit", () => {

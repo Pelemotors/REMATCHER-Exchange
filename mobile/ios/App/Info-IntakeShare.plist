@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>he</string>
+  <key>CFBundleDisplayName</key>
+  <string>REMATCHER Exchange</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>co.rematcher.exchange.intake</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>rematcher-exchange</string>
+      </array>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+    </dict>
+  </array>
+  <key>RematcherIntakeBaseURL</key>
+  <string>https://field-test-exchange.rematcher.co.il</string>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>fetch</string>
+  </array>
+</dict>
+</plist>

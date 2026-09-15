@@ -11,5 +11,10 @@ const config = {
   android: {
     allowMixedContent: false,
   },
+  ios: {
+    // Capacitor ios/ project is generated on macOS (`npx cap add ios`).
+    // Share Extension + ShareStaging sources live under mobile/ios/ until applied.
+    scheme: "REMATCHER Exchange",
+  },
 };
 module.exports = config;
