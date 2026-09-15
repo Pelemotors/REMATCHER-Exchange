@@ -257,6 +257,82 @@ export async function runActionGateway(params: {
       if (manageTurn) return manageTurn;
     }
 
+    if (pending.action === "intake_resolve") {
+      const { resolveIntakeCandidate } = await import(
+        "@/services/intake/review"
+      );
+      const candidateId = String(pending.payload.candidateId ?? "");
+      const op = String(pending.payload.operation ?? "");
+      const facts =
+        (pending.payload.facts as Record<string, unknown> | undefined) ?? {};
+      const result = await resolveIntakeCandidate({
+        dealerId: params.dealerId,
+        candidateId,
+        reject: op === "REJECT_CANDIDATE",
+        detectedPlate:
+          typeof facts.detectedPlate === "string" ? facts.detectedPlate : undefined,
+        askingPrice:
+          typeof facts.askingPrice === "number" ? facts.askingPrice : undefined,
+        mileage: typeof facts.mileage === "number" ? facts.mileage : undefined,
+        confirmExistingVehicleId:
+          typeof facts.confirmExistingVehicleId === "string"
+            ? facts.confirmExistingVehicleId
+            : undefined,
+        createNewDespiteExisting: Boolean(facts.createNewDespiteExisting),
+      });
+      meta.policyResult = result.ok ? "ALLOW" : "DENY";
+      meta.responseType = "mutation_intake";
+      const msg = !result.ok
+        ? `לא הצלחתי להשלים את הקליטה (${"error" in result ? result.error : "שגיאה"}).`
+        : "rejected" in result && result.rejected
+          ? "המועמד נדחה."
+          : "vehicleId" in result && result.vehicleId
+            ? "הקליטה הושלמה והרכב נשמר במלאי."
+            : "הקליטה עודכנה.";
+      return {
+        intent: "UPDATE_INVENTORY",
+        message: msg,
+        conversation: { ...conversation, pendingConfirmation: undefined },
+        meta,
+        ...(result.ok &&
+        "vehicleId" in result &&
+        result.vehicleId
+          ? {
+              inventoryMutationResult: {
+                type: "created" as const,
+                vehicleId: result.vehicleId,
+              },
+            }
+          : {}),
+      };
+    }
+
+    if (pending.action === "intake_retry") {
+      const { processIntakeBatch } = await import(
+        "@/services/intake/process-batch"
+      );
+      const batchId = String(pending.payload.batchId ?? "");
+      try {
+        await processIntakeBatch(params.dealerId, batchId);
+        meta.policyResult = "ALLOW";
+        meta.responseType = "mutation_intake_retry";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "הפעלתי מחדש את עיבוד האצווה. אפשר לבדוק ב־/intake/review.",
+          conversation: { ...conversation, pendingConfirmation: undefined },
+          meta,
+        };
+      } catch {
+        meta.policyResult = "DENY";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "לא הצלחתי להריץ מחדש את האצווה.",
+          conversation: { ...conversation, pendingConfirmation: undefined },
+          meta,
+        };
+      }
+    }
+
     return {
       intent: "UNKNOWN",
       message: "לא הצלחתי לאשר את הפעולה הממתינה.",
@@ -413,6 +489,97 @@ export async function runActionGateway(params: {
       conversation,
       meta,
     };
+  }
+
+  if (proposal.capability === "INTAKE") {
+    const facts = proposal.facts ?? {};
+    const candidateId =
+      typeof facts.candidateId === "string"
+        ? facts.candidateId
+        : typeof proposal.targetReference === "string" &&
+            /^[a-z0-9_-]{8,}$/i.test(proposal.targetReference)
+          ? proposal.targetReference
+          : null;
+    const batchId =
+      typeof facts.batchId === "string" ? facts.batchId : null;
+
+    if (
+      proposal.operation === "CONFIRM_CANDIDATE" ||
+      proposal.operation === "RESOLVE_CANDIDATE" ||
+      proposal.operation === "REJECT_CANDIDATE" ||
+      proposal.operation === "UPDATE"
+    ) {
+      if (!candidateId) {
+        meta.policyResult = "REQUIRE_CLARIFICATION";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message:
+            "כדי לטפל במועמד קליטה צריך לזהות איזה מועמד — אפשר לעבור ל־/intake/review.",
+          suggestions: [{ label: "סקירת קליטה", href: "/intake/review" }],
+          conversation,
+          meta,
+        };
+      }
+
+      if (!conversation?.pendingConfirmation) {
+        const label =
+          proposal.operation === "REJECT_CANDIDATE"
+            ? "לדחות את מועמד הקליטה?"
+            : "לאשר/להשלים את מועמד הקליטה?";
+        meta.policyResult = "REQUIRE_CONFIRMATION";
+        meta.responseType = "confirmation_intake";
+        const pending = {
+          action: "intake_resolve",
+          label,
+          payload: {
+            capability: "INTAKE",
+            operation: proposal.operation,
+            candidateId,
+            facts,
+          },
+        };
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: label,
+          requiresConfirmation: pending,
+          suggestions: [{ label: "כן" }, { label: "לא" }],
+          conversation: {
+            ...conversation,
+            pendingConfirmation: pending,
+          },
+          meta,
+        };
+      }
+    }
+
+    if (proposal.operation === "RETRY_INTAKE") {
+      if (!batchId) {
+        meta.policyResult = "REQUIRE_CLARIFICATION";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "כדי לנסות שוב קליטה צריך מזהה אצווה. אפשר לעבור ל־/intake.",
+          suggestions: [{ label: "קליטה", href: "/intake" }],
+          conversation,
+          meta,
+        };
+      }
+      if (!conversation?.pendingConfirmation) {
+        const pending = {
+          action: "intake_retry",
+          label: "להריץ מחדש את עיבוד האצווה?",
+          payload: { capability: "INTAKE", operation: "RETRY_INTAKE", batchId },
+        };
+        meta.policyResult = "REQUIRE_CONFIRMATION";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: pending.label,
+          requiresConfirmation: pending,
+          suggestions: [{ label: "כן" }, { label: "לא" }],
+          conversation: { ...conversation, pendingConfirmation: pending },
+          meta,
+        };
+      }
+    }
   }
 
   return {

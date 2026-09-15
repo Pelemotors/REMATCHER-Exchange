@@ -56,7 +56,7 @@ export async function executeReadTool(
 ): Promise<unknown> {
   switch (tool) {
     case "getMyExchangeState": {
-      const [pending, demands, usage, validations, matches, opportunities] =
+      const [pending, demands, usage, validations, matches, opportunities, intakeNeedsInfo] =
         await Promise.all([
           getPendingActionsForDealer(dealerId),
           getEnrichedDemandsForDealer(dealerId, { lightweight: true }),
@@ -74,6 +74,12 @@ export async function executeReadTool(
           prisma.sellerOpportunity.count({
             where: { vehicle: { dealerId }, status: "OPEN" },
           }),
+          prisma.vehicleCandidate.count({
+            where: {
+              dealerId,
+              status: { in: ["NEEDS_INFO", "NEEDS_CONFIRMATION"] },
+            },
+          }),
         ]);
       const active = demands.filter((d) =>
         ["ACTIVE", "EXPIRING"].includes(d.uxStatus)
@@ -86,6 +92,7 @@ export async function executeReadTool(
         pendingValidations: validations,
         authorizedMatches: matches,
         openOpportunities: opportunities,
+        intakeNeedsInfo,
         pendingOutcomes: await prisma.reveal.count({
           where: {
             OR: [{ buyerDealerId: dealerId }, { sellerDealerId: dealerId }],

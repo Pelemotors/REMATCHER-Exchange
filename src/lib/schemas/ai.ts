@@ -19,6 +19,17 @@ export const parsedDemandSchema = z.object({
   engineDisplacementCc: fieldValueSchema.optional(),
   ownershipHand: fieldValueSchema.optional(),
   ownershipType: fieldValueSchema.optional(),
+  /** Customer offered trade-in — separate from ownershipType (vehicle origin) */
+  customerTradeIn: z
+    .object({
+      make: z.string().nullable().optional(),
+      model: z.string().nullable().optional(),
+      year: z.number().nullable().optional(),
+      notes: z.string().nullable().optional(),
+      provenance: z.enum(["user_stated", "agent_inferred"]).optional(),
+    })
+    .nullable()
+    .optional(),
   features: z.array(z.string()).optional(),
   colorExclusions: z.array(z.string()).optional(),
   colorPreferences: z.array(z.string()).optional(),

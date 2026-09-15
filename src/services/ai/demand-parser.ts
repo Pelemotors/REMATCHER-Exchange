@@ -29,7 +29,8 @@ Rules (CRITICAL):
 - fuelType: when explicitly stated return GASOLINE, DIESEL, HYBRID, PLUG_IN_HYBRID, ELECTRIC, LPG, CNG, HYDROGEN or OTHER.
 - engineDisplacementCc: when explicitly stated return integer cc; 1.6L = 1600. Never infer engine size from model knowledge.
 - ownershipHand: when explicitly stated return integer hand number. Never infer it.
-- ownershipType: normalize private/פרטי, leasing/ליסינג, rental/השכרה, company/חברה, trade-in/טרייד אין.
+- ownershipType: vehicle ORIGIN of the desired car only — private/פרטי, leasing/ליסינג, rental/השכרה, company/חברה. NEVER map trade-in/טרייד אין to ownershipType.
+- customer trade-in (לקוח מביא טרייד-אין / יש לו רכב להחלפה): put a short note in ambiguities as "trade_in:..." — do NOT set ownershipType.
 - features: include only explicitly requested special equipment/drivetrain features. Canonical examples: AWD_4X4, SUNROOF, PANORAMIC_ROOF, LEATHER_SEATS, ELECTRIC_SEATS, HEATED_SEATS, VENTILATED_SEATS, ADAPTIVE_CRUISE, LANE_ASSIST, BLIND_SPOT_MONITOR, PARKING_SENSORS, REAR_CAMERA, SURROUND_CAMERA, TOW_BAR.
 - IMPORTANT PRODUCT RULE: if the dealer explicitly mentions a special feature as part of the requested vehicle, treat it as a hard requirement by default, even if they did not literally say "חובה". Example: "סופרב 4x4", "קודיאק 4x4", "קורולה עם חלון בגג" => the mentioned feature belongs in hardConstraints.
 - Only classify an explicitly mentioned feature as a softPreference when the dealer clearly frames it as optional/preferred, e.g. "עדיף", "רצוי", "אם יש", "בונוס", "לא חובה", "nice to have", "preferably", "if available".
@@ -156,10 +157,21 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     maybePushSoftConstraint(result, "hand", hand, `יד ${hand}`);
   }
 
-  const ownershipMatch = rawText.match(/טרייד[\s־-]*אין|trade[\s-]*in|ליסינג|leasing|lease|השכרה|rental|rent|פרטי|private|חברה|company|corporate/i);
+  // Customer trade-in is NOT ownershipSource of the desired vehicle
+  const tradeInMention = /טרייד[\s־-]*אין|trade[\s-]*in/i.test(rawText);
+  if (tradeInMention) {
+    result.customerTradeIn = {
+      notes: "לקוח מציע טרייד-אין",
+      provenance: "user_stated",
+    };
+  }
+
+  const ownershipMatch = rawText.match(
+    /ליסינג|leasing|lease|השכרה|rental|rent|פרטי|private|חברה|company|corporate/i
+  );
   if (ownershipMatch) {
     const ownership = canonicalizeOwnershipSource(ownershipMatch[0]);
-    if (ownership) {
+    if (ownership && ownership !== "TRADE_IN") {
       result.ownershipType = { value: ownership, status: "known", source: "inferred" };
       maybePushSoftConstraint(result, "ownershipSource", ownership, `מקוריות ${ownership}`);
     }
@@ -229,7 +241,38 @@ async function sanitizeParsedDemand(data: unknown, rawText: string, userId?: str
   if (identity.fuelType) copy.fuelType = { value: identity.fuelType, status: "known", source: "ai" };
   if (identity.engineDisplacementCc != null) copy.engineDisplacementCc = { value: identity.engineDisplacementCc, status: "known", source: "ai" };
   if (identity.ownershipHand != null) copy.ownershipHand = { value: identity.ownershipHand, status: "known", source: "ai" };
-  if (identity.ownershipType) copy.ownershipType = { value: identity.ownershipType, status: "known", source: "ai" };
+  if (identity.ownershipType && identity.ownershipType !== "TRADE_IN") {
+    copy.ownershipType = { value: identity.ownershipType, status: "known", source: "ai" };
+  }
+
+  // Strip TRADE_IN from ownershipType → customerTradeIn (never ownershipSource)
+  const ownVal =
+    copy.ownershipType?.status === "known"
+      ? String(copy.ownershipType.value ?? "")
+      : "";
+  if (/^TRADE_IN$/i.test(ownVal) || /trade[\s_-]*in|טרייד/i.test(ownVal)) {
+    copy.customerTradeIn = copy.customerTradeIn ?? {
+      notes: "לקוח מציע טרייד-אין",
+      provenance: "agent_inferred",
+    };
+    copy.ownershipType = { value: null, status: "unknown", source: "inferred" };
+  }
+  // Ambiguities may carry trade_in notes from the model
+  const tradeAmb = (copy.ambiguities ?? []).find((a) =>
+    /^trade_in:/i.test(a)
+  );
+  if (tradeAmb && !copy.customerTradeIn) {
+    copy.customerTradeIn = {
+      notes: tradeAmb.replace(/^trade_in:\s*/i, "").trim() || "לקוח מציע טרייד-אין",
+      provenance: "agent_inferred",
+    };
+  }
+  if (!copy.customerTradeIn && /טרייד[\s־-]*אין|trade[\s-]*in/i.test(rawText)) {
+    copy.customerTradeIn = {
+      notes: "לקוח מציע טרייד-אין",
+      provenance: "user_stated",
+    };
+  }
 
   const colorExclusions = (copy.colorExclusions ?? []).map((c) => {
     const lower = c.toLowerCase();
@@ -248,7 +291,21 @@ async function sanitizeParsedDemand(data: unknown, rawText: string, userId?: str
   if (copy.fuelType?.status === "known") maybePushSoftConstraint(copy, "fuel", copy.fuelType.value, `סוג דלק/הנעה ${copy.fuelType.value}`);
   if (copy.engineDisplacementCc?.status === "known") maybePushSoftConstraint(copy, "engineDisplacementCc", copy.engineDisplacementCc.value, `נפח מנוע ${copy.engineDisplacementCc.value} סמ״ק`);
   if (copy.ownershipHand?.status === "known") maybePushSoftConstraint(copy, "hand", copy.ownershipHand.value, `יד ${copy.ownershipHand.value}`);
-  if (copy.ownershipType?.status === "known") maybePushSoftConstraint(copy, "ownershipSource", copy.ownershipType.value, `מקוריות ${copy.ownershipType.value}`);
+  if (copy.ownershipType?.status === "known") {
+    const ov = String(copy.ownershipType.value ?? "");
+    if (ov && !/^TRADE_IN$/i.test(ov) && !/trade[\s_-]*in|טרייד/i.test(ov)) {
+      maybePushSoftConstraint(copy, "ownershipSource", copy.ownershipType.value, `מקוריות ${copy.ownershipType.value}`);
+    }
+  }
+  // Remove any soft/hard ownershipSource that is actually trade-in
+  const isTradeInConstraint = (c: {
+    field: string;
+    value?: unknown;
+  }) =>
+    (c.field === "ownershipSource" || c.field === "ownershipType") &&
+    /TRADE_IN|trade[\s_-]*in|טרייד/i.test(String(c.value ?? ""));
+  copy.softPreferences = copy.softPreferences.filter((c) => !isTradeInConstraint(c));
+  copy.hardConstraints = copy.hardConstraints.filter((c) => !isTradeInConstraint(c));
   for (const feature of copy.features ?? []) {
     if (!copy.hardConstraints.some((x) => x.field === "feature" && x.value === feature) &&
         !copy.softPreferences.some((x) => x.field === "feature" && x.value === feature)) {

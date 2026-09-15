@@ -15,6 +15,7 @@ import {
   AI_PROMPT_VERSIONS,
   AGENT_LOOP_MAX_ROUNDS,
   AGENT_LOOP_MAX_TOOLS_PER_ROUND,
+  AGENT_LOOP_DEADLINE_MS,
 } from "@/config/product";
 import {
   getOpenAIClient,
@@ -27,6 +28,7 @@ import {
   isControlTool,
   isConversationStateTool,
   isDealerMemoryTool,
+  isIntakeAgentTool,
   isReadOpenAiTool,
   isSearchIntentTool,
   OPENAI_READ_TOOL_MAP,
@@ -37,6 +39,7 @@ import {
 } from "@/services/assistant/dealer-memory";
 import { executeDealerMemoryTool } from "@/services/assistant/dealer-memory/tools";
 import { executeSearchIntentTool } from "@/services/matching/search-intent-agent-tools";
+import { executeIntakeTool } from "@/services/intake/intake-agent-tools";
 import type {
   MemoryDebugMeta,
   MemoryMutationRecord,
@@ -51,6 +54,8 @@ import { applyInventoryDraftFacts } from "@/services/assistant/inventory-draft-s
 import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
 import type { ReadToolName } from "@/services/assistant/tools/registry";
 import { AGENT_VERSION } from "@/services/assistant/tools/registry";
+
+export type AgentLoopMode = "fast" | "light" | "deep";
 
 export type AgentLoopResult = {
   message: string;
@@ -68,6 +73,8 @@ export type AgentLoopResult = {
   toolResults: Record<string, unknown>;
   memoryMeta?: MemoryPublicMeta;
   memoryDebug?: MemoryDebugMeta;
+  /** Fast = short-circuit; Light = normal; Deep = diagnose / multi-search reads */
+  mode?: AgentLoopMode;
 };
 
 function buildSystemPrompt(params: {
@@ -107,6 +114,7 @@ RUNTIME BINDING (not a second constitution):
 - For unsaved inventory discussion, update_inventory_draft records structured facts you understood. It does not write to the database. When the dealer corrects a draft fact (year/model/km/hand/price/etc.), call update_inventory_draft so conversation state matches what you tell them.
 - Dealer Memory tools persist durable business context (goals/preferences). Use stable topicKey. Forget/correct require exact memoryId from get_my_dealer_memory. Memory is context, not REMATCHER truth.
 - Search Intent tools draft/inspect/summarize commercial demand understanding. Map dealer language to target/boundary/importance/flexibility yourself — never ask for weights, scores, or HARD/SOFT labels. Clarify only when the answer would materially change which vehicles are shown. Before activation, give a short natural summary. Activation/update of live search still requires propose_mutation + confirmation.
+- Intake tools (get_my_intake_*) and diagnose_my_search_matches are authorized reads for THIS dealer. Customer trade-in is never ownershipSource. Mutations for intake require propose_mutation INTAKE + confirmation.
 - report_business_event only for explicit dealer-stated outcomes (sold, external purchase, no-deal). Do not guess which vehicle/match.
 - propose_mutation only for real domain/database actions. REMATCHER Action Gateway authorizes, confirms and executes.
 - Match existence, privacy, Reveal, ownership and writes remain deterministic REMATCHER authority — never invent them.
@@ -117,7 +125,7 @@ RUNTIME BINDING (not a second constitution):
 CONTEXT:
 route=${params.route ?? "/"}
 inventoryMode=${Boolean(params.inventoryMode)}
-${params.pageContextBlock ? `${params.pageContextBlock}\n` : ""}${params.memoryBlock ?? ""}${pendingBlock}${draftBlock}${searchDraft}`;
+${params.pageContextBlock ? `${params.pageContextBlock}\n` : ""}${params.memoryBlock ?? ""}${compactSummaryBlock(params.conversation)}${pendingBlock}${draftBlock}${searchDraft}`;
 }
 
 function historyMessages(
@@ -127,6 +135,12 @@ function historyMessages(
     role: turn.role,
     content: turn.text,
   }));
+}
+
+function compactSummaryBlock(conversation?: ConversationState): string {
+  const turns = conversation?.recentTurns?.length ?? 0;
+  if (turns <= 10 || !conversation?.compactSummary?.trim()) return "";
+  return `\nCOMPACT CONVERSATION SUMMARY (older turns):\n${conversation.compactSummary.slice(0, 800)}\n`;
 }
 
 function truncateToolResult(value: unknown): string {
@@ -169,6 +183,10 @@ export async function runAgentToolLoop(params: {
   const memoryMutations: MemoryMutationRecord[] = [];
   let memoryMeta: MemoryPublicMeta | undefined;
   let memoryDebug: MemoryDebugMeta | undefined;
+  let mode: AgentLoopMode = "light";
+
+  const deadlineMs = AGENT_LOOP_DEADLINE_MS;
+  const pastDeadline = () => Date.now() - started > deadlineMs;
 
   const addUsage = (usage: any) => {
     if (!usage) return;
@@ -206,6 +224,7 @@ export async function runAgentToolLoop(params: {
     toolResults,
     memoryMeta,
     memoryDebug,
+    mode,
   });
 
   if (!isOpenAIConfigured()) {
@@ -262,6 +281,28 @@ export async function runAgentToolLoop(params: {
 
   try {
     for (let round = 0; round < AGENT_LOOP_MAX_ROUNDS; round++) {
+      if (pastDeadline()) {
+        await logAiOperation({
+          operation: "agent_loop",
+          model,
+          promptVersion: AI_PROMPT_VERSIONS.agentLoop,
+          success: false,
+          latencyMs: Date.now() - started,
+          userId: params.userId,
+          errorMessage: "deadline_exceeded",
+          usageJson: usageSnapshot("deadline"),
+        });
+        return {
+          message:
+            "לקח יותר מדי זמן להשלים את הבדיקה. לא בוצעה שום פעולה — אפשר לנסות שוב בקצרה.",
+          proposal: null,
+          model,
+          success: false,
+          fallbackReason: "deadline_exceeded",
+          ...baseResult(),
+        };
+      }
+
       modelCallCount += 1;
       const completion = await openai.chat.completions.create({
         model,
@@ -285,7 +326,7 @@ export async function runAgentToolLoop(params: {
           success: true,
           latencyMs: Date.now() - started,
           userId: params.userId,
-          usageJson: usageSnapshot("final_text"),
+          usageJson: usageSnapshot("final_text", { mode }),
         });
         return {
           message: text || "לא הצלחתי לנסח תשובה מועילה כרגע.",
@@ -323,8 +364,22 @@ export async function runAgentToolLoop(params: {
       }> = [];
 
       for (const call of limited) {
+        if (pastDeadline()) break;
         const name = call.function.name;
         toolsUsed.push(name);
+
+        if (
+          name === "diagnose_my_search_matches" ||
+          (isReadOpenAiTool(name) &&
+            (name === "get_my_searches" || name === "get_my_matches") &&
+            toolsUsed.filter((t) =>
+              ["get_my_searches", "get_my_matches", "diagnose_my_search_matches"].includes(
+                t
+              )
+            ).length >= 2)
+        ) {
+          mode = "deep";
+        }
 
         if (isConversationStateTool(name)) {
           const args = parseToolArgs(call.function.arguments);
@@ -415,6 +470,21 @@ export async function runAgentToolLoop(params: {
           continue;
         }
 
+        if (isIntakeAgentTool(name)) {
+          if (name === "diagnose_my_search_matches") mode = "deep";
+          const args = parseToolArgs(call.function.arguments);
+          const t0 = Date.now();
+          const result = await executeIntakeTool(name, params.dealerId, args);
+          toolDurations[name] = (toolDurations[name] ?? 0) + (Date.now() - t0);
+          toolResults[name] = result;
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: truncateToolResult(result),
+          });
+          continue;
+        }
+
         if (isControlTool(name)) {
           const parsed = parseActionProposalFromTool(
             name,
@@ -446,8 +516,21 @@ export async function runAgentToolLoop(params: {
         });
       }
 
+      if (pastDeadline()) {
+        return {
+          message:
+            "לקח יותר מדי זמן להשלים את הבדיקה. לא בוצעה שום פעולה — אפשר לנסות שוב בקצרה.",
+          proposal: null,
+          model,
+          success: false,
+          fallbackReason: "deadline_exceeded",
+          ...baseResult(),
+        };
+      }
+
       if (readBatch.length) {
         const names = [...new Set(readBatch.map((item) => item.internal))];
+        if (names.length >= 2) mode = "deep";
         const { results, durations, errors } = await executeToolsParallel(
           names,
           params.dealerId
@@ -488,6 +571,7 @@ export async function runAgentToolLoop(params: {
             proposalKind: proposal.kind,
             capability: proposal.capability,
             operation: proposal.operation,
+            mode,
           }),
         });
         return {

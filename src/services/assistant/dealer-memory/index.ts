@@ -1,6 +1,11 @@
 /**
  * Deterministic Dealer Memory persistence.
  * NLP / semantic judgment stays with the Agent — this module validates and stores.
+ *
+ * Provenance kinds (do not conflate):
+ * - USER_STATED: dealer explicitly said it — high trust for personalization wording
+ * - AGENT_INFERRED: agent hypothesis — capped confidence; never phrase as "you said"
+ * - SYSTEM_DERIVED: profile/business_context only — never live REMATCHER counters
  */
 import "server-only";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +17,7 @@ import type {
 import {
   DEALER_MEMORY_MAX_ACTIVE,
   DEALER_MEMORY_MAX_INFERRED_CONFIDENCE,
+  DEALER_MEMORY_MIN_RETRIEVE_INFERRED_CONFIDENCE,
   DEALER_MEMORY_RETRIEVAL_CAP,
   DEALER_MEMORY_TOPIC_KEY_PATTERN,
   DEALER_MEMORY_TOPIC_PREFIXES,
@@ -437,7 +443,18 @@ export async function retrieveRelevantMemories(params: {
     take: DEALER_MEMORY_MAX_ACTIVE,
   });
 
-  const ranked = [...rows].sort((a, b) => {
+  const ranked = [...rows]
+    .filter((row) => {
+      // Drop weak AGENT_INFERRED from prompt context (explicit USER_STATED always kept)
+      if (
+        row.provenance === "AGENT_INFERRED" &&
+        row.confidence < DEALER_MEMORY_MIN_RETRIEVE_INFERRED_CONFIDENCE
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
     const pk = KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind];
     if (pk !== 0) return pk;
     if (b.confidence !== a.confidence) return b.confidence - a.confidence;

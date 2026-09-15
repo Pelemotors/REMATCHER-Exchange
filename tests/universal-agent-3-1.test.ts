@@ -93,7 +93,7 @@ function plan(partial: Partial<AgentTurnPlan["action"]>): AgentTurnPlan {
 
 describe("Universal Agent 3.1", () => {
   it("same Agent, version 3.1", () => {
-    expect(AGENT_VERSION).toBe("4.0");
+    expect(AGENT_VERSION).toBe("4.1");
   });
 
   it("TURN_PLAN_SCHEMA remains recursively strict and includes operation/scope", () => {

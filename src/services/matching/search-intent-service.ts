@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { legacyToSearchIntent, searchIntentToLegacyConfirmed } from "@/services/matching/legacy-search-intent-adapter";
 import {
+  sanitizeTradeInOutOfOwnership,
   summarizeIntentHe,
   type StructuredSearchIntent,
 } from "@/services/matching/search-intent-types";
@@ -116,8 +117,8 @@ export async function ensureSearchIntentForDemand(demandId: string) {
 
 export function parseStructuredIntent(json: unknown): StructuredSearchIntent {
   const raw = (json ?? {}) as Partial<StructuredSearchIntent>;
-  return {
+  return sanitizeTradeInOutOfOwnership({
     ...raw,
     schemaVersion: 2,
-  };
+  });
 }

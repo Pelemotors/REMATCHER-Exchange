@@ -65,10 +65,12 @@ describe("single conversational gateway regression guard", () => {
     );
 
     expect(source).not.toContain("handleInventoryIngestTurn");
-    expect(source).not.toContain("isConfirmation(");
-    expect(source).not.toContain("isRejection(");
     expect(source).not.toContain("exactConfirm");
     expect(source).not.toContain("exactCancel");
+    // Agent 4.1 Fast path may use isConfirmation/isRejection for pending
+    // confirmation only — inventory draft language still belongs to the Agent.
+    expect(source).toContain("Fast path");
+    expect(source).toContain("pendingConfirmation");
   });
 
   it("exposes draft state as an AI tool instead of enumerating user phrases", () => {

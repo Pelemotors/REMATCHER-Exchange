@@ -12,7 +12,10 @@ export type {
 
 export const DEALER_MEMORY_MAX_ACTIVE = 80;
 export const DEALER_MEMORY_RETRIEVAL_CAP = 8;
-export const DEALER_MEMORY_MAX_INFERRED_CONFIDENCE = 0.55;
+/** Cap when saving AGENT_INFERRED — weak anecdotes must not become personality */
+export const DEALER_MEMORY_MAX_INFERRED_CONFIDENCE = 0.45;
+/** Skip very weak inferences at retrieve time (still kept in DB) */
+export const DEALER_MEMORY_MIN_RETRIEVE_INFERRED_CONFIDENCE = 0.35;
 export const DEALER_MEMORY_TOPIC_KEY_PATTERN =
   /^[a-z][a-z0-9_.]{2,64}$/;
 export const DEALER_MEMORY_TOPIC_PREFIXES = [

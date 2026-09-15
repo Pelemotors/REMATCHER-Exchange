@@ -83,6 +83,14 @@ export interface ConversationState {
   queuedFollowUp?: string;
   /** Compact recent chat turns for Agent 4.0 tool loop — not authority */
   recentTurns?: Array<{ role: "user" | "assistant"; text: string }>;
+  /** Rolling compact summary when recentTurns grow long (P1.1) */
+  compactSummary?: string;
+  /** Soft entity refs mentioned in the conversation */
+  referencedEntities?: Array<{
+    type: string;
+    id: string;
+    label: string;
+  }>;
 }
 
 export function appendRecentTurns(

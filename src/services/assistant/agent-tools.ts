@@ -47,11 +47,20 @@ export const SEARCH_INTENT_TOOL_NAMES = [
   "get_inventory_enrichment_context",
 ] as const;
 
+export const INTAKE_AGENT_TOOL_NAMES = [
+  "get_my_intake_batches",
+  "get_my_intake_candidates",
+  "get_my_intake_candidate",
+  "diagnose_my_search_matches",
+  "get_my_attention_opportunities",
+] as const;
+
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
 export type ConversationStateToolName =
   (typeof CONVERSATION_STATE_TOOL_NAMES)[number];
 export type DealerMemoryToolName = (typeof DEALER_MEMORY_TOOL_NAMES)[number];
 export type SearchIntentToolName = (typeof SEARCH_INTENT_TOOL_NAMES)[number];
+export type IntakeAgentToolName = (typeof INTAKE_AGENT_TOOL_NAMES)[number];
 
 function emptyParams() {
   return {
@@ -411,8 +420,44 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
     }
   ),
   tool(
+    "get_my_intake_batches",
+    "List THIS dealer's recent Intake batches (WhatsApp/share handoff). Own batches only. Status and media/candidate counts — no other dealers."
+  ),
+  tool(
+    "get_my_intake_candidates",
+    "List THIS dealer's intake candidates needing review (NEEDS_INFO / NEEDS_CONFIRMATION): missing fields, plate, conflicts. Own data only."
+  ),
+  tool(
+    "get_my_intake_candidate",
+    "Detail for one intake candidate owned by THIS dealer (plate, missing fields, media hints, gov state). Never invent plate or GOV identity.",
+    {
+      type: "object",
+      properties: {
+        candidateId: { type: "string" },
+      },
+      required: ["candidateId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "diagnose_my_search_matches",
+    "Privacy-safe diagnostics for why THIS dealer's search (demandId) has few/no matches: hard-fail aggregates and near-misses. Does NOT invent matches or expose other dealers. Present summaryHe in natural Hebrew.",
+    {
+      type: "object",
+      properties: {
+        demandId: { type: "string" },
+      },
+      required: ["demandId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "get_my_attention_opportunities",
+    "Proactive attention list for THIS dealer: expiring searches, stale inventory, intake needing info, open matches/opportunities. Own flags only — do not invent urgency beyond system counts."
+  ),
+  tool(
     "propose_mutation",
-    "Propose a DATABASE/DOMAIN write action. Does NOT execute. REMATCHER Action Gateway authorizes, resolves targets, and requires confirmation. Use for saving a prepared inventory draft, updating/selling an already-saved vehicle, create/update/close/renew searches, or validation confirmation. Do NOT use this merely to add facts to an unsaved inventory draft — use update_inventory_draft for that. Never invent database IDs; use human targetReference.",
+    "Propose a DATABASE/DOMAIN write action. Does NOT execute. REMATCHER Action Gateway authorizes, resolves targets, and requires confirmation. Use for saving a prepared inventory draft, updating/selling an already-saved vehicle, create/update/close/renew searches, intake confirm/reject/resolve/retry, or validation confirmation. Do NOT use this merely to add facts to an unsaved inventory draft — use update_inventory_draft for that. Never invent database IDs; use human targetReference.",
     {
       type: "object",
       properties: {
@@ -426,6 +471,7 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
             "REVEALS",
             "OUTCOMES",
             "VALIDATIONS",
+            "INTAKE",
             "GENERAL",
           ],
         },
@@ -438,6 +484,10 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
             "RENEW",
             "MARK_SOLD",
             "CONFIRM_VALIDATION",
+            "CONFIRM_CANDIDATE",
+            "REJECT_CANDIDATE",
+            "RESOLVE_CANDIDATE",
+            "RETRY_INTAKE",
           ],
         },
         scope: {
@@ -508,6 +558,10 @@ export function isSearchIntentTool(
   name: string
 ): name is SearchIntentToolName {
   return (SEARCH_INTENT_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+export function isIntakeAgentTool(name: string): name is IntakeAgentToolName {
+  return (INTAKE_AGENT_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 export function isReadOpenAiTool(name: string): boolean {

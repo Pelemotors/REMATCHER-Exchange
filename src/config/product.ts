@@ -112,3 +112,5 @@ export const AI_MODELS = {
 /** Bound Agent 4.0 tool rounds (model→tools→model cycles after the first call) */
 export const AGENT_LOOP_MAX_ROUNDS = 4;
 export const AGENT_LOOP_MAX_TOOLS_PER_ROUND = 6;
+/** Soft wall-clock deadline for agent tool loop (no writes after fail) */
+export const AGENT_LOOP_DEADLINE_MS = 45000;

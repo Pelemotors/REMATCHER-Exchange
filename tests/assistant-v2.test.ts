@@ -14,7 +14,7 @@ import {
 
 describe("Agent V2 architecture", () => {
   it("exports agent version 3.0", () => {
-    expect(AGENT_VERSION).toBe("4.0");
+    expect(AGENT_VERSION).toBe("4.1");
   });
 
   it("defines all read tools without unconditional base set", () => {

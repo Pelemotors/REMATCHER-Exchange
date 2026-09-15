@@ -10,12 +10,13 @@ import {
   normalizePlate,
   refreshBatchStatus,
 } from "@/services/intake/status";
+import { planCandidateSlots } from "@/services/intake/grouping";
+import type { ExtractedField } from "@/services/intake/text-extract";
 
 /**
- * Process a durable IntakeBatch into independent VehicleCandidates.
- * Candidate failures do not block siblings.
- * Safe to re-enter: skips candidate creation if already present; continues
- * enrichment/commit for non-terminal candidates.
+ * Process a durable IntakeBatch into VehicleCandidate(s).
+ * Staged: classify → text → OCR (if needed) → GOV → Vision (if still incomplete).
+ * Default grouping: one share → one candidate unless distinct plates.
  */
 export async function processIntakeBatch(dealerId: string, batchId: string) {
   const batch = await prisma.intakeBatch.findFirst({
@@ -24,7 +25,12 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
   });
   if (!batch) return { ok: false as const, error: "not_found" as const };
 
-  if (["COMMITTED", "FAILED"].includes(batch.status) && batch.candidates.every((c) => c.status === "COMMITTED" || c.status === "REJECTED")) {
+  if (
+    ["COMMITTED", "FAILED"].includes(batch.status) &&
+    batch.candidates.every(
+      (c) => c.status === "COMMITTED" || c.status === "REJECTED"
+    )
+  ) {
     return { ok: true as const, skipped: true as const };
   }
 
@@ -62,25 +68,34 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
 
     const combinedText = batch.texts.map((t) => t.text).join("\n");
     const commercial = extractCommercialFromText(combinedText);
-    let plates =
+    let plates: ExtractedField<string>[] =
       commercial.plates.length > 0
         ? commercial.plates
         : commercial.plate
           ? [commercial.plate]
           : [];
 
-    // Image → plate candidate when text has none (OCR optional; never invent).
+    // OCR only when text has no plates
     if (plates.length === 0 && batch.media.length > 0) {
       const { extractPlateFromImageBytes } = await import(
         "@/services/intake/plate-ocr"
       );
       const { resolveMediaAbsolutePath } = await import("@/lib/media/storage");
       const { readFile } = await import("node:fs/promises");
-      for (const media of batch.media) {
+      // Cheap: try up to 3 images (document/exterior first if classified)
+      const ordered = [...batch.media].sort((a, b) => {
+        const rank = (c: string | null | undefined) =>
+          c === "DOCUMENT" ? 0 : c === "EXTERIOR" ? 1 : 2;
+        return rank(a.categoryHint) - rank(b.categoryHint);
+      });
+      for (const media of ordered.slice(0, 3)) {
         try {
           const abs = resolveMediaAbsolutePath(media.storageKey);
           const bytes = await readFile(abs);
-          const ocr = await extractPlateFromImageBytes(bytes);
+          const ocr = await extractPlateFromImageBytes(bytes, {
+            mimeType: media.mimeType ?? undefined,
+            mediaId: media.id,
+          });
           if (ocr?.value) {
             plates = [
               {
@@ -102,26 +117,100 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
             break;
           }
         } catch {
-          // continue other images — failure is non-fatal; review remains available
+          /* non-fatal */
+        }
+      }
+    }
+
+    let visionHint: Awaited<
+      ReturnType<
+        typeof import("@/services/intake/media-vision").understandIntakeMediaSample
+      >
+    > = null;
+
+    // Vision only when identity still weak (no plate + no commercial make/model/year)
+    const commercialFields = commercial.fields as Record<string, unknown>;
+    const needsVision =
+      plates.length === 0 &&
+      batch.media.length > 0 &&
+      !commercialFields.make &&
+      !commercialFields.model;
+
+    if (needsVision) {
+      const { understandIntakeMediaSample } = await import(
+        "@/services/intake/media-vision"
+      );
+      const { resolveMediaAbsolutePath } = await import("@/lib/media/storage");
+      const { readFile } = await import("node:fs/promises");
+      const images: Array<{ bytes: Buffer; mimeType?: string; mediaId?: string }> =
+        [];
+      for (const media of batch.media.slice(0, 2)) {
+        try {
+          const abs = resolveMediaAbsolutePath(media.storageKey);
+          images.push({
+            bytes: await readFile(abs),
+            mimeType: media.mimeType ?? undefined,
+            mediaId: media.id,
+          });
+        } catch {
+          /* skip */
+        }
+      }
+      visionHint = await understandIntakeMediaSample(images, {
+        accompanyingText: combinedText,
+        maxImages: 2,
+      });
+      if (visionHint?.plateDigitsHint && plates.length === 0) {
+        const digits = visionHint.plateDigitsHint.replace(/\D/g, "");
+        if (digits.length >= 7 && digits.length <= 8) {
+          plates = [
+            {
+              value: digits,
+              confidence: Math.min(0.55, visionHint.confidence),
+              source: "VISION",
+            },
+          ];
+        }
+      }
+      if (visionHint) {
+        if (visionHint.makeHint && !commercialFields.make) {
+          commercialFields.make = visionHint.makeHint;
+          commercial.provenance.make = {
+            value: visionHint.makeHint,
+            source: "VISION",
+            confidence: visionHint.confidence,
+          };
+        }
+        if (visionHint.modelHint && !commercialFields.model) {
+          commercialFields.model = visionHint.modelHint;
+          commercial.provenance.model = {
+            value: visionHint.modelHint,
+            source: "VISION",
+            confidence: visionHint.confidence,
+          };
+        }
+        if (visionHint.yearHint && !commercialFields.year) {
+          commercialFields.year = visionHint.yearHint;
+          commercial.provenance.year = {
+            value: visionHint.yearHint,
+            source: "VISION",
+            confidence: visionHint.confidence,
+          };
         }
       }
     }
 
     if (batch.candidates.length === 0) {
-      const plateSlots =
-        plates.length > 0
-          ? plates
-          : [{ value: null as string | null, confidence: null as number | null }];
+      const slots = planCandidateSlots({
+        plates,
+        mediaCount: batch.media.length,
+        visionLikelySameVehicle: visionHint?.likelySameVehicle ?? null,
+      });
 
-      for (const slot of plateSlots) {
-        const plateValue =
-          typeof slot === "object" && slot && "value" in slot
-            ? (slot.value as string | null)
-            : null;
-        const plateConfidence =
-          typeof slot === "object" && slot && "confidence" in slot
-            ? (slot.confidence as number | null)
-            : null;
+      for (const slot of slots) {
+        const plateValue = slot.plate?.value ?? null;
+        const plateConfidence = slot.plate?.confidence ?? null;
+        const plateSource = slot.plate?.source ?? null;
 
         await prisma.vehicleCandidate.create({
           data: {
@@ -131,15 +220,25 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
             detectedPlate: plateValue,
             plateNormalized: plateValue ? normalizePlate(plateValue) : null,
             plateConfidence: plateValue ? plateConfidence ?? 0.6 : null,
-            commercialJson: toPrismaJson(commercial.fields),
+            commercialJson: toPrismaJson(commercialFields),
             fieldProvenance: toPrismaJson({
               ...commercial.provenance,
-              ...(plateValue && plateConfidence != null && !commercial.plate
+              ...(plateValue && plateSource
                 ? {
                     detectedPlate: {
                       value: plateValue,
-                      source: "OCR",
+                      source: plateSource,
                       confidence: plateConfidence,
+                    },
+                  }
+                : {}),
+              grouping: { reason: slot.reason, mediaCount: batch.media.length },
+              ...(visionHint
+                ? {
+                    vision: {
+                      source: "VISION",
+                      confidence: visionHint.confidence,
+                      likelySameVehicle: visionHint.likelySameVehicle,
                     },
                   }
                 : {}),
@@ -211,26 +310,67 @@ async function enrichCandidateIdentity(candidateId: string, dealerId: string) {
     where: { id: candidateId, dealerId },
   });
   if (!candidate) return;
-  if (["COMMITTED", "REJECTED", "NEEDS_CONFIRMATION"].includes(candidate.status)) {
+  if (
+    ["COMMITTED", "REJECTED", "NEEDS_CONFIRMATION"].includes(candidate.status)
+  ) {
     return;
   }
 
   if (candidate.plateNormalized) {
     const gov = await lookupVehicleByPlate(candidate.plateNormalized);
-    await prisma.vehicleCandidate.update({
-      where: { id: candidate.id },
-      data: {
-        govState: gov.state,
-        govIdentityJson: gov.identity ? toPrismaJson(gov.identity) : undefined,
-        govLookedUpAt: new Date(),
-        status: gov.state === "FOUND" ? "READY" : "NEEDS_INFO",
-        reviewStatus: gov.state === "FOUND" ? "NONE" : "PENDING",
-        missingFields: toPrismaJson(
-          gov.state === "FOUND" ? [] : ["detectedPlate"]
-        ),
-        confidenceBand: gov.state === "FOUND" ? "HIGH" : "LOW",
-      },
-    });
+    const provenance =
+      (candidate.fieldProvenance as Record<string, unknown> | null) ?? {};
+
+    // OCR/VISION plate that GOV rejects → do not treat as READY identity
+    const plateProv = provenance.detectedPlate as
+      | { source?: string; confidence?: number }
+      | undefined;
+    const lowOcr =
+      plateProv &&
+      (plateProv.source === "OCR" || plateProv.source === "VISION") &&
+      (plateProv.confidence ?? 1) < 0.55;
+
+    if (gov.state === "FOUND") {
+      await prisma.vehicleCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          govState: gov.state,
+          govIdentityJson: gov.identity ? toPrismaJson(gov.identity) : undefined,
+          govLookedUpAt: new Date(),
+          status: "READY",
+          reviewStatus: "NONE",
+          missingFields: toPrismaJson([]),
+          confidenceBand: "HIGH",
+          fieldProvenance: toPrismaJson({
+            ...provenance,
+            govIdentity: { source: "GOV", confidence: 1 },
+          }),
+        },
+      });
+    } else {
+      await prisma.vehicleCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          govState: gov.state,
+          govLookedUpAt: new Date(),
+          status: "NEEDS_INFO",
+          reviewStatus: "PENDING",
+          missingFields: toPrismaJson(["detectedPlate"]),
+          confidenceBand: lowOcr ? "LOW" : "MEDIUM",
+          conflictsJson:
+            gov.state === "NOT_FOUND" || gov.state === "UNAVAILABLE"
+              ? toPrismaJson([
+                  {
+                    type: "gov_plate_unverified",
+                    plate: candidate.plateNormalized,
+                    govState: gov.state,
+                  },
+                ])
+              : undefined,
+        },
+      });
+    }
+
     await emitExchangeEvent({
       eventType: "intake.candidate.gov_lookup",
       dealerId,
@@ -241,12 +381,19 @@ async function enrichCandidateIdentity(candidateId: string, dealerId: string) {
       operational: true,
     }).catch(() => undefined);
   } else {
+    const commercial = (candidate.commercialJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const missing: string[] = ["detectedPlate"];
+    if (!commercial.make) missing.push("make");
+    if (!commercial.model) missing.push("model");
     await prisma.vehicleCandidate.update({
       where: { id: candidate.id },
       data: {
         status: "NEEDS_INFO",
         reviewStatus: "PENDING",
-        missingFields: toPrismaJson(["detectedPlate"]),
+        missingFields: toPrismaJson(missing),
         confidenceBand: "LOW",
       },
     });

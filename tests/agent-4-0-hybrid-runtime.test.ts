@@ -124,8 +124,8 @@ function loopOk(partial: Record<string, unknown>) {
 }
 
 describe("Agent 4.0 hybrid runtime — architecture", () => {
-  it("same Agent at version 4.0", () => {
-    expect(AGENT_VERSION).toBe("4.0");
+  it("same Agent at version 4.1", () => {
+    expect(AGENT_VERSION).toBe("4.1");
   });
 
   it("orchestrator uses agent loop, not Turn Planner as mandatory brain", () => {

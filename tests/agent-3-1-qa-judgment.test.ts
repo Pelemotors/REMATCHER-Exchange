@@ -161,8 +161,28 @@ describe("Universal Agent confirmation", () => {
     vi.mocked(runAgentToolLoop).mockReset();
   });
 
-  it.each(["כן", "מאשר", "יאללה", "כן תבטל אותם", "סגור אותם"])(
-    "confirmation language is interpreted by the Agent: %s",
+  it.each(["כן", "מאשר", "יאללה"])(
+    "short confirmation uses Fast path (no LLM): %s",
+    async (message) => {
+      const result = await runExchangeAssistantV2({
+        dealerId: "dealer-1",
+        userId: "u1",
+        message,
+        context: { route: "/inventory", mode: "inventory_management" },
+        conversation: { pendingConfirmation: pendingFour },
+      });
+
+      expect(runAgentToolLoop).not.toHaveBeenCalled();
+      expect(bulkPrep).not.toHaveBeenCalled();
+      expect(bulkExec).toHaveBeenCalledWith("dealer-1", ["s1", "s2", "s3", "s4"]);
+      expect(result.message).toMatch(/סגרתי 4/);
+      expect(result.meta?.executor).toBe("action_gateway_fast");
+      expect(result.meta?.finalResponseSource).toBe("action_gateway");
+    }
+  );
+
+  it.each(["כן תבטל אותם", "סגור אותם"])(
+    "natural confirmation language is interpreted by the Agent: %s",
     async (message) => {
       vi.mocked(runAgentToolLoop).mockResolvedValue(
         loopResult({
@@ -215,6 +235,21 @@ describe("Universal Agent confirmation", () => {
     expect(bulkExec).not.toHaveBeenCalled();
     expect(result.message).toMatch(/בוטל/);
     expect(result.meta?.finalResponseSource).toBe("action_gateway");
+  });
+
+  it("exact rejection uses Fast path", async () => {
+    const result = await runExchangeAssistantV2({
+      dealerId: "dealer-1",
+      userId: "u1",
+      message: "לא",
+      context: { route: "/" },
+      conversation: { pendingConfirmation: pendingFour },
+    });
+
+    expect(runAgentToolLoop).not.toHaveBeenCalled();
+    expect(bulkExec).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/בוטל/);
+    expect(result.meta?.executor).toBe("action_gateway_fast");
   });
 
   it("a normal read while confirmation is pending stays conversational", async () => {

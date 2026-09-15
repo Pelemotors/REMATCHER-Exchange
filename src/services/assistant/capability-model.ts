@@ -13,6 +13,7 @@ export const AGENT_CAPABILITIES = [
   "OUTCOMES",
   "ACTIVITY",
   "VALIDATIONS",
+  "INTAKE",
   "COMMERCIAL",
   "HELP",
 ] as const;
@@ -27,6 +28,10 @@ export const AGENT_OPERATIONS = [
   "RENEW",
   "MARK_SOLD",
   "CONFIRM_VALIDATION",
+  "CONFIRM_CANDIDATE",
+  "REJECT_CANDIDATE",
+  "RESOLVE_CANDIDATE",
+  "RETRY_INTAKE",
   "HELP",
   "NONE",
 ] as const;
@@ -61,6 +66,7 @@ const CAP_ALIASES: Record<string, AgentCapability> = {
   activity: "ACTIVITY",
   validations: "VALIDATIONS",
   validation: "VALIDATIONS",
+  intake: "INTAKE",
   commercial: "COMMERCIAL",
   broker: "GENERAL",
   help: "HELP",
@@ -76,6 +82,10 @@ const OP_ALIASES: Record<string, AgentOperation> = {
   mark_sold: "MARK_SOLD",
   sold: "MARK_SOLD",
   confirm_validation: "CONFIRM_VALIDATION",
+  confirm_candidate: "CONFIRM_CANDIDATE",
+  reject_candidate: "REJECT_CANDIDATE",
+  resolve_candidate: "RESOLVE_CANDIDATE",
+  retry_intake: "RETRY_INTAKE",
   help: "HELP",
   none: "NONE",
 };

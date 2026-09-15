@@ -19,8 +19,8 @@ export const ALL_READ_TOOLS = [
 
 export type ReadToolName = (typeof ALL_READ_TOOLS)[number];
 
-/** Hybrid tool-using runtime — same Exchange Assistant, new conversational brain */
-export const AGENT_VERSION = "4.0";
+/** Hybrid tool-using runtime — Agent 4.1 conversational brain */
+export const AGENT_VERSION = "4.1";
 
 export type ActionIntent =
   | "read"

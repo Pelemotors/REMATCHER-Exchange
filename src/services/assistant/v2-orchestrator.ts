@@ -1,5 +1,5 @@
 /**
- * Exchange Assistant orchestrator — Agent 4.0 hybrid runtime.
+ * Exchange Assistant orchestrator — Agent 4.1 hybrid runtime.
  *
  * Ordinary conversation always goes through the universal Agent. Deterministic
  * code remains authority for privacy, authorization, confirmation and execution.
@@ -10,6 +10,8 @@ import {
   type AssistantCard,
   type ConversationState,
   appendRecentTurns,
+  isConfirmation,
+  isRejection,
 } from "@/services/assistant/conversation-state";
 import { executeToolsParallel } from "@/services/assistant/tools/read-tools";
 import {
@@ -42,7 +44,40 @@ function withHistory(
   userMessage: string,
   assistantMessage: string
 ): ConversationState {
-  return appendRecentTurns(conversation, userMessage, assistantMessage);
+  const next = appendRecentTurns(conversation, userMessage, assistantMessage);
+  return maybeRefreshCompactSummary(next);
+}
+
+/** Build/update compactSummary when recentTurns grow past 10 (no extra LLM). */
+function maybeRefreshCompactSummary(
+  state: ConversationState
+): ConversationState {
+  const turns = state.recentTurns?.length ?? 0;
+  if (turns <= 10) return state;
+  const parts: string[] = [];
+  if (state.goal) parts.push(`מטרה: ${state.goal}`);
+  if (state.focusedObject) {
+    parts.push(`מיקוד: ${state.focusedObject.type}:${state.focusedObject.id}`);
+  }
+  if (state.lastList?.length) {
+    parts.push(
+      `רשימה אחרונה: ${state.lastList
+        .slice(0, 4)
+        .map((i) => i.title)
+        .join(", ")}`
+    );
+  }
+  if (state.referencedEntities?.length) {
+    parts.push(
+      `ישויות: ${state.referencedEntities
+        .slice(0, 4)
+        .map((e) => e.label || e.id)
+        .join(", ")}`
+    );
+  }
+  const summary = parts.filter(Boolean).join(" | ").slice(0, 600);
+  if (!summary) return state;
+  return { ...state, compactSummary: summary };
 }
 
 export async function runExchangeAssistantV2(params: {
@@ -110,6 +145,65 @@ export async function runExchangeAssistantV2(params: {
     };
   }
 
+  // Fast path: pending confirmation + כן/לא — skip OpenAI entirely.
+  const pending = params.conversation?.pendingConfirmation;
+  if (
+    pending &&
+    (isConfirmation(params.message) || isRejection(params.message))
+  ) {
+    meta.finalResponseSource = "action_gateway";
+    meta.executor = "action_gateway_fast";
+    meta.responseType = "fast_confirm";
+    const proposal = {
+      capability: "GENERAL" as const,
+      operation: "NONE" as const,
+      scope: null,
+      targetReference: null,
+      reason: null,
+      facts: null,
+      kind: isConfirmation(params.message)
+        ? ("CONFIRM_PENDING" as const)
+        : ("CANCEL_PENDING" as const),
+    };
+    const gated = await runActionGateway({
+      dealerId: params.dealerId,
+      userId: params.userId,
+      message: params.message,
+      proposal,
+      conversation: params.conversation,
+      meta,
+      entityType: params.context.entityType,
+      entityId: params.context.entityId,
+    });
+    await logAppEvent({
+      eventType: "agent_action_gateway",
+      dealerId: params.dealerId,
+      metadata: {
+        agentVersion: AGENT_VERSION,
+        kind: proposal.kind,
+        mode: "fast",
+        policyResult: meta.policyResult,
+        executor: "action_gateway_fast",
+      },
+    });
+    const fastMeta: AgentMeta = {
+      ...meta,
+      ...(gated.meta ?? {}),
+      executor: "action_gateway_fast",
+      responseType: "fast_confirm",
+      finalResponseSource: "action_gateway",
+    };
+    return {
+      ...gated,
+      conversation: withHistory(
+        gated.conversation ?? params.conversation,
+        params.message,
+        gated.message
+      ),
+      meta: fastMeta,
+    };
+  }
+
   // No intent regex, no turn classifier, no inventory workflow interception here.
   // The universal Agent interprets the turn and chooses capabilities.
   const loop = await runAgentToolLoop({
@@ -161,6 +255,7 @@ export async function runExchangeAssistantV2(params: {
       toolsUsed: loop.toolsUsed,
       totalTokens: loop.totalTokens,
       latencyMs: loop.latencyMs,
+      mode: loop.mode ?? "light",
       hasProposal: Boolean(loop.proposal),
       proposalKind: loop.proposal?.kind ?? null,
       capability: loop.proposal?.capability ?? null,

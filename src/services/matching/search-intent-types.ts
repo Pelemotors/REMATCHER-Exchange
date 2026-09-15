@@ -51,6 +51,15 @@ export type FeatureRequirement = {
   notes?: string | null;
 };
 
+/** Customer's offered trade-in vehicle — NOT ownershipSource of the desired car */
+export type CustomerTradeInOffer = {
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  notes?: string | null;
+  provenance?: "user_stated" | "agent_inferred";
+};
+
 export type StructuredSearchIntent = {
   schemaVersion: 2;
   make?: DimensionIntent<string>;
@@ -66,7 +75,10 @@ export type StructuredSearchIntent = {
   transmission?: DimensionIntent<string>;
   drivetrain?: DimensionIntent<string>;
   color?: DimensionIntent<string>;
+  /** Origin of the desired vehicle (private/leasing/…)—never customer trade-in */
   ownershipSource?: DimensionIntent<string>;
+  /** Vehicle the customer offers as trade-in (separate from ownershipSource) */
+  customerTradeIn?: CustomerTradeInOffer | null;
   hand?: DimensionIntent<number> & { flexibility?: NumericFlexibility };
   region?: DimensionIntent<string>;
   seats?: DimensionIntent<number>;
@@ -74,6 +86,30 @@ export type StructuredSearchIntent = {
   freeFormRequirements?: string[];
   tradeOffNotes?: string[];
 };
+
+const TRADE_IN_OWNERSHIP_RE =
+  /^(TRADE_IN|trade[\s_-]*in|טרייד[\s־-]*אין)$/i;
+
+/** Move mistaken TRADE_IN ownershipSource into customerTradeIn. Mutates + returns intent. */
+export function sanitizeTradeInOutOfOwnership(
+  intent: StructuredSearchIntent
+): StructuredSearchIntent {
+  const target = intent.ownershipSource?.target;
+  if (target == null) return intent;
+  const asStr = String(target);
+  if (!TRADE_IN_OWNERSHIP_RE.test(asStr)) return intent;
+  const next: StructuredSearchIntent = { ...intent };
+  if (!next.customerTradeIn) {
+    next.customerTradeIn = {
+      notes: "טרייד-אין לקוח (הופרד ממקוריות)",
+      provenance: intent.ownershipSource?.provenance === "user_stated"
+        ? "user_stated"
+        : "agent_inferred",
+    };
+  }
+  delete next.ownershipSource;
+  return next;
+}
 
 export type SearchIntentDraft = {
   naturalLanguageSummary: string;
@@ -109,7 +145,20 @@ export function summarizeIntentHe(intent: StructuredSearchIntent): string {
   if (intent.fuel?.target) parts.push(`דלק ${intent.fuel.target}`);
   if (intent.engineDisplacementCc?.target != null) parts.push(`מנוע ${intent.engineDisplacementCc.target} סמ״ק`);
   if (intent.hand?.target != null) parts.push(`עד יד ${intent.hand.target}`);
-  if (intent.ownershipSource?.target) parts.push(`מקוריות ${intent.ownershipSource.target}`);
+  if (intent.ownershipSource?.target) {
+    const own = String(intent.ownershipSource.target);
+    if (!TRADE_IN_OWNERSHIP_RE.test(own)) {
+      parts.push(`מקוריות ${own}`);
+    }
+  }
+  if (intent.customerTradeIn) {
+    const t = intent.customerTradeIn;
+    const vehicleBit = [t.make, t.model, t.year].filter((x) => x != null && x !== "").join(" ");
+    const noteBit = t.notes?.trim() || "";
+    parts.push(
+      `טרייד-אין לקוח: ${[vehicleBit, noteBit].filter(Boolean).join(" — ") || "כן"}`
+    );
+  }
   if (intent.featureRequirements?.length) {
     parts.push(
       `פיצ'רים ${intent.featureRequirements
