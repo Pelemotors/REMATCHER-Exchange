@@ -111,8 +111,17 @@ export async function deliverPushToUser(
   const subs = await prisma.pushSubscription.findMany({
     where: { userId: params.userId, invalidatedAt: null },
   });
+  // Native APNs/FCM tokens are stored as apns:// / fcm:// — not Web Push endpoints.
+  const webSubs = subs.filter(
+    (s) =>
+      !s.endpoint.startsWith("apns://") && !s.endpoint.startsWith("fcm://")
+  );
 
-  if (subs.length === 0) {
+  if (webSubs.length === 0) {
+    if (subs.length > 0) {
+      // Only native tokens — FCM/APNs sender is OWNER_BLOCKED until credentials exist.
+      return { sent: 0, failed: 0, deliveries: [] };
+    }
     if (!params.skipIfNoSubscription) {
       const delivery = await prisma.pushDelivery.create({
         data: {
@@ -151,7 +160,7 @@ export async function deliverPushToUser(
   const deliveryIds: string[] = [];
 
   await Promise.allSettled(
-    subs.map(async (sub) => {
+    webSubs.map(async (sub) => {
       const idempotencyKey = pushDeliveryIdempotencyKey(
         params.source,
         params.notificationId ?? null,

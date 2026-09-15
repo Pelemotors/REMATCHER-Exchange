@@ -66,9 +66,9 @@
 /* Mobile companion — bottom sheet ~48% usable viewport */
 .companion {
   inset-inline: 0;
-  bottom: 0;
+  bottom: var(--kb-inset, 0px);
   height: min(52dvh, 100dvh);
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 2.5rem);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 2.5rem - var(--kb-inset, 0px));
   border-radius: 1rem 1rem 0 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -76,8 +76,9 @@
 /* Mobile focus — near fullscreen conversation */
 .focus {
   inset: 0;
-  height: 100dvh;
-  max-height: 100dvh;
+  bottom: var(--kb-inset, 0px);
+  height: calc(100dvh - var(--kb-inset, 0px));
+  max-height: calc(100dvh - var(--kb-inset, 0px));
   border-radius: 0;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);

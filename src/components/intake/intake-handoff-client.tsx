@@ -37,8 +37,8 @@ async function getShareStaging(): Promise<ShareStagingPlugin | null> {
 
 /**
  * Deep-link landing after OS Share handoff.
- * On Capacitor (Android / iOS): consumes durable staged files → authenticated upload → ACK.
- * Web upload path also uses this for Field Test without native builds.
+ * On Capacitor: consumes durable staged files → authenticated upload → ACK.
+ * Web upload path for Field Test without native builds.
  */
 export function IntakeHandoffClient() {
   const params = useSearchParams();
@@ -65,14 +65,18 @@ export function IntakeHandoffClient() {
   const [caption, setCaption] = useState(shareText);
   const [nativeReady, setNativeReady] = useState(false);
   const [receivedSummary, setReceivedSummary] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const plugin = await getShareStaging();
       if (plugin && isNativeShare) {
+        if (cancelled) return;
         setNativeReady(true);
         setStatus("מעבד שיתוף מהמכשיר…");
         setUploading(true);
+        setError(null);
         try {
           const pending = await plugin.getPending();
           const id = pending.clientBatchId || clientBatchId;
@@ -89,8 +93,8 @@ export function IntakeHandoffClient() {
           );
 
           const result = await plugin.consumeAndUpload({ clientBatchId: id });
+          if (cancelled) return;
           if (result.needsLogin) {
-            // Keep App Group / local staging; resume after login via callbackUrl.
             const callback = `/intake/handoff?${new URLSearchParams({
               clientBatchId: id,
               source,
@@ -109,10 +113,10 @@ export function IntakeHandoffClient() {
           setBatchId(result.batchId ?? null);
           setDone(true);
           setStatus("קיבלנו");
-        } catch (e) {
-          setError("שגיאה בעיבוד השיתוף מהמכשיר");
+        } catch {
+          if (!cancelled) setError("שגיאה בעיבוד השיתוף מהמכשיר");
         } finally {
-          setUploading(false);
+          if (!cancelled) setUploading(false);
         }
         return;
       }
@@ -128,10 +132,13 @@ export function IntakeHandoffClient() {
           }),
         });
         if (!res.ok) {
-          setError("לא הצלחנו לפתוח קליטה — התחבר מחדש ונסה שוב");
+          if (!cancelled) {
+            setError("לא הצלחנו לפתוח קליטה — התחבר מחדש ונסה שוב");
+          }
           return;
         }
         const data = await res.json();
+        if (cancelled) return;
         const id = data.batch?.id ?? null;
         setBatchId(id);
         setStatus(data.resumed ? "ממשיכים קליטה קיימת" : "מוכן לקליטה");
@@ -148,10 +155,13 @@ export function IntakeHandoffClient() {
           });
         }
       } catch {
-        setError("שגיאת רשת");
+        if (!cancelled) setError("שגיאת רשת");
       }
     })();
-  }, [clientBatchId, source, shareText, isNativeShare]);
+    return () => {
+      cancelled = true;
+    };
+  }, [clientBatchId, source, shareText, isNativeShare, retryToken]);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length || !batchId || uploading) return;
@@ -193,6 +203,9 @@ export function IntakeHandoffClient() {
         setError("הקליטה לא אושרה בשרת");
         return;
       }
+      setReceivedSummary(
+        files.length === 1 ? "תמונה אחת" : `${files.length} תמונות`
+      );
       setDone(true);
       setStatus("קיבלנו");
     } finally {
@@ -201,12 +214,12 @@ export function IntakeHandoffClient() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-4 px-5 py-6">
+    <div className="mx-auto max-w-md space-y-4 px-5 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <h1 className="text-2xl font-bold text-v2-warm-white">קליטת מלאי</h1>
       <p className="text-sm text-v2-text-secondary">
         {nativeReady
           ? "שיתוף מ־WhatsApp מתעבד אוטומטית."
-          : "זרוק לכאן תמונות מהגלריה או מ־WhatsApp. אנחנו נטפל בשאר."}
+          : "בחר תמונות מהגלריה או צלם — אנחנו נטפל בשאר."}
       </p>
       <Surface depth="raised" className="space-y-3 p-4">
         <p className="text-sm text-v2-text-muted" role="status">
@@ -228,24 +241,37 @@ export function IntakeHandoffClient() {
             <label className="block space-y-1 text-sm">
               <span className="text-v2-text-muted">טקסט מהשיתוף (לוחית / מחיר)</span>
               <textarea
-                className="min-h-20 w-full rounded-xl border border-v2-border bg-v2-surface px-3 py-2 text-v2-warm-white"
+                className="min-h-20 w-full rounded-xl border border-v2-border bg-v2-surface px-3 py-2 text-base text-v2-warm-white"
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 placeholder="לדוגמה: 12-345-67 יד 2 85000 ק״מ מחיר 145000"
                 disabled={uploading}
               />
             </label>
-            <label className="flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-v2-border bg-v2-surface px-4 text-center font-semibold">
-              {uploading ? "מעלה…" : "בחר תמונות"}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                className="sr-only"
-                disabled={!batchId || uploading}
-                onChange={(e) => void onFiles(e.target.files)}
-              />
-            </label>
+            <div className="flex flex-col gap-2">
+              <label className="flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-v2-border bg-v2-surface px-4 text-center text-base font-semibold">
+                {uploading ? "מעלה…" : "בחר מהגלריה"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="sr-only"
+                  disabled={!batchId || uploading}
+                  onChange={(e) => void onFiles(e.target.files)}
+                />
+              </label>
+              <label className="flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-v2-border bg-transparent px-4 text-center text-base font-semibold text-v2-text-secondary">
+                {uploading ? "מעלה…" : "צלם רכב"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  className="sr-only"
+                  disabled={!batchId || uploading}
+                  onChange={(e) => void onFiles(e.target.files)}
+                />
+              </label>
+            </div>
           </>
         ) : (
           <p className="text-sm text-v2-text-muted">
@@ -253,9 +279,21 @@ export function IntakeHandoffClient() {
           </p>
         )}
         {error && (
-          <p className="text-sm text-error" role="alert">
-            {error}
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-error" role="alert">
+              {error}
+            </p>
+            {nativeReady && !done ? (
+              <ButtonV2
+                variant="primary"
+                className="w-full"
+                disabled={uploading}
+                onClick={() => setRetryToken((n) => n + 1)}
+              >
+                נסה שוב
+              </ButtonV2>
+            ) : null}
+          </div>
         )}
         <ButtonV2 variant="ghost" href="/inventory" className="w-full">
           למלאי שלי

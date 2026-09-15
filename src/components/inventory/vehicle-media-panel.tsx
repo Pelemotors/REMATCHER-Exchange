@@ -191,11 +191,18 @@ export function VehicleMediaPanel({ vehicleId }: { vehicleId: string }) {
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              capture={cat === "EXTERIOR" || cat === "INTERIOR" ? "environment" : undefined}
+              multiple={cat === "OTHER"}
               className="sr-only"
               disabled={Boolean(uploading)}
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void upload(cat, file);
+                const files = e.target.files;
+                if (!files?.length) return;
+                void (async () => {
+                  for (const file of Array.from(files)) {
+                    await upload(cat, file);
+                  }
+                })();
                 e.target.value = "";
               }}
             />

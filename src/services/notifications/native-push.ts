@@ -1,16 +1,19 @@
 /**
- * Native push architecture (APNs / FCM) — scaffolding without store credentials.
+ * Native push (APNs / FCM) — registration + persistence without inventing credentials.
  *
- * Current production path: Web Push (VAPID) via `src/services/notifications/push.ts`.
- * Store apps SHOULD use platform push; this module defines the bridge contract.
+ * Web Push (VAPID) remains in `push.ts` for browsers/PWA.
+ * Store apps register device tokens here; delivery waits on Owner APNs/FCM config.
  *
- * OWNER BLOCKERS before device push works in Store builds:
- * - Apple: APNs key (.p8) + App ID Push capability + Team ID
- * - Google: Firebase project + google-services.json / GoogleService-Info.plist
- * - Wire `@capacitor/push-notifications` on Mac/CI after credentials exist
+ * OWNER BLOCKERS for live device delivery:
+ * - Apple: APNs key (.p8) + Push capability
+ * - Google: Firebase + google-services.json / GoogleService-Info.plist
+ * - Capacitor PushNotifications wired in signed builds
  */
 
-export type NativePushPlatform = "ios" | "android" | "web" | "unknown";
+import "server-only";
+import { prisma } from "@/lib/prisma";
+
+export type NativePushPlatform = "ios" | "android";
 
 export type NativePushRegistration = {
   platform: NativePushPlatform;
@@ -18,8 +21,12 @@ export type NativePushRegistration = {
   deviceToken: string;
 };
 
-export function isNativePushConfigured(): boolean {
-  // Credentials are injected at build time by Owner; code must not invent them.
+const NATIVE_ENDPOINT_PREFIX = {
+  ios: "apns://",
+  android: "fcm://",
+} as const;
+
+export function isNativePushDeliveryConfigured(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_NATIVE_PUSH_READY === "true" ||
       process.env.FCM_SERVER_KEY ||
@@ -27,17 +34,90 @@ export function isNativePushConfigured(): boolean {
   );
 }
 
+export function nativeEndpointFor(
+  platform: NativePushPlatform,
+  deviceToken: string
+): string {
+  return `${NATIVE_ENDPOINT_PREFIX[platform]}${deviceToken}`;
+}
+
+export function isNativePushEndpoint(endpoint: string): boolean {
+  return (
+    endpoint.startsWith(NATIVE_ENDPOINT_PREFIX.ios) ||
+    endpoint.startsWith(NATIVE_ENDPOINT_PREFIX.android)
+  );
+}
+
 /**
- * Server-side registration hook (future). Persists device tokens separately from Web Push.
- * Returns false until Owner credentials + native plugin are wired.
+ * Persist native device token using PushSubscription row with apns:// or fcm:// endpoint.
+ * Delivery path skips these until FCM/APNs credentials exist.
  */
-export async function registerNativePushDevice(_input: {
-  dealerId: string;
+export async function registerNativePushDevice(input: {
   userId: string;
   registration: NativePushRegistration;
 }): Promise<{ ok: boolean; reason?: string }> {
-  if (!isNativePushConfigured()) {
-    return { ok: false, reason: "native_push_not_configured" };
+  const token = input.registration.deviceToken?.trim();
+  if (!token || token.length < 8 || token.length > 4096) {
+    return { ok: false, reason: "invalid_token" };
   }
-  return { ok: false, reason: "native_push_persistence_pending" };
+  if (!/^[a-zA-Z0-9_\-:]+$/.test(token) && !/^[0-9a-fA-F]+$/.test(token)) {
+    // Allow common FCM/APNs token char sets (hex or url-safe)
+    if (!/^[a-zA-Z0-9_\-:.]+$/.test(token)) {
+      return { ok: false, reason: "invalid_token_charset" };
+    }
+  }
+
+  const endpoint = nativeEndpointFor(input.registration.platform, token);
+  await prisma.pushSubscription.upsert({
+    where: { endpoint },
+    create: {
+      userId: input.userId,
+      endpoint,
+      p256dh: `native:${input.registration.platform}`,
+      auth: "native-device-token",
+    },
+    update: {
+      userId: input.userId,
+      p256dh: `native:${input.registration.platform}`,
+      auth: "native-device-token",
+      invalidatedAt: null,
+    },
+  });
+
+  return { ok: true };
+}
+
+export async function unregisterNativePushDevice(input: {
+  userId: string;
+  platform: NativePushPlatform;
+  deviceToken: string;
+}): Promise<boolean> {
+  const endpoint = nativeEndpointFor(input.platform, input.deviceToken);
+  const existing = await prisma.pushSubscription.findUnique({
+    where: { endpoint },
+  });
+  if (!existing || existing.userId !== input.userId) return false;
+  await prisma.pushSubscription.delete({ where: { endpoint } });
+  return true;
+}
+
+/**
+ * Placeholder send — never invents APNs/FCM credentials.
+ * Returns not_configured until Owner env is present.
+ */
+export async function sendNativePushToUser(_input: {
+  userId: string;
+  title: string;
+  body: string;
+  link?: string;
+}): Promise<{ sent: number; failed: number; reason?: string }> {
+  if (!isNativePushDeliveryConfigured()) {
+    return { sent: 0, failed: 0, reason: "native_push_not_configured" };
+  }
+  return { sent: 0, failed: 0, reason: "native_push_sender_pending_credentials" };
+}
+
+/** @deprecated use isNativePushDeliveryConfigured */
+export function isNativePushConfigured(): boolean {
+  return isNativePushDeliveryConfigured();
 }

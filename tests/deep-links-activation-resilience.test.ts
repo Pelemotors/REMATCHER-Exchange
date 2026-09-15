@@ -34,6 +34,9 @@ describe("Deep Links", () => {
     expect(isSafeInternalPath("//evil.com")).toBe(false);
     expect(isSafeInternalPath("https://evil.com")).toBe(false);
     expect(isSafeInternalPath("/matches?focus=x")).toBe(true);
+    expect(isSafeInternalPath("/intake/handoff?clientBatchId=x&staged=1")).toBe(
+      true
+    );
     expect(sanitizeReturnPath("//evil")).toBeNull();
     expect(sanitizeReturnPath("/opportunities?focus=1")).toBe(
       "/opportunities?focus=1"
@@ -50,6 +53,14 @@ describe("Deep Links", () => {
       "/matches?focus=abc"
     );
     expect(getPostAuthRedirect(user, "//evil")).toBe("/home");
+    expect(
+      getPostAuthRedirect(
+        user,
+        "/intake/handoff?clientBatchId=batch1&source=ANDROID_SHARE&staged=1"
+      )
+    ).toBe(
+      "/intake/handoff?clientBatchId=batch1&source=ANDROID_SHARE&staged=1"
+    );
   });
 
   it("pages consume focus params", () => {

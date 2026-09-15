@@ -2,5 +2,16 @@
   "name": "rematcher-exchange-mobile",
   "private": true,
   "version": "0.2.0-rc.1",
-  "description": "Capacitor shell for REMATCHER Exchange (OS adapters only)"
+  "description": "Capacitor shell for REMATCHER Exchange (OS adapters only)",
+  "dependencies": {
+    "@capacitor/android": "file:../node_modules/@capacitor/android",
+    "@capacitor/app": "file:../node_modules/@capacitor/app",
+    "@capacitor/core": "file:../node_modules/@capacitor/core",
+    "@capacitor/keyboard": "file:../node_modules/@capacitor/keyboard",
+    "@capacitor/preferences": "file:../node_modules/@capacitor/preferences",
+    "@capacitor/push-notifications": "file:../node_modules/@capacitor/push-notifications"
+  },
+  "optionalDependencies": {
+    "@capacitor/ios": "file:../node_modules/@capacitor/ios"
+  }
 }

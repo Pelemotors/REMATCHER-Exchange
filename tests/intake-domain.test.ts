@@ -183,6 +183,8 @@ describe("intake domain surface", () => {
     );
     expect(handoff).toContain("IOS_SHARE");
     expect(handoff).toContain("isNativeShare");
+    expect(handoff).toContain("callbackUrl");
+    expect(handoff).toContain("נסה שוב");
   });
 });
 

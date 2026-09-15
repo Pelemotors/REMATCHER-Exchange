@@ -8,6 +8,7 @@ export const SAFE_DEEP_LINK_PREFIXES = [
   "/opportunities",
   "/inventory",
   "/demand",
+  "/intake",
   "/validations",
   "/reveals/",
   "/activity",

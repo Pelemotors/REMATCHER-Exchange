@@ -93,6 +93,9 @@
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Camera via web file capture / future Capacitor Camera -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <!-- POST_NOTIFICATIONS for Android 13+ when native FCM is wired (Owner Firebase) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

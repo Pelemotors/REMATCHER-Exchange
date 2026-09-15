@@ -55,9 +55,14 @@ Replace `TEAMID` in `public/.well-known/apple-app-site-association` and Play SHA
 5. Internal testing track + AAB signed with Owner keystore
 6. Physical: Gallery/WhatsApp Share → Intake ACK
 
-## Native push (OWNER_BLOCKED for credentials)
+## Native push (OWNER_BLOCKED for live delivery)
 
-Web Push (VAPID) works in PWA/browser. Store native push needs APNs + FCM — see `src/services/notifications/native-push.ts`.
+Code path ready:
+- Client: `NativePushRegister` + `@capacitor/push-notifications`
+- API: `POST /api/push/native-register` (stores `apns://` / `fcm://` tokens)
+- Web Push delivery skips native endpoints
+
+Still need Owner: APNs `.p8`, Firebase `google-services.json` / `GoogleService-Info.plist`, then wire sender.
 
 ## Android release artifacts (unsigned — no Owner keystore)
 

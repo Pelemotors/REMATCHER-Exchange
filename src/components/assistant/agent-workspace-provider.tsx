@@ -530,11 +530,23 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.agentMode = presentationMode;
     document.documentElement.dataset.agentDesktop = isDesktop ? "1" : "0";
+    document.documentElement.dataset.agentOpen =
+      presentationMode === "closed" ? "0" : "1";
     return () => {
       delete document.documentElement.dataset.agentMode;
       delete document.documentElement.dataset.agentDesktop;
+      delete document.documentElement.dataset.agentOpen;
     };
   }, [presentationMode, isDesktop]);
+
+  // Native Android back / rematcher:agent-close
+  useEffect(() => {
+    function onClose() {
+      closeAgent();
+    }
+    document.addEventListener("rematcher:agent-close", onClose);
+    return () => document.removeEventListener("rematcher:agent-close", onClose);
+  }, [closeAgent]);
 
   const value = useMemo<AgentWorkspaceContextValue>(
     () => ({
