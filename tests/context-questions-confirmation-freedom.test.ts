@@ -29,7 +29,7 @@ vi.mock("@/services/assistant/tools/action-tools", () => ({
 
 import { interpretTurnFallback } from "@/services/assistant/turn-interpreter";
 import { handleInventoryIngestTurn } from "@/services/assistant/inventory-ingest";
-import type { PendingInventoryDraft } from "@/services/assistant/inventory-draft";
+import { emptyDraftFields, type PendingInventoryDraft } from "@/services/assistant/inventory-draft";
 import type { ConversationState } from "@/services/assistant/conversation-state";
 
 /** Build a fully complete draft (WAITING_CONFIRMATION state) */
@@ -38,20 +38,18 @@ function buildConfirmingDraft(overrides?: Partial<PendingInventoryDraft["fields"
     status: "WAITING_CONFIRMATION",
     sourceText: "אודי Q7 2012, 157 אלף, פרטית, 46 לסוחר",
     fields: {
+      ...emptyDraftFields(),
       make: "Audi",
       model: "Q7",
       year: 2012,
       mileage: 157000,
       ownershipType: "private",
-      ownershipHand: null,
       b2bPrice: 46000,
-      retailPrice: null,
-      color: null,
-      trim: null,
-      region: null,
+      fuelType: "PETROL",
+      engineDisplacementCc: 3000,
       ...overrides,
     },
-    askedGaps: ["mileage", "dealer_price", "ownership"],
+    askedGaps: ["mileage", "fuel_type", "engine_displacement", "dealer_price", "ownership"],
     skippedGaps: [],
   };
 }
@@ -420,19 +418,7 @@ describe("F. Advisory questions — general knowledge while draft open", () => {
     return {
       status: "DRAFT",
       sourceText: "",
-      fields: {
-        make: null,
-        model: null,
-        year: null,
-        mileage: null,
-        ownershipType: null,
-        ownershipHand: null,
-        b2bPrice: null,
-        retailPrice: null,
-        color: null,
-        trim: null,
-        region: null,
-      },
+      fields: { ...emptyDraftFields() },
       askedGaps: [],
       skippedGaps: [],
     };

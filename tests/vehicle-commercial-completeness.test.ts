@@ -69,7 +69,8 @@ describe("vehicle commercial completeness", () => {
   it("teaches the demand AI all four dimensions without inventing them", () => {
     const parser = source("src/services/ai/demand-parser.ts");
     expect(parser).toContain("ownershipHand: when explicitly stated");
-    expect(parser).toContain("ownershipType: when explicitly stated");
+    expect(parser).toContain("ownershipType: normalize private/פרטי, leasing/ליסינג");
+    expect(parser).toContain("ownershipHand: when explicitly stated");
     expect(parser).toContain("Never infer engine size from model knowledge");
     expect(parser).toContain("canonicalizeOwnershipSource");
     expect(parser).toContain('maybePushSoftConstraint(copy, "hand"');

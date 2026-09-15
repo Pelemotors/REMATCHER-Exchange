@@ -326,7 +326,11 @@ export function buildStructuredSummary(draft: PendingInventoryDraft): string {
   if (f.engineDisplacementCc != null) lines.push(`מנוע ${fmtNum(f.engineDisplacementCc)} סמ״ק`);
   const own = ownershipLabel(f);
   if (own) lines.push(own);
-  if (f.features.length) lines.push(`פיצ'רים: ${canonicalizeVehicleFeatures(f.features).map(vehicleFeatureLabelHe).join(", ")}`);
+  if ((f.features ?? []).length) {
+    lines.push(
+      `פיצ'רים: ${canonicalizeVehicleFeatures(f.features ?? []).map(vehicleFeatureLabelHe).join(", ")}`
+    );
+  }
   if (f.b2bPrice != null) lines.push(`מחיר לסוחר ${fmtNum(f.b2bPrice)} ₪`);
   else if (f.retailPrice != null) lines.push(`מחיר לקוח ${fmtNum(f.retailPrice)} ₪`);
   if (f.color) lines.push(`צבע ${f.color}`);
@@ -341,7 +345,9 @@ export function buildCompactSummary(draft: PendingInventoryDraft): string {
   if (f.mileage != null) bits.push(`${fmtNum(f.mileage)} ק״מ`);
   if (f.fuelType) bits.push(fuelTypeLabelHe(f.fuelType) ?? f.fuelType);
   if (f.engineDisplacementCc != null) bits.push(`${fmtNum(f.engineDisplacementCc)} סמ״ק`);
-  if (f.features.length) bits.push(canonicalizeVehicleFeatures(f.features).map(vehicleFeatureLabelHe).join(", "));
+  if ((f.features ?? []).length) {
+    bits.push(canonicalizeVehicleFeatures(f.features ?? []).map(vehicleFeatureLabelHe).join(", "));
+  }
   if (f.b2bPrice != null) bits.push(`מחיר ${fmtNum(f.b2bPrice)}`);
   return bits.join(" · ");
 }
@@ -403,7 +409,11 @@ export function identityPartialMessage(fields: InventoryDraftFields): string {
   if (fields.mileage != null) known.push(`עם ${fmtNum(fields.mileage)} ק״מ`);
   if (fields.fuelType) known.push(fuelTypeLabelHe(fields.fuelType) ?? fields.fuelType);
   if (fields.engineDisplacementCc != null) known.push(`מנוע ${fmtNum(fields.engineDisplacementCc)} סמ״ק`);
-  if (fields.features.length) known.push(canonicalizeVehicleFeatures(fields.features).map(vehicleFeatureLabelHe).join(", "));
+  if ((fields.features ?? []).length) {
+    known.push(
+      canonicalizeVehicleFeatures(fields.features ?? []).map(vehicleFeatureLabelHe).join(", ")
+    );
+  }
   if (fields.b2bPrice != null) known.push(`מחיר ${fmtNum(fields.b2bPrice)} ₪`);
   else if (fields.retailPrice != null) known.push(`מחיר ${fmtNum(fields.retailPrice)} ₪`);
   if (fields.color) known.push(`צבע ${fields.color}`);

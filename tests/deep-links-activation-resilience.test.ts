@@ -179,7 +179,10 @@ describe("Production resilience", () => {
 describe("Exchange regression anchors", () => {
   it("preserves rematch hotfix and controlled intelligence", () => {
     const info = read("src/services/matching/information-request.ts");
-    expect(info).toContain("Always re-evaluate related active demands");
+    expect(info).toContain("rematchAfterInventoryMutation");
+    expect(info).not.toMatch(
+      /if \(open\.length === 0\) return \{ fulfilled: 0, reevaluated/
+    );
     const flow = read("src/services/domain/matching-flow.ts");
     expect(flow).toContain("applyControlledIntelligenceRanking");
   });

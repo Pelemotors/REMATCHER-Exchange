@@ -28,6 +28,7 @@ const baseVehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
   freshnessState: "FRESH",
   createdAt: new Date(),
   updatedAt: new Date(),
+  mediaReady: true,
   archivedAt: null,
   ...overrides,
 });

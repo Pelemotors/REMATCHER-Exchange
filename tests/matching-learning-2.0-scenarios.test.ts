@@ -117,7 +117,7 @@ describe("ML2.0 scenario contracts", () => {
       join(process.cwd(), "src/services/inventory/mark-sold.ts"),
       "utf8"
     );
-    expect(updateSrc).toContain('eventType: "INVENTORY_REMOVED"');
+    expect(updateSrc).toMatch(/eventType:\s*"INVENTORY_REMOVED"/);
     expect(updateSrc).toContain("archived_not_sold");
     expect(updateSrc).not.toContain('eventType: "VEHICLE_SOLD"');
     expect(soldSrc).toContain('eventType: "VEHICLE_SOLD"');
@@ -160,7 +160,8 @@ describe("ML2.0 scenario contracts", () => {
       join(process.cwd(), "src/services/exchange/intelligence-live.ts"),
       "utf8"
     );
-    expect(live).toContain("runExchangeIntelligenceShadow");
+    // Controlled live path must stay deterministic — shadow is async/offline only
+    expect(live).not.toContain("runExchangeIntelligenceShadow");
     expect(live).toContain("fallback_deterministic");
   });
 

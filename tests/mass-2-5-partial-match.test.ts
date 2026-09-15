@@ -218,7 +218,8 @@ describe("Mass 2.5 Partial Match", () => {
       "utf8"
     );
     expect(svc).toContain("INVENTORY_ENRICHED");
-    expect(svc).toContain("runMatchingForDemand");
+    // Full-discovery rematch lives in inventory-rematch (Mass 2.5 / rematchAfterInventoryMutation)
+    expect(svc).toContain("rematchAfterInventoryMutation");
     expect(svc).toContain("BUYER_MATCH");
     expect(svc).toContain("reevaluateDemandsForVehicle");
     // Must rematch even when no OPEN InformationRequest remains

@@ -10,6 +10,7 @@ import {
   parseAmendment,
   parseGapAnswer,
   readyForConfirmation,
+  emptyDraftFields,
   type PendingInventoryDraft,
 } from "@/services/assistant/inventory-draft";
 import { heuristicPlan } from "@/services/assistant/planner";
@@ -22,17 +23,11 @@ function baseDraft(
     status: "DRAFT",
     sourceText: "טויוטה קורולה 2022 139000",
     fields: {
+      ...emptyDraftFields(),
       make: "טויוטה",
       model: "קורולה",
-      trim: null,
       year: 2022,
-      mileage: null,
-      color: null,
-      ownershipHand: null,
-      ownershipType: null,
       retailPrice: 139000,
-      b2bPrice: null,
-      region: null,
     },
     askedGaps: [],
     skippedGaps: [],
@@ -44,17 +39,9 @@ describe("inventory draft identity hard gate", () => {
   it("requires make model year", () => {
     expect(
       hasInventoryIdentity({
+        ...emptyDraftFields(),
         make: "Toyota",
-        model: null,
-        trim: null,
         year: 2022,
-        mileage: null,
-        color: null,
-        ownershipHand: null,
-        ownershipType: null,
-        retailPrice: null,
-        b2bPrice: null,
-        region: null,
       })
     ).toBe(false);
     expect(hasInventoryIdentity(baseDraft().fields)).toBe(true);
@@ -74,13 +61,25 @@ describe("inventory draft identity hard gate", () => {
 });
 
 describe("inventory draft gaps", () => {
-  it("asks mileage then ownership when retail already known; never re-asks", () => {
-    const d = baseDraft();
+  it("asks mileage then fuel/engine before ownership; never re-asks", () => {
+    const d = baseDraft({
+      fields: {
+        ...baseDraft().fields,
+        retailPrice: null,
+        b2bPrice: 134000,
+      },
+    });
     expect(nextGapToAsk(d)).toBe("mileage");
     const afterMileage = advanceDraftAfterGap(d, "mileage", "skip");
-    // retailPrice already present → dealer_price satisfied
-    expect(nextGapToAsk(afterMileage)).toBe("ownership");
-    const afterOwn = advanceDraftAfterGap(afterMileage, "ownership", "skip");
+    // VNext commercial order: fuel_type before ownership; retail alone does not close dealer_price
+    expect(nextGapToAsk(afterMileage)).toBe("fuel_type");
+    const afterFuel = advanceDraftAfterGap(afterMileage, "fuel_type", { fuelType: "PETROL" });
+    expect(nextGapToAsk(afterFuel)).toBe("engine_displacement");
+    const afterEngine = advanceDraftAfterGap(afterFuel, "engine_displacement", {
+      engineDisplacementCc: 1600,
+    });
+    expect(nextGapToAsk(afterEngine)).toBe("ownership");
+    const afterOwn = advanceDraftAfterGap(afterEngine, "ownership", "skip");
     expect(nextGapToAsk(afterOwn)).toBeNull();
     expect(readyForConfirmation(afterOwn)).toBe(true);
   });
@@ -90,15 +89,19 @@ describe("inventory draft gaps", () => {
     const next = advanceDraftAfterGap(d, "mileage", "skip");
     expect(next.askedGaps).toContain("mileage");
     expect(next.fields.mileage).toBeNull();
-    expect(nextGapToAsk(next)).toBe("ownership");
+    expect(nextGapToAsk(next)).toBe("fuel_type");
   });
 
-  it("asks dealer_price when no price at all", () => {
+  it("asks dealer_price when no b2b price after fuel/engine", () => {
     const d = baseDraft({
       fields: { ...baseDraft().fields, retailPrice: null, b2bPrice: null },
     });
-    const afterMileage = advanceDraftAfterGap(d, "mileage", { mileage: 62000 });
-    expect(nextGapToAsk(afterMileage)).toBe("dealer_price");
+    let cur = advanceDraftAfterGap(d, "mileage", { mileage: 62000 });
+    expect(nextGapToAsk(cur)).toBe("fuel_type");
+    cur = advanceDraftAfterGap(cur, "fuel_type", { fuelType: "PETROL" });
+    expect(nextGapToAsk(cur)).toBe("engine_displacement");
+    cur = advanceDraftAfterGap(cur, "engine_displacement", { engineDisplacementCc: 1600 });
+    expect(nextGapToAsk(cur)).toBe("dealer_price");
   });
 
   it("parses mileage and dealer price answers", () => {
@@ -191,17 +194,12 @@ describe("createVehicleForDealer shared path", () => {
     const result = await executeConfirmInventoryCreate("d1", {
       sourceText: "טויוטה קורולה 2022",
       fields: {
+        ...emptyDraftFields(),
         make: "Toyota",
         model: "Corolla",
-        trim: null,
         year: 2022,
         mileage: 62000,
-        color: null,
-        ownershipHand: null,
-        ownershipType: null,
         retailPrice: 139000,
-        b2bPrice: null,
-        region: null,
       },
     });
 

@@ -194,7 +194,7 @@ describe("Exchange Learning 2.0", () => {
       candidateMatchId: "m1",
       intent: { schemaVersion: 2 },
       engine: {
-        engineVersion: "matching-engine-2.0",
+        engineVersion: "matching-engine-2.2",
         band: "GOOD",
         resolutionState: "RESOLVED",
         score: 80,

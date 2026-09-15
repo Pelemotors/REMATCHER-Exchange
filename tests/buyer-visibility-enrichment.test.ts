@@ -100,9 +100,15 @@ describe("Buyer Visibility Gate — server source", () => {
       join(process.cwd(), "src/app/api/matches/route.ts"),
       "utf8"
     );
-    expect(api).toContain("BUYER_VISIBLE_MATCH_WHERE");
+    // Route delegates listing to listBuyerMatches (gate lives there + candidate-policy)
+    expect(api).toContain("listBuyerMatches");
     expect(api).not.toContain("NEEDS_INFORMATION");
     expect(api).not.toContain("PENDING_VALIDATION");
+    const list = readFileSync(
+      join(process.cwd(), "src/services/matching/list-buyer-matches.ts"),
+      "utf8"
+    );
+    expect(list).toContain("BUYER_VISIBLE_MATCH_WHERE");
 
     const policy = readFileSync(
       join(process.cwd(), "src/services/domain/candidate-policy.ts"),
@@ -139,7 +145,7 @@ describe("Buyer Visibility Gate — server source", () => {
     expect(fields.map(fieldLabelHe)).toEqual([
       "קילומטראז׳",
       "הנעה",
-      "מחיר",
+      "מחיר מבוקש",
     ]);
     expect(fieldLabelHe("price")).not.toMatch(/B2B|סוחר|עסקה/i);
   });

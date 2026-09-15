@@ -38,7 +38,9 @@ describe("Pilot closeout — confirmed bugs", () => {
     expect(upd).toContain("reactivateVehicleForDealer");
     expect(upd).toContain('status?: "ARCHIVED"');
     expect(upd).not.toMatch(/f\.status === "SOLD"/);
-    expect(upd).toContain("Edited now ≠ availability");
+    // Availability confirmation is explicit — not implied by a generic field edit
+    expect(upd).toContain("lastAvailabilityConfirmedAt");
+    expect(upd).toMatch(/if \("lastAvailabilityConfirmedAt" in f/);
   });
 
   it("INVENTORY_ADDED is not swallowed after create", () => {

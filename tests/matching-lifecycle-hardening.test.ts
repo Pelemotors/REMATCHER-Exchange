@@ -34,8 +34,12 @@ describe("matching lifecycle hardening", () => {
   it("renews expired demand TTL and preserves confirmed constraints before rematching", () => {
     const code = source("src/services/demand/demand-mutations.ts");
     expect(code).toContain("expiresAt: computeDemandExpiry()");
-    expect(code).toContain("Preserve the confirmed hard/soft/exclusion constraints on edit");
+    // Edit path must reuse confirmed constraints — not rebuildDemandConstraints
     expect(code).toContain("legacyToSearchIntent(params.confirmed, constraints)");
+    const updateFn = code.slice(code.indexOf("export async function updateDemandForDealer"));
+    const activateIdx = updateFn.indexOf("export async function activateDemandForDealer");
+    const updateOnly = activateIdx >= 0 ? updateFn.slice(0, activateIdx) : updateFn;
+    expect(updateOnly).not.toContain("rebuildDemandConstraints(");
   });
 
   it("requires live Qualified candidate state immediately before Reveal", () => {

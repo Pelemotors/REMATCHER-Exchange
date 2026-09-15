@@ -341,7 +341,7 @@ describe("Architecture wiring present", () => {
     expect(src).not.toMatch(
       /if \(open\.length === 0\) return \{ fulfilled: 0, reevaluated/
     );
-    expect(src).toContain("Always re-evaluate related active demands");
+    expect(src).toContain("rematchAfterInventoryMutation");
   });
 
   it("controlled live intelligence mode constant", () => {

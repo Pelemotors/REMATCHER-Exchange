@@ -70,6 +70,10 @@ describe("import confirm uses shared domain mutation path", () => {
         vehicle: {
           create: vi.fn(),
           update: vi.fn(),
+          count: vi.fn().mockResolvedValue(0),
+        },
+        demand: {
+          findMany: vi.fn().mockResolvedValue([]),
         },
       },
     }));

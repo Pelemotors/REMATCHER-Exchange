@@ -309,6 +309,8 @@ describe("commercial completeness still works", () => {
         mileage: 62000,
         b2bPrice: 134000,
         ownershipType: "private",
+        fuelType: "PETROL",
+        engineDisplacementCc: 1600,
       },
       askedGaps: [],
     };

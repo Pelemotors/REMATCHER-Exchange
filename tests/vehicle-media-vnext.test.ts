@@ -165,8 +165,8 @@ describe("navigation simplification", () => {
       "/inventory",
     ]);
     expect(SECONDARY_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(true);
-    expect(MOBILE_BOTTOM_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(
-      false
-    );
+    expect(
+      MOBILE_BOTTOM_NAV_ITEMS.map((i) => i.href as string).includes("/activity")
+    ).toBe(false);
   });
 });

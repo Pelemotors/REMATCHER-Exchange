@@ -13,6 +13,7 @@ import {
   parseGapAnswer,
   readyForConfirmation,
   splitMultiVehicleText,
+  emptyDraftFields,
   type PendingInventoryDraft,
 } from "@/services/assistant/inventory-draft";
 import {
@@ -43,17 +44,11 @@ function baseDraft(
     status: "DRAFT",
     sourceText: "טויוטה קורולה 2022 139000",
     fields: {
+      ...emptyDraftFields(),
       make: "Toyota",
       model: "Corolla",
-      trim: null,
       year: 2022,
-      mileage: null,
-      color: null,
-      ownershipHand: null,
-      ownershipType: null,
       retailPrice: 139000,
-      b2bPrice: null,
-      region: null,
     },
     askedGaps: [],
     skippedGaps: [],
@@ -163,7 +158,7 @@ describe("clarification / commercial completeness", () => {
     const skipped = advanceDraftAfterGap(d, "mileage", "skip");
     expect(skipped.skippedGaps).toContain("mileage");
     expect(nextGapToAsk(skipped)).not.toBe("mileage");
-    expect(nextGapToAsk(skipped)).toBe("ownership");
+    expect(nextGapToAsk(skipped)).toBe("fuel_type");
   });
 
   it("ownership may be asked when commercially useful", () => {
@@ -173,6 +168,8 @@ describe("clarification / commercial completeness", () => {
         mileage: 62000,
         b2bPrice: 134000,
         retailPrice: null,
+        fuelType: "PETROL",
+        engineDisplacementCc: 1600,
       },
     });
     expect(nextGapToAsk(d)).toBe("ownership");
@@ -185,6 +182,8 @@ describe("clarification / commercial completeness", () => {
         mileage: 62000,
         b2bPrice: 134000,
         ownershipType: "private",
+        fuelType: "PETROL",
+        engineDisplacementCc: 1600,
         color: null,
         trim: null,
       },
@@ -214,7 +213,8 @@ describe("clarification / commercial completeness", () => {
     );
     expect(s).toContain("מחיר");
     expect(s).not.toContain("B2B");
-    expect(s).not.toContain("מחיר לסוחר");
+    // SoT uses Hebrew commercial wording "מחיר לסוחר", not English B2B jargon
+    expect(s).toContain("מחיר לסוחר");
   });
 });
 
