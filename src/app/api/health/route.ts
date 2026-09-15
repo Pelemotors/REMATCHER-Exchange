@@ -8,9 +8,16 @@ import { MATCHING_INTELLIGENCE_LIVE_MODE } from "@/services/exchange/intelligenc
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // Prefer explicit deploy markers so self-hosted health matches the running build.
   const commit =
     process.env.VERCEL_GIT_COMMIT_SHA ??
     process.env.GIT_COMMIT ??
+    process.env.DEPLOY_SHA ??
+    "local";
+  const buildRef =
+    process.env.VERCEL_GIT_COMMIT_REF ??
+    process.env.GIT_COMMIT_REF ??
+    process.env.DEPLOY_REF ??
     "local";
 
   let db: "ok" | "error" = "error";
@@ -46,7 +53,7 @@ export async function GET() {
     environment:
       process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
     agentVersion: AGENT_VERSION,
-    build: process.env.VERCEL_GIT_COMMIT_REF ?? "local",
+    build: buildRef,
     matchingEngine: "2.0",
     matchingIntelligence: MATCHING_INTELLIGENCE_LIVE_MODE,
     db,

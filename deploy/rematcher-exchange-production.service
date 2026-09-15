@@ -10,7 +10,9 @@ WorkingDirectory=/srv/gal/rematcher-exchange/app
 EnvironmentFile=/srv/gal/rematcher-exchange/app/.env.production
 Environment=NODE_ENV=production
 Environment=PORT=3200
-# Set GIT_COMMIT to the deployed SHA on the host unit if desired.
+# Set at deploy time to the running git SHA / branch so /api/health matches reality:
+# Environment=GIT_COMMIT=<sha>
+# Environment=GIT_COMMIT_REF=<branch>
 ExecStart=/usr/bin/node /srv/gal/rematcher-exchange/app/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3200
 Restart=always
 RestartSec=5

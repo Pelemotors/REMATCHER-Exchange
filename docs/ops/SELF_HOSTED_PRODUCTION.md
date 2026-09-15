@@ -50,3 +50,12 @@ Until `exchange.rematcher.co.il` A/AAAA records point at this server (not Vercel
 Local smoke (always available on the server):
 
 `curl -sS http://127.0.0.1:3200/api/health`
+
+## Health commit markers
+
+`/api/health` reports `commit` / `fullCommit` / `build` from:
+
+- `GIT_COMMIT` (or `DEPLOY_SHA` / `VERCEL_GIT_COMMIT_SHA`)
+- `GIT_COMMIT_REF` (or `DEPLOY_REF` / `VERCEL_GIT_COMMIT_REF`)
+
+Set these on the systemd unit at deploy time so health matches the running build.
