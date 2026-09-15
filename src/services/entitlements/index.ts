@@ -87,6 +87,13 @@ export async function recalculateEntitlement(
     });
   }
 
+  if (row.status === "SUSPENDED") {
+    return prisma.dealerEntitlement.update({
+      where: { dealerId },
+      data: { status: "SUSPENDED", recalculatedAt: now },
+    });
+  }
+
   const subscription = await prisma.dealerSubscription.findFirst({
     where: {
       dealerId,

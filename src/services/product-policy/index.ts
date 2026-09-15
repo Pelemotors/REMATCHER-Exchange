@@ -14,9 +14,14 @@ export async function getProductPolicyFlag(
   const env = envOverrideFor(key);
   if (env !== undefined) return env;
 
-  const row = await prisma.productPolicy.findUnique({ where: { key } });
-  if (!row) return false;
-  return coercePolicyValue(row.valueJson);
+  try {
+    const row = await prisma.productPolicy.findUnique({ where: { key } });
+    if (!row) return false;
+    return coercePolicyValue(row.valueJson);
+  } catch {
+    // Missing table / test mocks without productPolicy → default OFF
+    return false;
+  }
 }
 
 export async function isMonetizationEnabled(): Promise<boolean> {

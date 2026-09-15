@@ -53,12 +53,29 @@ export async function requireEntitledDealer(capability?: string) {
   }
 }
 
-export async function requireVerifiedDealer() {
+export async function requireVerifiedDealer(opts?: {
+  requireEntitlement?: boolean;
+}) {
   const result = await requireDealerSession();
   if ("error" in result) return result;
 
   const { session } = result;
   const dealerId = session.user.dealerId!;
+
+  if (opts?.requireEntitlement !== false && (await isMonetizationEnabled())) {
+    try {
+      await assertEntitled(dealerId);
+    } catch (err) {
+      if (err instanceof EntitlementError) {
+        return {
+          error: "Subscription required" as const,
+          status: 402 as const,
+          code: err.code,
+        };
+      }
+      throw err;
+    }
+  }
 
   const membership = await prisma.dealerMembership.findUnique({
     where: {

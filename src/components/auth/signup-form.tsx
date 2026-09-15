@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
 export function SignupForm() {
   const router = useRouter();
@@ -150,6 +151,8 @@ export function SignupForm() {
             />
           </div>
         </div>
+
+        <OAuthButtons mode="signup" />
 
         <ButtonV2 type="submit" variant="signal" className="w-full" disabled={loading}>
           {loading ? "נרשם..." : "הצטרפות ל-Exchange"}

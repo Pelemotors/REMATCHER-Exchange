@@ -8,6 +8,7 @@ import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
 import { ExchangeMark } from "@/components/brand/exchange-mark";
 import { getPostAuthRedirect } from "@/lib/auth-routing";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
 const RATE_LIMIT_MSG =
   "בוצעו יותר מדי ניסיונות התחברות. נסה שוב בעוד מספר דקות.";
@@ -109,6 +110,8 @@ export function LoginForm() {
         <ButtonV2 type="submit" variant="signal" className="w-full" disabled={loading}>
           {loading ? "מתחבר..." : "כניסה"}
         </ButtonV2>
+
+        <OAuthButtons mode="login" />
 
         <p className="text-center text-sm text-v2-text-secondary">
           עדיין אין לך חשבון?{" "}

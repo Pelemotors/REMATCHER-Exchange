@@ -3,7 +3,7 @@ import { requireVerifiedDealer } from "@/lib/auth-guards";
 import { getAssistantContext } from "@/services/assistant/v2-orchestrator";
 
 export async function GET() {
-  const authResult = await requireVerifiedDealer();
+  const authResult = await requireVerifiedDealer({ requireEntitlement: false });
   if ("error" in authResult) {
     return NextResponse.json(
       { error: authResult.error },
@@ -11,9 +11,6 @@ export async function GET() {
     );
   }
 
-  const context = await getAssistantContext(
-    authResult.session.user.dealerId!
-  );
-
+  const context = await getAssistantContext(authResult.session.user.dealerId!);
   return NextResponse.json(context);
 }

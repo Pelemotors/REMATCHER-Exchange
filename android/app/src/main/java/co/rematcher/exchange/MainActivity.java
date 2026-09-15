@@ -5,11 +5,15 @@ import android.net.Uri;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
 import co.rematcher.exchange.share.ShareStagingPlugin;
+import co.rematcher.exchange.billing.StoreBillingPlugin;
+import co.rematcher.exchange.identity.SocialLoginPlugin;
 
 public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(ShareStagingPlugin.class);
+    registerPlugin(StoreBillingPlugin.class);
+    registerPlugin(SocialLoginPlugin.class);
     super.onCreate(savedInstanceState);
     maybeRouteIntake(getIntent());
   }
@@ -46,9 +50,11 @@ public class MainActivity extends BridgeActivity {
           path.startsWith("/home")
               || path.startsWith("/demand")
               || path.startsWith("/inventory")
-              ||           path.startsWith("/matches")
+              || path.startsWith("/matches")
               || path.startsWith("/opportunities")
               || path.startsWith("/activity")
+              || path.startsWith("/subscription")
+              || path.startsWith("/intake")
       )) {
         final String url = data.toString();
         bridge.getWebView().post(() -> bridge.getWebView().loadUrl(url));

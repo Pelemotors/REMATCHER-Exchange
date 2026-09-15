@@ -18,6 +18,8 @@ cp -f "$ROOT/mobile/ios/App/ShareStaging/ShareStagingPlugin.swift" "$IOS_APP/Sha
 cp -f "$ROOT/mobile/ios/App/IntakeShareHandoff.swift" "$IOS_APP/"
 cp -f "$ROOT/mobile/ios/App/App.entitlements" "$IOS_APP/App.entitlements"
 cp -f "$ROOT/mobile/ios/App/PrivacyInfo.xcprivacy" "$IOS_APP/PrivacyInfo.xcprivacy"
+cp -f "$ROOT/mobile/ios/App/StoreBillingPlugin.swift" "$IOS_APP/" 2>/dev/null || true
+cp -f "$ROOT/mobile/ios/App/SocialLoginPlugin.swift" "$IOS_APP/" 2>/dev/null || true
 
 cp -f "$ROOT/mobile/ios/App/ShareExtension/ShareViewController.swift" "$EXT_DIR/"
 cp -f "$ROOT/mobile/ios/App/ShareExtension/Info.plist" "$EXT_DIR/"

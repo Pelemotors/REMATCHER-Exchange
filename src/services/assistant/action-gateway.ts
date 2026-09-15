@@ -26,6 +26,8 @@ import {
   prepareInventoryDraftConfirmation,
 } from "@/services/assistant/inventory-draft-state";
 import { pendingSearchCloseMatchesPlan } from "@/services/assistant/turn-policy";
+import { assertEntitled, EntitlementError } from "@/services/entitlements";
+import { isMonetizationEnabled } from "@/services/product-policy";
 
 type GatewayResponse = AssistantResponse & {
   conversation?: ConversationState;
@@ -131,6 +133,25 @@ export async function runActionGateway(params: {
       conversation: cancelPendingConversation(conversation),
       meta,
     };
+  }
+
+  if (await isMonetizationEnabled()) {
+    try {
+      await assertEntitled(params.dealerId);
+    } catch (err) {
+      if (err instanceof EntitlementError) {
+        meta.policyResult = "REQUIRE_CONFIRMATION";
+        meta.responseType = "not_entitled";
+        return {
+          intent: "UNKNOWN",
+          message:
+            "הגישה העסקית אינה פעילה כרגע. אפשר לפתוח את מסך המנוי כדי להמשיך.",
+          conversation,
+          meta,
+        };
+      }
+      throw err;
+    }
   }
 
   if (proposal.kind === "CONFIRM_PENDING") {

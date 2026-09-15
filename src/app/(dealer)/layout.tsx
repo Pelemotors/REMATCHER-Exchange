@@ -5,6 +5,8 @@ import { canAccessExchange } from "@/lib/auth-routing";
 import { AppShellV2 } from "@/components/layout/app-shell-v2";
 import { hasCompletedPrivacyAiV1 } from "@/services/privacy/policy";
 import { sanitizeReturnPath } from "@/lib/deep-links";
+import { isMonetizationEnabled } from "@/services/product-policy";
+import { assertEntitled, EntitlementError } from "@/services/entitlements";
 
 export default async function DealerLayout({
   children,
@@ -52,6 +54,24 @@ export default async function DealerLayout({
     });
     if (!completed) {
       redirect("/privacy-ai");
+    }
+  }
+
+  const onSubscription = pathname.startsWith("/subscription");
+  if (
+    session.user.dealerId &&
+    !onSubscription &&
+    !onPrivacyAi &&
+    (await isMonetizationEnabled())
+  ) {
+    try {
+      await assertEntitled(session.user.dealerId);
+    } catch (err) {
+      if (err instanceof EntitlementError) {
+        redirect("/subscription");
+      } else {
+        throw err;
+      }
     }
   }
 

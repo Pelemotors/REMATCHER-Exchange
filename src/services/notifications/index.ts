@@ -2,7 +2,19 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { NotificationSourceCategory, NotificationType } from "@prisma/client";
 import { deliverPushToUser } from "./push";
-import type { PushSource, PushTriggerType } from "@prisma/client";
+import type { PushSource, PushTriggerType, NotificationEventType } from "@prisma/client";
+
+function eventPrefType(
+  type: NotificationType,
+  trigger?: PushTriggerType
+): NotificationEventType | null {
+  if (trigger === "MUTUAL_INTEREST" || type === "MUTUAL_INTEREST") return "MUTUAL_INTEREST";
+  if (trigger === "MATCH_CREATED" || trigger === "MATCH_NOTIFIED" || type === "BUYER_MATCH") {
+    return "NEW_MATCH";
+  }
+  if (trigger === "DEMAND_EXPIRING") return "SEARCH_EXPIRING";
+  return null;
+}
 
 export async function createNotification(params: {
   userId: string; type: NotificationType; title: string; body: string; link?: string; entityType?: string; entityId?: string; sendPush?: boolean; sourceCategory?: NotificationSourceCategory; pushSource?: PushSource; pushTriggerType?: PushTriggerType; dealerId?: string;
@@ -16,7 +28,15 @@ export async function createNotification(params: {
     const prefs = await prisma.notificationPreference.findUnique({ where: { userId: params.userId } });
     const category = params.sourceCategory ?? "PRODUCT";
     const allowed = !prefs || (category === "PRODUCT" && prefs.criticalProduct) || (category === "REMINDER" && prefs.reminders) || (category === "ADMIN" && prefs.adminCommunications) || category === "SYSTEM";
-    if (allowed) await deliverPushToUser({ userId: params.userId, dealerId: params.dealerId, title: params.title, body: params.body, link: params.link, source: params.pushSource ?? "PRODUCT", triggerType: params.pushTriggerType, notificationId: notification.id, skipIfNoSubscription: true }).catch(() => {});
+    const mapped = eventPrefType(params.type, params.pushTriggerType);
+    let eventAllowed = true;
+    if (mapped) {
+      const eventPref = await prisma.notificationEventPreference.findUnique({
+        where: { userId_eventType: { userId: params.userId, eventType: mapped } },
+      });
+      if (eventPref && eventPref.enabled === false) eventAllowed = false;
+    }
+    if (allowed && eventAllowed) await deliverPushToUser({ userId: params.userId, dealerId: params.dealerId, title: params.title, body: params.body, link: params.link, source: params.pushSource ?? "PRODUCT", triggerType: params.pushTriggerType, notificationId: notification.id, skipIfNoSubscription: true }).catch(() => {});
   }
   return notification;
 }

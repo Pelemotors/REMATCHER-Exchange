@@ -55,10 +55,30 @@ Auth flow:
 ## Billing (OWNER_REQUIRED)
 
 ```
-BILLING_PROVIDER_MODE=fake   # tests / local
-APPLE_IAP_SHARED_SECRET=     # OWNER_REQUIRED for real Apple webhooks
-GOOGLE_PLAY_WEBHOOK_SECRET=  # OWNER_REQUIRED for real Google webhooks
+BILLING_PROVIDER_MODE=fake   # tests / local only — never Production
+APPLE_IAP_ISSUER_ID=         # App Store Connect API key issuer
+APPLE_IAP_KEY_ID=
+APPLE_IAP_PRIVATE_KEY=
+APPLE_IAP_BUNDLE_ID=co.rematcher.exchange
+APPLE_IAP_SHARED_SECRET=     # optional legacy; ASN v2 uses signedPayload JWS
+GOOGLE_PLAY_PACKAGE_NAME=co.rematcher.exchange
+GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=   # full SA JSON string
+GOOGLE_PLAY_WEBHOOK_SECRET=         # HMAC for Pub/Sub push envelope (custom)
 ```
+
+JSON purchase proofs are **rejected** unless `BILLING_PROVIDER_MODE=fake`.
+
+Native:
+
+- iOS `StoreBillingPlugin` — StoreKit 2 (`Product.purchase` / `Transaction.currentEntitlements`)
+- iOS `SocialLoginPlugin` — Sign in with Apple (`ASAuthorizationAppleIDProvider`)
+- Android `StoreBillingPlugin` — Play Billing Library 7 (`BillingClient` subscriptions)
+- Android `SocialLoginPlugin` — Google Sign-In (`requestIdToken`); set Capacitor config `googleServerClientId` or `default_web_client_id` string
+
+Live Sandbox / Internal testing still requires Owner store products + device (OWNER_BLOCKED until verified).
+
+Paywall UI: `/subscription` + `GET /api/billing/paywall`.
+
 
 Endpoints:
 

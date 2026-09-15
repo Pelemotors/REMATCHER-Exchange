@@ -31,13 +31,15 @@ export async function GET() {
       : getDealerEntitlement(dealerId),
   ]);
 
-  await logAppEvent({
-    eventType: "PAYWALL_VIEWED",
-    entityType: "Dealer",
-    entityId: dealerId,
-    dealerId,
-    userId: authz.session.user.id,
-  });
+  if (monetizationEnabled) {
+    await logAppEvent({
+      eventType: "PAYWALL_VIEWED",
+      entityType: "Dealer",
+      entityId: dealerId,
+      dealerId,
+      userId: authz.session.user.id,
+    });
+  }
 
   return NextResponse.json({
     monetizationEnabled,

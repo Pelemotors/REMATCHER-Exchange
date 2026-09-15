@@ -25,6 +25,28 @@ export function NativePushRegister() {
 
         await PushNotifications.PushNotifications.register();
 
+        try {
+          const installationId =
+            typeof localStorage !== "undefined"
+              ? localStorage.getItem("rmx-installation-id") ||
+                crypto.randomUUID()
+              : crypto.randomUUID();
+          localStorage.setItem("rmx-installation-id", installationId);
+          const platform =
+            Capacitor.getPlatform() === "ios" ? "IOS" : "ANDROID";
+          await fetch("/api/devices/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              installationId,
+              platform,
+              appVersion: "0.2.0-rc.1",
+            }),
+          });
+        } catch {
+          /* device API optional */
+        }
+
         const reg = await PushNotifications.PushNotifications.addListener(
           "registration",
           (token) => {
