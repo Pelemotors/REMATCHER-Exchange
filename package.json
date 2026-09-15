@@ -16,10 +16,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate:preflight": "tsx scripts/migration-preflight.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "mobile:sync": "cd mobile && npx cap sync",
+    "mobile:open:android": "cd mobile && npx cap open android"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
+    "@capacitor/android": "^8.5.2",
     "@prisma/client": "^6.3.1",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
@@ -39,6 +42,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",

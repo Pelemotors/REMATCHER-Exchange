@@ -1,13 +1,15 @@
 /** @type {import('@capacitor/cli').CapacitorConfig} */
 const config = {
   appId: "co.rematcher.exchange",
-  appName: "REMATCHER Exchange",
-  webDir: "www",
+  appName: "REMATCHER Field Test",
+  webDir: "mobile/www",
   server: {
-    // Field Test / Production URL injected at build time — never hardcode secrets
-    url: process.env.MOBILE_WEB_URL || "http://127.0.0.1:3100",
-    cleartext: true,
+    url: process.env.MOBILE_WEB_URL || "https://field-test-exchange.rematcher.co.il",
+    cleartext: false,
+    allowNavigation: ["https://field-test-exchange.rematcher.co.il/*"],
+  },
+  android: {
+    allowMixedContent: false,
   },
 };
-
 module.exports = config;

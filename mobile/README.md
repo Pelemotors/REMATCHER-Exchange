@@ -2,15 +2,30 @@
 
 Capacitor shell + Android Share Receiver + iOS Share Extension.
 
-## Status
+## Status (Field Test)
 
-Source adapters are real implementations of receive → durable stage → deep-link handoff.
-Signing, App Store / Play distribution, and device install require owner accounts
-(`USER DISTRIBUTION: ACTION REQUIRED`).
+| Layer | Status |
+|-------|--------|
+| Android Share Receiver (in real app) | Wired in `android/` Capacitor project |
+| ShareStaging → authenticated Intake → ACK | `ShareStagingPlugin` |
+| Signed Field Test APK (direct HTTPS) | See `docs/ANDROID_FIELD_TEST_INSTALL.md` |
+| Google Play | Not required for Field Test |
+| iOS TestFlight | Owner actions: `docs/IOS_TESTFLIGHT_OWNER_ACTIONS.md` |
 
-## Next engineering steps (after Field Test HTTPS URL exists)
+## Android build (engineering)
 
-1. `npm i -D @capacitor/cli @capacitor/core` at repo or mobile package
-2. `npx cap add android` / `npx cap add ios` using this folder
-3. Merge `SHARE_MANIFEST_SNIPPET.xml` and iOS Share Extension target + App Group
-4. Build signed artifacts for owner device test
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export ANDROID_SDK_ROOT=/opt/rematcher-android-sdk
+export ANDROID_HOME=$ANDROID_SDK_ROOT
+MOBILE_WEB_URL=https://field-test-exchange.rematcher.co.il npx cap sync android
+cd android && ./gradlew assembleRelease
+# APK: android/app/build/outputs/apk/release/app-release.apk
+# Signing via .secrets/key.properties (gitignored)
+```
+
+## Deep link / Share contract
+
+```
+/intake/handoff?clientBatchId=<uuid>&source=ANDROID_SHARE|IOS_SHARE&staged=1&text=<optional>
+```
