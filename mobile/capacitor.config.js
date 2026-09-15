@@ -1,6 +1,5 @@
-import type { CapacitorConfig } from "@capacitor/cli";
-
-const config: CapacitorConfig = {
+/** @type {import('@capacitor/cli').CapacitorConfig} */
+const config = {
   appId: "co.rematcher.exchange",
   appName: "REMATCHER Exchange",
   webDir: "www",
@@ -11,4 +10,4 @@ const config: CapacitorConfig = {
   },
 };
 
-export default config;
+module.exports = config;
