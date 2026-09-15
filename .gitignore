@@ -55,7 +55,6 @@ next-env.d.ts
 .qa-dealer-credentials.local
 .admin-bootstrap-credentials.local
 .media/
-.media-field-test/
 .secrets/
 .field-test-dist/
 *.keystore

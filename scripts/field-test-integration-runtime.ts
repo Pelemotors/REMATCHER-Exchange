@@ -182,7 +182,7 @@ async function main() {
 
   report.isolation = {
     dbPort5435: (process.env.DATABASE_URL || "").includes(":5435"),
-    mediaFieldTest: (process.env.MEDIA_ROOT || "").includes(".media-field-test"),
+    mediaFieldTest: (process.env.MEDIA_ROOT || "") === "/srv/gal/rematcher-exchange/field-test/media",
     fieldTestFlag: process.env.FIELD_TEST === "true",
     authHost: (process.env.AUTH_URL || "").includes(
       "field-test-exchange.rematcher.co.il"
