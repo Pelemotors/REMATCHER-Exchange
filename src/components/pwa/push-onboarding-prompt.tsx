@@ -69,7 +69,11 @@ export function PushOnboardingPrompt() {
       setVisible(false);
       return;
     }
-    setError("לא הצלחנו להשלים את הרישום להתראות. נסה שוב.");
+    if (result.reason === "not_configured") {
+      setError("התראות עדיין לא הוגדרו בשרת Field Test. נסו שוב אחרי עדכון.");
+    } else {
+      setError("לא הצלחנו להשלים את הרישום להתראות. נסה שוב.");
+    }
     await evaluate();
   }
 

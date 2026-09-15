@@ -73,7 +73,11 @@ export function PushSettings({
       await refresh();
       return;
     }
-    setError("לא הצלחנו להפעיל התראות. נסה שוב.");
+    if (result.reason === "not_configured") {
+      setError("התראות עדיין לא הוגדרו בשרת. נסו שוב אחרי עדכון.");
+    } else {
+      setError("לא הצלחנו להפעיל התראות. נסה שוב.");
+    }
     await refresh();
   }
 
