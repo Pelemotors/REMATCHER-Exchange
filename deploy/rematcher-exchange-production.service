@@ -1,0 +1,19 @@
+[Unit]
+Description=REMATCHER Exchange Production
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/gal/rematcher-exchange/app
+EnvironmentFile=/srv/gal/rematcher-exchange/app/.env.production
+Environment=NODE_ENV=production
+Environment=PORT=3200
+# Set GIT_COMMIT to the deployed SHA on the host unit if desired.
+ExecStart=/usr/bin/node /srv/gal/rematcher-exchange/app/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3200
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

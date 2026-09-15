@@ -109,13 +109,17 @@ Use Supabase project backup settings (Point-in-Time Recovery per plan). No custo
 
 ## Domain
 
-**Production (user-facing + QA):** `https://exchange.rematcher.co.il` → Vercel CNAME.
+**Production (canonical):** `https://exchange.rematcher.co.il`
 
-Set `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the canonical domain in production.
+**Self-hosted Production (current server path):** Caddy → `127.0.0.1:3200`, Postgres `127.0.0.1:5436`, ENV `.env.production`. See [ops/SELF_HOSTED_PRODUCTION.md](./ops/SELF_HOSTED_PRODUCTION.md).
 
-**Transactional emails** always link to `https://exchange.rematcher.co.il` in production (`getTransactionalEmailBaseUrl()`), even if `NEXT_PUBLIC_APP_URL` still points at a Vercel alias.
+DNS for `exchange.rematcher.co.il` must point at this server for Let's Encrypt / public HTTPS. Until cutover, public DNS may still resolve to a legacy Vercel deployment — do not treat that as the self-hosted runtime.
 
-**Vercel deployment URL** (`https://rematcher-exchange.vercel.app`) — deployment verification and debug only; not the default target for Production QA.
+Set `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to `https://exchange.rematcher.co.il` in production.
+
+**Transactional emails** always link to `https://exchange.rematcher.co.il` in production (`getTransactionalEmailBaseUrl()`).
+
+**Field Test** remains on `https://field-test-exchange.rematcher.co.il` → `:3100` / DB `:5435` and must stay isolated.
 
 ## Integration Principle
 
