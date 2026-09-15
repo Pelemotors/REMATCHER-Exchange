@@ -308,7 +308,7 @@ async function interestRevealE2E(browser: Browser) {
     "npx",
     ["tsx", "scripts/seed-browser-reveal-match.ts"],
     {
-      cwd: "/srv/gal/projects/REMATCHER-Exchange",
+      cwd: "/srv/gal/rematcher-exchange/app",
       env: process.env,
       encoding: "utf8",
     }

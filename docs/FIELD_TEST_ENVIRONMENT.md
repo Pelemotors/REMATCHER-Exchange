@@ -8,19 +8,19 @@
 | Resource | Field Test | Production |
 |----------|------------|------------|
 | Postgres | Docker `rematcher-exchange-field-test-db` on `127.0.0.1:5435`, DB `rematcher_exchange_field_test` | Supabase / Production `DATABASE_URL` |
-| Media | `/srv/gal/projects/REMATCHER-Exchange/.media-field-test` | Production `MEDIA_ROOT` |
+| Media | `/srv/gal/rematcher-exchange/field-test/media` | Production `MEDIA_ROOT` |
 | App process | Next on port **3100** with `.env.field-test` | Vercel `exchange.rematcher.co.il` |
 | Public host | `https://field-test-exchange.rematcher.co.il` (Caddy → `127.0.0.1:3100`) | `exchange.rematcher.co.il` |
 
-**Env gates (Field Test):** `FIELD_TEST=true`, `DATABASE_URL`/`DIRECT_URL` → `:5435/rematcher_exchange_field_test` only, `MEDIA_ROOT` under `.media-field-test`, no Supabase/Redis/cron secrets pointing at Production.
+**Env gates (Field Test):** `FIELD_TEST=true`, `DATABASE_URL`/`DIRECT_URL` → `:5435/rematcher_exchange_field_test` only, `MEDIA_ROOT=/srv/gal/rematcher-exchange/field-test/media`, no Supabase/Redis/cron secrets pointing at Production.
 
 ## Local start (engineering)
 
 ```bash
-cd /srv/gal/projects/REMATCHER-Exchange
+cd /srv/gal/rematcher-exchange/app
 docker compose -f field-test/docker-compose.yml up -d
-# ensure .env.field-test exists (gitignored)
-set -a && source .env.field-test && set +a
+# Field Test ENV is stored outside the Git repository
+set -a && source /srv/gal/rematcher-exchange/field-test/.env.field-test && set +a
 npx prisma migrate deploy
 npx tsx scripts/seed-field-test-owner-network.ts
 # optional legacy seed: scripts/seed-field-test-dealers.ts
