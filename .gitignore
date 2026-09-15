@@ -74,3 +74,4 @@ mobile/node_modules/
 /android/captures/
 /capacitor.config.js
 test-results/
+.tools/android-sdk/

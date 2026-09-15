@@ -47,6 +47,7 @@ public class ShareStagingStore {
         String mime = context.getContentResolver().getType(uri);
         if (mime == null) mime = "image/jpeg";
         String ext = mime.contains("png") ? "png" : mime.contains("webp") ? "webp" : "jpg";
+        String displayName = queryDisplayName(uri);
         String name = String.format("%03d.%s", index, ext);
         File dest = new File(dir, name);
         try (InputStream in = context.getContentResolver().openInputStream(uri);
@@ -58,12 +59,13 @@ public class ShareStagingStore {
         }
         JSONObject f = new JSONObject();
         f.put("name", name);
+        f.put("originalName", displayName != null ? displayName : name);
         f.put("mime", mime);
         f.put("bytes", dest.length());
         files.put(f);
         index++;
       } catch (Exception e) {
-        Log.w(TAG, "Failed to stage uri " + uri, e);
+        Log.w(TAG, "Failed to stage uri", e);
       }
     }
 
@@ -142,6 +144,19 @@ public class ShareStagingStore {
   public String fileToBase64(File f) throws Exception {
     byte[] bytes = readAll(f);
     return Base64.encodeToString(bytes, Base64.NO_WRAP);
+  }
+
+  private String queryDisplayName(Uri uri) {
+    try (Cursor c = context.getContentResolver().query(
+        uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+      if (c != null && c.moveToFirst()) {
+        int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+        if (idx >= 0) return c.getString(idx);
+      }
+    } catch (Exception ignored) {
+      /* content providers vary */
+    }
+    return null;
   }
 
   private static byte[] readAll(File f) throws Exception {

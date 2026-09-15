@@ -17,12 +17,16 @@
     "test:watch": "vitest",
     "migrate:preflight": "tsx scripts/migration-preflight.ts",
     "postinstall": "prisma generate",
-    "mobile:sync": "cd mobile && npx cap sync",
-    "mobile:open:android": "cd mobile && npx cap open android"
+    "mobile:sync": "cd mobile && node ../node_modules/@capacitor/cli/bin/capacitor sync android",
+    "mobile:open:android": "cd mobile && node ../node_modules/@capacitor/cli/bin/capacitor open android",
+    "mobile:open:ios": "cd mobile && node ../node_modules/@capacitor/cli/bin/capacitor open ios",
+    "mobile:android:assemble": "cd android && ./gradlew assembleRelease",
+    "mobile:acceptance": "tsx scripts/mobile-viewport-acceptance.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
     "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
     "@prisma/client": "^6.3.1",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
@@ -59,5 +63,8 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.4"
+  },
+  "optionalDependencies": {
+    "@capacitor/ios": "^8.5.2"
   }
 }

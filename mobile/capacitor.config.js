@@ -1,20 +1,38 @@
 /** @type {import('@capacitor/cli').CapacitorConfig} */
+const fieldTestHost = "https://field-test-exchange.rematcher.co.il";
+const productionHost = "https://exchange.rematcher.co.il";
+const webUrl = (process.env.MOBILE_WEB_URL || fieldTestHost).replace(/\/$/, "");
+
 const config = {
   appId: "co.rematcher.exchange",
-  appName: "REMATCHER Field Test",
-  webDir: "mobile/www",
+  appName: "REMATCHER Exchange",
+  // Config lives in mobile/ — webDir is relative to this file.
+  webDir: "www",
   server: {
-    url: process.env.MOBILE_WEB_URL || "https://field-test-exchange.rematcher.co.il",
+    url: webUrl,
     cleartext: false,
-    allowNavigation: ["https://field-test-exchange.rematcher.co.il/*"],
+    allowNavigation: [
+      `${fieldTestHost}/*`,
+      `${productionHost}/*`,
+      `${webUrl}/*`,
+    ],
   },
   android: {
+    path: "../android",
     allowMixedContent: false,
   },
   ios: {
-    // Capacitor ios/ project is generated on macOS (`npx cap add ios`).
-    // Share Extension + ShareStaging sources live under mobile/ios/ until applied.
+    // Generated on macOS: `npx cap add ios` then `bash mobile/ios/apply-share-sources.sh`
+    path: "../ios",
     scheme: "REMATCHER Exchange",
+    contentInset: "automatic",
+  },
+  plugins: {
+    SplashScreen: {
+      launchAutoHide: true,
+      backgroundColor: "#070C14",
+    },
   },
 };
+
 module.exports = config;

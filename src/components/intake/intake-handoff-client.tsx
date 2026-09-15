@@ -64,6 +64,7 @@ export function IntakeHandoffClient() {
   const [done, setDone] = useState(false);
   const [caption, setCaption] = useState(shareText);
   const [nativeReady, setNativeReady] = useState(false);
+  const [receivedSummary, setReceivedSummary] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -76,10 +77,29 @@ export function IntakeHandoffClient() {
           const pending = await plugin.getPending();
           const id = pending.clientBatchId || clientBatchId;
           if (pending.text) setCaption(pending.text);
+          const fileCount = pending.fileCount ?? 0;
+          const hasText = Boolean((pending.text || shareText || "").trim());
+          const parts: string[] = [];
+          if (fileCount > 0) {
+            parts.push(fileCount === 1 ? "תמונה אחת" : `${fileCount} תמונות`);
+          }
+          if (hasText) parts.push("פרטי רכב");
+          setReceivedSummary(
+            parts.length > 0 ? parts.join(" ו") : "השיתוף"
+          );
+
           const result = await plugin.consumeAndUpload({ clientBatchId: id });
           if (result.needsLogin) {
-            setError("יש להתחבר באפליקציה ואז לשתף שוב מ־WhatsApp");
-            setStatus("נדרשת התחברות");
+            // Keep App Group / local staging; resume after login via callbackUrl.
+            const callback = `/intake/handoff?${new URLSearchParams({
+              clientBatchId: id,
+              source,
+              staged: "1",
+              ...(pending.text || shareText
+                ? { text: (pending.text || shareText).slice(0, 1500) }
+                : {}),
+            }).toString()}`;
+            window.location.href = `/login?callbackUrl=${encodeURIComponent(callback)}`;
             return;
           }
           if (!result.ok) {
@@ -194,7 +214,11 @@ export function IntakeHandoffClient() {
         </p>
         {done ? (
           <div className="space-y-3">
-            <p className="text-lg font-semibold text-success">קיבלנו ✓</p>
+            <p className="text-lg font-semibold text-success">קיבלנו 👍</p>
+            {receivedSummary ? (
+              <p className="text-sm text-v2-text-secondary">{receivedSummary}</p>
+            ) : null}
+            <p className="text-sm text-v2-text-secondary">REMATCHER מטפלת בזה.</p>
             <ButtonV2 variant="primary" href="/intake/review" className="w-full">
               לבדיקת קליטות
             </ButtonV2>

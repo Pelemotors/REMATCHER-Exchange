@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { Providers } from "@/app/providers";
 import { PwaRegister } from "@/components/pwa/pwa-register";
 import { PwaNavigationBridge } from "@/components/pwa/pwa-navigation-bridge";
+import { CapacitorNativeBridge } from "@/components/native/capacitor-native-bridge";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -50,6 +51,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <PwaRegister />
+          <CapacitorNativeBridge />
           <Suspense fallback={null}>
             <PwaNavigationBridge />
           </Suspense>

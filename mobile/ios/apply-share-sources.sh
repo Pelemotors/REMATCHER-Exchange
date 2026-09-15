@@ -17,6 +17,7 @@ cp -f "$ROOT/mobile/ios/App/ShareStaging/ShareStagingStore.swift" "$IOS_APP/Shar
 cp -f "$ROOT/mobile/ios/App/ShareStaging/ShareStagingPlugin.swift" "$IOS_APP/ShareStaging/"
 cp -f "$ROOT/mobile/ios/App/IntakeShareHandoff.swift" "$IOS_APP/"
 cp -f "$ROOT/mobile/ios/App/App.entitlements" "$IOS_APP/App.entitlements"
+cp -f "$ROOT/mobile/ios/App/PrivacyInfo.xcprivacy" "$IOS_APP/PrivacyInfo.xcprivacy"
 
 cp -f "$ROOT/mobile/ios/App/ShareExtension/ShareViewController.swift" "$EXT_DIR/"
 cp -f "$ROOT/mobile/ios/App/ShareExtension/Info.plist" "$EXT_DIR/"

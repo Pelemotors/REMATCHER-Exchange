@@ -6,5 +6,12 @@
   <array>
     <string>group.co.rematcher.exchange</string>
   </array>
+  <key>com.apple.developer.associated-domains</key>
+  <array>
+    <string>applinks:field-test-exchange.rematcher.co.il</string>
+    <string>applinks:exchange.rematcher.co.il</string>
+    <string>webcredentials:field-test-exchange.rematcher.co.il</string>
+    <string>webcredentials:exchange.rematcher.co.il</string>
+  </array>
 </dict>
 </plist>

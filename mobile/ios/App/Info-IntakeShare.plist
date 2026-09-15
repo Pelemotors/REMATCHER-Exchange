@@ -21,9 +21,17 @@
   </array>
   <key>RematcherIntakeBaseURL</key>
   <string>https://field-test-exchange.rematcher.co.il</string>
-  <key>UIBackgroundModes</key>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>REMATCHER Exchange מקבלת תמונות רכב ששיתפת כדי לקלוט אותן למלאי שלך.</string>
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>REMATCHER Exchange עשויה לשמור תמונות רכב ששיתפת לצורך קליטת מלאי.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>REMATCHER Exchange משתמשת במצלמה רק כשאתה בוחר לצלם רכב לקליטת מלאי.</string>
+  <key>UISupportedInterfaceOrientations</key>
   <array>
-    <string>fetch</string>
+    <string>UIInterfaceOrientationPortrait</string>
   </array>
+  <key>UILaunchStoryboardName</key>
+  <string>LaunchScreen</string>
 </dict>
 </plist>

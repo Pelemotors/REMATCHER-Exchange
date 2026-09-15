@@ -72,7 +72,12 @@ public class ShareStagingPlugin: CAPPlugin, CAPBridgedPlugin {
         let result = try self.uploadBatch(clientBatchId: clientBatchId)
         call.resolve(result)
       } catch {
-        call.reject(error.localizedDescription)
+        let msg = error.localizedDescription
+        if msg.hasPrefix("unauthorized:") {
+          call.resolve(["ok": false, "needsLogin": true, "error": msg])
+          return
+        }
+        call.reject(msg)
       }
     }
   }

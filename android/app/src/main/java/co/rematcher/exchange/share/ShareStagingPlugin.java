@@ -1,5 +1,6 @@
 package co.rematcher.exchange.share;
 
+import co.rematcher.exchange.RematcherApp;
 import android.util.Log;
 import android.webkit.CookieManager;
 import com.getcapacitor.JSArray;
@@ -29,8 +30,10 @@ import java.util.UUID;
 @CapacitorPlugin(name = "ShareStaging")
 public class ShareStagingPlugin extends Plugin {
   private static final String TAG = "ShareStagingPlugin";
-  private static final String BASE =
-      "https://field-test-exchange.rematcher.co.il";
+
+  private String baseUrl() {
+    return RematcherApp.intakeBaseUrl();
+  }
 
   @PluginMethod
   public void getPending(PluginCall call) {
@@ -76,8 +79,17 @@ public class ShareStagingPlugin extends Plugin {
           JSObject result = uploadBatch(store, clientBatchId);
           call.resolve(result);
         } catch (Exception e) {
+          String msg = e.getMessage() != null ? e.getMessage() : "upload_failed";
+          if (msg.startsWith("unauthorized:")) {
+            JSObject out = new JSObject();
+            out.put("ok", false);
+            out.put("needsLogin", true);
+            out.put("error", msg);
+            call.resolve(out);
+            return;
+          }
           Log.e(TAG, "upload failed", e);
-          call.reject(e.getMessage() != null ? e.getMessage() : "upload_failed");
+          call.reject(msg);
         }
       }
     });
@@ -93,7 +105,7 @@ public class ShareStagingPlugin extends Plugin {
   }
 
   private JSObject uploadBatch(ShareStagingStore store, String clientBatchId) throws Exception {
-    String cookie = CookieManager.getInstance().getCookie(BASE);
+    String cookie = CookieManager.getInstance().getCookie(baseUrl());
     JSObject out = new JSObject();
     if (cookie == null || cookie.trim().isEmpty()) {
       out.put("ok", false);
@@ -113,7 +125,7 @@ public class ShareStagingPlugin extends Plugin {
     createBody.put("action", "create");
     createBody.put("clientBatchId", clientBatchId);
     createBody.put("source", "ANDROID_SHARE");
-    String createResp = httpJson("POST", BASE + "/api/intake/batch", createBody.toString(), cookie, null);
+    String createResp = httpJson("POST", baseUrl() + "/api/intake/batch", createBody.toString(), cookie, null);
     JSONObject createJson = new JSONObject(createResp);
     if (!createJson.optBoolean("ok", false) && createJson.optJSONObject("batch") == null) {
       // session expired?
@@ -132,7 +144,7 @@ public class ShareStagingPlugin extends Plugin {
       textBody.put("action", "add_text");
       textBody.put("batchId", serverBatchId);
       textBody.put("text", text);
-      httpJson("POST", BASE + "/api/intake/batch", textBody.toString(), cookie, null);
+      httpJson("POST", baseUrl() + "/api/intake/batch", textBody.toString(), cookie, null);
     }
 
     // 3) media multipart
@@ -140,14 +152,14 @@ public class ShareStagingPlugin extends Plugin {
     int order = 0;
     for (File f : files) {
       String mime = guessMime(f.getName());
-      httpMultipart(BASE + "/api/intake/batch", cookie, serverBatchId, f, mime, order++);
+      httpMultipart(baseUrl() + "/api/intake/batch", cookie, serverBatchId, f, mime, order++);
     }
 
     // 4) ack
     JSONObject ackBody = new JSONObject();
     ackBody.put("action", "ack");
     ackBody.put("batchId", serverBatchId);
-    String ackResp = httpJson("POST", BASE + "/api/intake/batch", ackBody.toString(), cookie, null);
+    String ackResp = httpJson("POST", baseUrl() + "/api/intake/batch", ackBody.toString(), cookie, null);
     JSONObject ackJson = new JSONObject(ackResp);
     if (!ackJson.optBoolean("ok", false)) {
       out.put("ok", false);

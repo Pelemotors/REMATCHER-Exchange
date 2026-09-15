@@ -6,6 +6,8 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def intakeBaseUrl = (System.getenv("MOBILE_WEB_URL") ?: project.findProperty("MOBILE_WEB_URL") ?: "https://field-test-exchange.rematcher.co.il").toString().replaceAll(/\/$/, "")
+
 android {
     namespace = "co.rematcher.exchange"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -13,12 +15,16 @@ android {
         applicationId "co.rematcher.exchange"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0-field-test"
+        versionCode 2
+        versionName "0.2.0-rc.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "INTAKE_BASE_URL", "\"${intakeBaseUrl}\""
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+    }
+    buildFeatures {
+        buildConfig true
     }
     signingConfigs {
         release {
@@ -31,8 +37,12 @@ android {
         }
     }
     buildTypes {
+        debug {
+            minifyEnabled false
+        }
         release {
             minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (keystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.release
@@ -67,5 +77,5 @@ try {
         apply plugin: 'com.google.gms.google-services'
     }
 } catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    logger.info("google-services.json not found, google-services plugin not applied. Native FCM push requires Owner Firebase config.")
 }

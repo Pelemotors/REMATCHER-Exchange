@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">REMATCHER Field Test</string>
-    <string name="title_activity_main">REMATCHER Field Test</string>
+    <string name="app_name">REMATCHER Exchange</string>
+    <string name="title_activity_main">REMATCHER Exchange</string>
     <string name="package_name">co.rematcher.exchange</string>
-    <string name="custom_url_scheme">co.rematcher.exchange</string>
+    <string name="custom_url_scheme">rematcher-exchange</string>
+    <string name="share_received_title">קיבלנו</string>
 </resources>

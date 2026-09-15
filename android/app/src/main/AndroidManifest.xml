@@ -16,34 +16,53 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- App deep link / custom scheme -->
+            <!-- Custom scheme deep link -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="rematcher-exchange" android:host="intake" />
+                <data android:scheme="rematcher-exchange" android:host="app" />
             </intent-filter>
 
-            <!-- HTTPS app-link style open of Field Test handoff -->
-            <intent-filter>
+            <!-- HTTPS App Links — Field Test (autoVerify when assetlinks.json + signing fingerprint match) -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="field-test-exchange.rematcher.co.il"
-                    android:pathPrefix="/intake/handoff" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/intake" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/home" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/demand" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/inventory" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/matches" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/opportunities" />
+                <data android:scheme="https" android:host="field-test-exchange.rematcher.co.il" android:pathPrefix="/activity" />
+            </intent-filter>
+
+            <!-- HTTPS App Links — Production -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/intake" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/home" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/demand" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/inventory" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/matches" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/opportunities" />
+                <data android:scheme="https" android:host="exchange.rematcher.co.il" android:pathPrefix="/activity" />
             </intent-filter>
         </activity>
 
-        <!-- WhatsApp / system Share Sheet entry -->
+        <!-- WhatsApp / Gallery Share Sheet — one share action = one IntakeBatch -->
         <activity
             android:name=".share.ShareReceiverActivity"
             android:exported="true"
@@ -74,4 +93,6 @@
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- POST_NOTIFICATIONS for Android 13+ when native FCM is wired (Owner Firebase) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

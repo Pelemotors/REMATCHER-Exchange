@@ -53,20 +53,20 @@ public class ShareReceiverActivity extends Activity {
     ShareStagingStore staging = new ShareStagingStore(this);
     staging.save(batchId, uris, text);
 
-    StringBuilder q = new StringBuilder();
-    q.append("clientBatchId=").append(Uri.encode(batchId));
-    q.append("&source=ANDROID_SHARE");
-    q.append("&staged=1");
-    if (text != null && !text.isEmpty()) {
-      String clipped = text.length() > 1500 ? text.substring(0, 1500) : text;
-      q.append("&text=").append(Uri.encode(clipped));
-    }
-
     Intent launch = new Intent(this, MainActivity.class);
     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     launch.putExtra("intake_client_batch_id", batchId);
     launch.putExtra("intake_source", "ANDROID_SHARE");
-    launch.setData(Uri.parse("https://field-test-exchange.rematcher.co.il/intake/handoff?" + q));
+    if (text != null && !text.isEmpty()) {
+      String clipped = text.length() > 1500 ? text.substring(0, 1500) : text;
+      launch.putExtra("intake_text", clipped);
+    }
+    String handoff = co.rematcher.exchange.RematcherApp.handoffUrl(batchId, "ANDROID_SHARE");
+    if (text != null && !text.isEmpty()) {
+      String clipped = text.length() > 1500 ? text.substring(0, 1500) : text;
+      handoff += "&text=" + Uri.encode(clipped);
+    }
+    launch.setData(Uri.parse(handoff));
     startActivity(launch);
     finish();
   }

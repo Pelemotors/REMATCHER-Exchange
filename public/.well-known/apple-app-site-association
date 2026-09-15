@@ -1,0 +1,30 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.co.rematcher.exchange",
+        "paths": [
+          "/intake/*",
+          "/home",
+          "/home/*",
+          "/demand",
+          "/demand/*",
+          "/inventory",
+          "/inventory/*",
+          "/matches",
+          "/matches/*",
+          "/opportunities",
+          "/opportunities/*",
+          "/activity",
+          "/activity/*",
+          "/login",
+          "/signup"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["TEAMID.co.rematcher.exchange"]
+  }
+}
