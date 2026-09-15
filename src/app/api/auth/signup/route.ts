@@ -9,6 +9,11 @@ import { sendUserVerificationEmail } from "@/services/email";
 import { logAppEvent } from "@/services/notifications";
 import { ensureDealerCommercial } from "@/services/commercial/reveal-usage";
 import { recordActivationMilestone } from "@/services/activation/milestones";
+import { getDealerEntitlement, startTrial } from "@/services/entitlements";
+import {
+  isMonetizationEnabled,
+  isTrialEnabled,
+} from "@/services/product-policy";
 
 const signupSchema = z
   .object({
@@ -91,12 +96,31 @@ export async function POST(req: Request) {
 
   const dealer = user.memberships[0]!.dealer;
   await ensureDealerCommercial(dealer.id);
+  await getDealerEntitlement(dealer.id);
+
+  // Trial only when monetization + trial flags are ON (default OFF)
+  if ((await isMonetizationEnabled()) && (await isTrialEnabled())) {
+    try {
+      await startTrial(dealer.id);
+    } catch {
+      // ignore ineligible
+    }
+  }
 
   void recordActivationMilestone({
     dealerId: dealer.id,
     milestone: "DEALER_SIGNED_UP",
     userId: user.id,
   }).catch(() => undefined);
+
+  await logAppEvent({
+    eventType: "ACCOUNT_CREATED",
+    entityType: "User",
+    entityId: user.id,
+    dealerId: dealer.id,
+    userId: user.id,
+    metadata: { via: "password_signup" },
+  });
 
   const token = await createEmailVerificationToken(user.id);
   await sendUserVerificationEmail({ to: email, name: user.name, token });

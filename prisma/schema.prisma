@@ -13,11 +13,14 @@ datasource db {
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
-  passwordHash  String
+  /** Null for OAuth-only users (Apple/Google). */
+  passwordHash  String?
   name          String
   phone         String?
   emailVerifiedAt DateTime?
   role          UserRole  @default(DEALER_USER)
+  /** Account moderation lifecycle — independent of billing. */
+  accountStatus AccountLifecycleStatus @default(ACTIVE)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -36,11 +39,21 @@ model User {
   legalAcceptances LegalAcceptance[]
   privacyAiOnboarding PrivacyAiOnboardingState[]
   accountDeletionRequests AccountDeletionRequest[]
+  externalIdentities ExternalIdentity[]
+  deviceInstallations DeviceInstallation[]
+  notificationEventPreferences NotificationEventPreference[]
+  purchasedSubscriptions DealerSubscription[] @relation("SubscriptionPurchaser")
 }
 
 enum UserRole {
   DEALER_USER
   ADMIN
+}
+
+enum AccountLifecycleStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
 }
 
 model Session {
@@ -90,6 +103,9 @@ model Dealer {
   exchangeLearnings ExchangeLearning[]
   intakeBatches     IntakeBatch[]
   vehicleCandidates VehicleCandidate[]
+  entitlement       DealerEntitlement?
+  subscriptions     DealerSubscription[]
+  deviceInstallations DeviceInstallation[]
 
   @@index([cohort])
 }
@@ -184,6 +200,7 @@ model DealerMembership {
 
 enum MembershipRole {
   OWNER
+  ADMIN
   MEMBER
 }
 
@@ -1348,3 +1365,258 @@ model VehicleCandidateMedia {
   @@index([mediaId])
 }
 
+
+// ─── Identity / Devices / Monetization (Agent-era commercial foundation) ───
+// Dealer model IS the Dealer Organization (business principal).
+
+model ExternalIdentity {
+  id               String   @id @default(cuid())
+  userId           String
+  provider         IdentityProvider
+  providerSubject  String
+  verifiedEmail    String?
+  rawProfileJson   Json?
+  createdAt        DateTime @default(now())
+  lastUsedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+  @@index([verifiedEmail])
+}
+
+enum IdentityProvider {
+  APPLE
+  GOOGLE
+  EMAIL
+}
+
+model DeviceInstallation {
+  id                   String             @id @default(cuid())
+  installationId       String             @unique
+  userId               String?
+  dealerId             String?
+  platform             ClientPlatform
+  appVersion           String?
+  buildNumber          String?
+  pushToken            String?
+  pushProvider         PushTokenProvider?
+  pushPermission       PushPermissionState @default(UNKNOWN)
+  lastSeenAt           DateTime           @default(now())
+  createdAt            DateTime           @default(now())
+  revokedAt            DateTime?
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  dealer Dealer? @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+
+  @@index([userId, revokedAt])
+  @@index([dealerId])
+  @@index([pushToken])
+}
+
+enum ClientPlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum PushTokenProvider {
+  APNS
+  FCM
+  WEB_PUSH
+}
+
+enum PushPermissionState {
+  UNKNOWN
+  GRANTED
+  DENIED
+  PROVISIONAL
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  nameHe      String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  providerProducts ProviderProduct[]
+  subscriptions    DealerSubscription[]
+}
+
+model ProviderProduct {
+  id              String              @id @default(cuid())
+  planId          String
+  provider        BillingProvider
+  externalProductId String
+  environment     BillingEnvironment  @default(SANDBOX)
+  active          Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalProductId, environment])
+  @@index([planId])
+}
+
+enum BillingProvider {
+  APPLE
+  GOOGLE
+  MANUAL
+}
+
+enum BillingEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+model DealerSubscription {
+  id                    String                 @id @default(cuid())
+  dealerId              String
+  planId                String?
+  provider              BillingProvider
+  externalSubscriptionId String?
+  externalProductId     String?
+  status                ProviderSubscriptionStatus @default(ACTIVE)
+  autoRenew             Boolean                @default(true)
+  purchasedAt           DateTime?
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  gracePeriodEndsAt     DateTime?
+  cancelledAt           DateTime?
+  environment           BillingEnvironment     @default(SANDBOX)
+  purchaserUserId       String?
+  rawSnapshotJson       Json?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  dealer    Dealer           @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  plan      SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  purchaser User?            @relation("SubscriptionPurchaser", fields: [purchaserUserId], references: [id], onDelete: SetNull)
+  transactions ProviderTransaction[]
+
+  @@unique([provider, externalSubscriptionId])
+  @@index([dealerId, status])
+  @@index([purchaserUserId])
+}
+
+enum ProviderSubscriptionStatus {
+  ACTIVE
+  IN_GRACE_PERIOD
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  REVOKED
+  PENDING
+}
+
+model ProviderTransaction {
+  id                 String   @id @default(cuid())
+  dealerId           String
+  subscriptionId     String?
+  provider           BillingProvider
+  externalTransactionId String
+  externalProductId  String?
+  eventType          String
+  status             String
+  environment        BillingEnvironment @default(SANDBOX)
+  occurredAt         DateTime @default(now())
+  rawPayloadJson     Json?
+  processedAt        DateTime?
+  createdAt          DateTime @default(now())
+
+  subscription DealerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalTransactionId, eventType])
+  @@index([dealerId, createdAt])
+  @@index([subscriptionId])
+}
+
+model DealerEntitlement {
+  id                 String            @id @default(cuid())
+  dealerId           String            @unique
+  status             EntitlementStatus @default(FREE)
+  planSlug           String?
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  trialConsumedAt    DateTime?
+  trialEligible      Boolean           @default(true)
+  foundingDealer     Boolean           @default(false)
+  currentPeriodEnd   DateTime?
+  gracePeriodEndsAt  DateTime?
+  sourceSubscriptionId String?
+  recalculatedAt     DateTime          @default(now())
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+}
+
+enum EntitlementStatus {
+  FREE
+  FOUNDING_DEALER
+  TRIAL
+  ACTIVE
+  GRACE_PERIOD
+  EXPIRED
+  SUSPENDED
+}
+
+model NotificationEventPreference {
+  id        String                 @id @default(cuid())
+  userId    String
+  eventType NotificationEventType
+  enabled   Boolean                @default(true)
+  updatedAt DateTime               @updatedAt
+  createdAt DateTime               @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType])
+  @@index([userId])
+}
+
+enum NotificationEventType {
+  NEW_MATCH
+  MUTUAL_INTEREST
+  INTAKE_NEEDS_INFO
+  SEARCH_EXPIRING
+  SUBSCRIPTION
+  AGENT_ATTENTION
+}
+
+model ProductPolicy {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  valueJson Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedBy String?
+}
+
+model AppVersionPolicy {
+  id                     String         @id @default(cuid())
+  platform               ClientPlatform @unique
+  latestVersion          String?
+  minimumSupportedVersion String?
+  updateMessageHe        String?
+  updatedAt              DateTime       @updatedAt
+  createdAt              DateTime       @default(now())
+}
+
+model IdentityLinkChallenge {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     IdentityProvider
+  providerSubject String?
+  tokenHash    String   @unique
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, provider])
+}

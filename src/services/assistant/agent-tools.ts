@@ -19,6 +19,7 @@ export const OPENAI_READ_TOOL_MAP: Record<string, ReadToolName> = {
   get_my_pending_outcomes: "getMyPendingOutcomes",
   get_my_validations: "getMyPendingValidations",
   get_my_commercial_status: "getMyCommercialStatus",
+  get_my_entitlement: "getMyEntitlement",
   get_my_pending_actions: "getMyPendingActions",
 };
 
@@ -136,6 +137,10 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   tool(
     "get_my_commercial_status",
     "THIS dealer's commercial / reveal usage and plan limits. Pricing/entitlement truth from product config — do not invent entitlements."
+  ),
+  tool(
+    "get_my_entitlement",
+    "THIS dealer's subscription/trial access status from REMATCHER entitlement service only. Never invent accessStatus, trial days, or plan. When monetization is off, reports monetizationEnabled=false."
   ),
   tool(
     "get_my_pending_actions",

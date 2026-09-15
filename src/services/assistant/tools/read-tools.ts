@@ -8,6 +8,11 @@ import {
 import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
 import { confirmedFromJson, demandTitle, formatSearchDisplayLabel } from "@/lib/demand-display";
 import type { ReadToolName } from "./registry";
+import {
+  compactEntitlementView,
+  getDealerEntitlement,
+} from "@/services/entitlements";
+import { isMonetizationEnabled } from "@/services/product-policy";
 
 /** Dealer-facing labels for Agent — never expose FRESH/STALE/B2B enums verbatim. */
 function freshnessLabelHe(state: string | null | undefined): string {
@@ -56,7 +61,8 @@ export async function executeReadTool(
 ): Promise<unknown> {
   switch (tool) {
     case "getMyExchangeState": {
-      const [pending, demands, usage, validations, matches, opportunities, intakeNeedsInfo] =
+      const monetizationOn = await isMonetizationEnabled();
+      const [pending, demands, usage, validations, matches, opportunities, intakeNeedsInfo, entitlement] =
         await Promise.all([
           getPendingActionsForDealer(dealerId),
           getEnrichedDemandsForDealer(dealerId, { lightweight: true }),
@@ -80,11 +86,16 @@ export async function executeReadTool(
               status: { in: ["NEEDS_INFO", "NEEDS_CONFIRMATION"] },
             },
           }),
+          monetizationOn ? getDealerEntitlement(dealerId) : Promise.resolve(null),
         ]);
       const active = demands.filter((d) =>
         ["ACTIVE", "EXPIRING"].includes(d.uxStatus)
       );
       const expiring = active.filter((d) => d.uxStatus === "EXPIRING");
+      const compact =
+        entitlement && monetizationOn
+          ? compactEntitlementView(entitlement)
+          : null;
       return {
         activeDemands: active.length,
         expiringDemands: expiring.length,
@@ -104,6 +115,28 @@ export async function executeReadTool(
           usage.planSlug === "onboarding"
             ? Math.max(0, usage.freeAllowance - usage.freeUsed)
             : Math.max(0, usage.monthlyAllowance - usage.monthlyUsed),
+        ...(compact
+          ? {
+              entitlement: {
+                accessStatus: compact.accessStatus,
+                trialDaysRemaining: compact.trialDaysRemaining,
+              },
+            }
+          : {}),
+      };
+    }
+    case "getMyEntitlement": {
+      if (!(await isMonetizationEnabled())) {
+        return {
+          monetizationEnabled: false,
+          accessStatus: null,
+          trialDaysRemaining: null,
+        };
+      }
+      const entitlement = await getDealerEntitlement(dealerId);
+      return {
+        monetizationEnabled: true,
+        ...compactEntitlementView(entitlement),
       };
     }
     case "getMyInventory": {

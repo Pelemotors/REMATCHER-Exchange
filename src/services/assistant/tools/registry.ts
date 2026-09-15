@@ -13,6 +13,7 @@ export const ALL_READ_TOOLS = [
   "getMyInventoryRequiringAttention",
   "getMyStaleInventory",
   "getMyCommercialStatus",
+  "getMyEntitlement",
   "getMyReveals",
   "getMyPendingOutcomes",
 ] as const;
@@ -105,6 +106,8 @@ export const TOOL_DESCRIPTIONS: Record<ReadToolName, string> = {
   getMyInventoryRequiringAttention: "Stale/validation-required inventory items",
   getMyStaleInventory: "Inventory marked stale",
   getMyCommercialStatus: "Reveal usage and commercial plan state",
+  getMyEntitlement:
+    "Subscription/trial access status for THIS dealer (service truth only — never invent)",
   getMyReveals: "Recent mutual-interest connections (Reveals) for this dealer",
   getMyPendingOutcomes: "Reveals awaiting outcome feedback",
 };

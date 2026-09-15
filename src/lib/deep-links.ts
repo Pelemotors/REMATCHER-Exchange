@@ -13,6 +13,7 @@ export const SAFE_DEEP_LINK_PREFIXES = [
   "/reveals/",
   "/activity",
   "/account",
+  "/subscription",
   "/privacy-ai",
   "/onboarding",
   "/pending-approval",

@@ -8,16 +8,32 @@ import {
   isLoginBlocked,
   recordFailedLogin,
 } from "@/lib/rate-limit";
+import { consumeOAuthBridgeToken } from "@/services/identity/oauth-bridge";
+import { sessionPayloadFromUser } from "@/services/identity/session-from-user";
 
 export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
   trustHost: true,
   providers: [
     Credentials({
+      id: "credentials",
+      name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        bridgeToken: { label: "Bridge Token", type: "text" },
       },
       async authorize(credentials) {
+        const bridgeToken =
+          typeof credentials?.bridgeToken === "string"
+            ? credentials.bridgeToken.trim()
+            : "";
+
+        if (bridgeToken) {
+          const consumed = await consumeOAuthBridgeToken(bridgeToken);
+          if (!consumed.ok) return null;
+          return sessionPayloadFromUser(consumed.userId);
+        }
+
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = (credentials.email as string).trim().toLowerCase();
@@ -34,6 +50,12 @@ export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
         });
 
         if (!user) return null;
+
+        // OAuth-only users have null passwordHash — cannot password-login
+        if (!user.passwordHash) {
+          await recordFailedLogin(email);
+          return null;
+        }
 
         const valid = await bcrypt.compare(
           credentials.password as string,
