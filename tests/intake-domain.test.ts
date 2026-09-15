@@ -158,16 +158,23 @@ describe("intake domain surface", () => {
 });
 
 describe("intake rate limit", () => {
-  it("blocks after burst", () => {
-    const id = `test-dealer-${Date.now()}`;
-    let blocked = false;
-    for (let i = 0; i < 40; i++) {
-      const r = checkIntakeRateLimit({ dealerId: id, kind: "create" });
-      if (r.blocked) {
-        blocked = true;
-        break;
+  it("blocks after burst in non-Field-Test mode", () => {
+    const prev = process.env.FIELD_TEST;
+    process.env.FIELD_TEST = "false";
+    try {
+      const id = `test-dealer-${Date.now()}`;
+      let blocked = false;
+      for (let i = 0; i < 40; i++) {
+        const r = checkIntakeRateLimit({ dealerId: id, kind: "create" });
+        if (r.blocked) {
+          blocked = true;
+          break;
+        }
       }
+      expect(blocked).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.FIELD_TEST;
+      else process.env.FIELD_TEST = prev;
     }
-    expect(blocked).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
 import "./globals.css";
 import { Suspense } from "react";
+import { Providers } from "@/app/providers";
 import { PwaRegister } from "@/components/pwa/pwa-register";
 import { PwaNavigationBridge } from "@/components/pwa/pwa-navigation-bridge";
 
@@ -46,11 +47,13 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" data-brand-ui="2">
       <body className={`${heebo.variable} font-sans bg-v2-canvas text-v2-text-primary`}>
-        {children}
-        <PwaRegister />
-        <Suspense fallback={null}>
-          <PwaNavigationBridge />
-        </Suspense>
+        <Providers>
+          {children}
+          <PwaRegister />
+          <Suspense fallback={null}>
+            <PwaNavigationBridge />
+          </Suspense>
+        </Providers>
       </body>
     </html>
   );

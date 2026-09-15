@@ -4,10 +4,21 @@
  */
 const windows = new Map<string, { count: number; resetAt: number }>();
 
+/** Field Test / browser harness: clear in-memory counters between acceptance runs. */
+export function resetIntakeRateLimitsForTests() {
+  windows.clear();
+}
+
 export function checkIntakeRateLimit(input: {
   dealerId: string;
   kind: "create" | "upload" | "ack" | "resolve";
 }): { blocked: boolean; retryAfterMs?: number } {
+  const isFieldTest = process.env.FIELD_TEST === "true";
+  // Field Test: keep function for parity but do not block Owner browser/device exercises.
+  // Production limits remain strict below.
+  if (isFieldTest) {
+    return { blocked: false };
+  }
   const limits: Record<string, { max: number; windowMs: number }> = {
     create: { max: 30, windowMs: 60_000 },
     upload: { max: 120, windowMs: 60_000 },
