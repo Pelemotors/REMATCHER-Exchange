@@ -1,15 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { toBuyerMatchView } from "@/lib/privacy-views";
-import type { MatchExplanation } from "@/lib/schemas/ai";
 import { publicThumbUrlForDisplayKey } from "@/lib/media/storage";
 import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
 
+/**
+ * Buyer-facing match DTO — pre-Reveal privacy boundary.
+ * Must NOT include: score, scoreBand, explanation, dealerId, b2bPrice,
+ * seller identity/contact, validation internals.
+ */
 export interface BuyerMatchListItem {
   id: string;
   demandId: string;
   status: string;
-  scoreBand: string | null;
-  explanation: MatchExplanation;
   vehicle: ReturnType<typeof toBuyerMatchView>;
   interest: { status: string } | null;
   revealId: string | null;
@@ -64,8 +66,6 @@ export async function listBuyerMatches(
       id: m.id,
       demandId: m.demandId,
       status: m.status,
-      scoreBand: m.scoreBand,
-      explanation: m.explanationJson as MatchExplanation,
       vehicle: toBuyerMatchView({
         ...m.vehicle,
         imageUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,

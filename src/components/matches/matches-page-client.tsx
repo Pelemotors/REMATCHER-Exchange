@@ -152,7 +152,25 @@ export function MatchesPageClient({
               <div key={m.id} id={`match-${m.id}`} className={`space-y-2 ${focusId === m.id ? "ring-2 ring-v2-signal rounded-lg" : ""}`}>
                 {connected && <Surface depth="secondary" className="px-3 py-2"><BadgeV2 variant="signal">החיבור נפתח</BadgeV2></Surface>}
                 {waiting && !connected && <Surface depth="secondary" className="px-3 py-2"><BadgeV2 variant="warning">ממתין לצד השני</BadgeV2></Surface>}
-                <MatchCardV2 headline={m.explanation?.headline ?? "התאמה"} summary={m.explanation?.summary ?? ""} fits={m.explanation?.fits ?? []} gaps={m.explanation?.gaps ?? []} vehicle={m.vehicle as Record<string, unknown>} band={m.scoreBand as "STRONG" | "GOOD" | "ALTERNATIVE" | null} loading={actionLoading === m.id} showActions={showActions} waiting={waiting} connected={connected} revealHref={m.revealId ? `/reveals/${m.revealId}` : undefined} onInterested={() => handleAction(m.id, "interested")} onReject={() => handleAction(m.id, "reject")} />
+                <MatchCardV2
+                  headline={
+                    [m.vehicle.make, m.vehicle.model, m.vehicle.year]
+                      .filter(Boolean)
+                      .join(" ") || "התאמה"
+                  }
+                  summary=""
+                  fits={[]}
+                  gaps={[]}
+                  vehicle={m.vehicle as Record<string, unknown>}
+                  band={null}
+                  loading={actionLoading === m.id}
+                  showActions={showActions}
+                  waiting={waiting}
+                  connected={connected}
+                  revealHref={m.revealId ? `/reveals/${m.revealId}` : undefined}
+                  onInterested={() => handleAction(m.id, "interested")}
+                  onReject={() => handleAction(m.id, "reject")}
+                />
               </div>
             );
           })}

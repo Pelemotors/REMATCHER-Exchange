@@ -91,8 +91,20 @@ describe("vehicle media schema + API surface", () => {
       join(root, "src/services/inventory/create-vehicle.ts"),
       "utf8"
     );
-    expect(create).toContain("mediaReady: input.source === \"import\"");
+    expect(create).toContain("mediaReady: false");
+    expect(create).not.toContain('mediaReady: input.source === "import"');
     expect(create).toContain("vehicle.mediaReady");
+  });
+
+  it("buyer match list omits scoreBand and explanation", () => {
+    const src = readFileSync(
+      join(root, "src/services/matching/list-buyer-matches.ts"),
+      "utf8"
+    );
+    expect(src).toContain("Buyer-facing match DTO");
+    expect(src).not.toMatch(/scoreBand:\s*m\.scoreBand/);
+    expect(src).not.toMatch(/explanation:\s*m\.explanationJson/);
+    expect(src).not.toContain("scoreBand: string");
   });
 
   it("matching only considers mediaReady vehicles", () => {
@@ -153,7 +165,7 @@ describe("navigation simplification", () => {
       "/inventory",
     ]);
     expect(SECONDARY_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(true);
-    expect(MOBILE_BOTTOM_NAV_ITEMS.some((i) => i.href === "/matches")).toBe(
+    expect(MOBILE_BOTTOM_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(
       false
     );
   });

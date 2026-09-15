@@ -227,8 +227,9 @@ export async function createVehicleForDealer(input: {
       freshnessState: "FRESH",
       lastInventoryUpdate: new Date(),
       // New vehicles require EXTERIOR+INTERIOR before network matching.
-      // Existing inventory remains mediaReady=true via migration default.
-      mediaReady: input.source === "import",
+      // Existing inventory remains mediaReady=true via migration DEFAULT only.
+      // No source-based bypass (including import) for newly created vehicles.
+      mediaReady: false,
       ...(input.lastAvailabilityConfirmedAt !== undefined
         ? { lastAvailabilityConfirmedAt: input.lastAvailabilityConfirmedAt }
         : {}),
