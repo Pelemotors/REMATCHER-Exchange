@@ -34,27 +34,33 @@ PORT=3100 npm run start
 Initial password is set by the seed script (see script; rotate before sharing externally).  
 **Do not paste passwords into chat or commits.**
 
-## Public reachability from real phones — OWNER ACTION REQUIRED
+## Public reachability — status
 
-Phones cannot use `127.0.0.1`. Field Test is **not** Ready for external devices until:
+**Caddy (done on VPS):** host `field-test-exchange.rematcher.co.il` → `127.0.0.1:3100`  
+Backup: `/etc/caddy/Caddyfile.bak-field-test-*`  
+Existing hosts verified after reload.
 
-1. DNS name pointing to this VPS (suggested): `field-test-exchange.rematcher.co.il` (or equivalent)
-2. TLS reverse proxy (Caddy) to `127.0.0.1:3100` — **snippet only; do not edit `/srv/infra` / live Caddy without explicit owner approval**
-3. Update `.env.field-test`:
-   - `AUTH_URL=https://<dns>`
-   - `NEXT_PUBLIC_APP_URL=https://<dns>`
-   - `MEDIA_PUBLIC_BASE_URL=https://<dns>/api/media`
-4. Restart the Field Test Next process
+**DNS (OWNER ACTION REQUIRED):** zone is LiveDNS (`park1/park2.livedns.co.il`).  
+Current lookup: **NXDOMAIN** for `field-test-exchange.rematcher.co.il`.  
+No LiveDNS/API credentials are available on this server — engineering cannot create the record.
 
-Suggested Caddy site block (owner applies):
+### Exact DNS steps (you)
 
-```
-field-test-exchange.rematcher.co.il {
-  reverse_proxy 127.0.0.1:3100
-}
-```
+1. Log into the DNS panel for `rematcher.co.il` (LiveDNS / DomainTheNet — typically https://domains.livedns.co.il/ or the registrar panel that manages this domain).
+2. Create record:
+   - **Type:** `A`
+   - **Name/Host:** `field-test-exchange` (FQDN = `field-test-exchange.rematcher.co.il`)
+   - **Value:** `65.21.200.14`
+   - **TTL:** 300–3600 (default OK)
+3. Optional: do **not** create AAAA unless you also have a stable IPv6 you want Let’s Encrypt to use.
+4. Wait until public resolve works:
+   ```bash
+   dig @8.8.8.8 +short A field-test-exchange.rematcher.co.il
+   # expect: 65.21.200.14
+   ```
+5. Tell engineering “DNS live” — Caddy will obtain Let’s Encrypt cert automatically (already configured; retries on its own). Then we restart Field Test with HTTPS URLs and run external smoke.
 
-Until then: engineering can validate APIs locally; **MOBILE FIELD TEST cannot be marked Ready for device Share** without HTTPS public URL.
+`.env.field-test` URLs are already prepared for `https://field-test-exchange.rematcher.co.il` (still points at Field Test DB/media only).
 
 ## OPENAI
 
