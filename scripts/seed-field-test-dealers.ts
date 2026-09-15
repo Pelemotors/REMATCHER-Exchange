@@ -4,6 +4,12 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
+import {
+  CONSENT_TEXT_VERSION,
+  PRIVACY_CONSENT_TYPES,
+  PRIVACY_POLICY_VERSION,
+  TERMS_VERSION,
+} from "../src/config/legal/versions";
 
 const prisma = new PrismaClient();
 
@@ -51,6 +57,40 @@ async function upsertDealer(tag: "A" | "B", email: string, name: string) {
     where: { userId_dealerId: { userId: user.id, dealerId: dealer.id } },
     create: { userId: user.id, dealerId: dealer.id, role: "OWNER" },
     update: {},
+  });
+
+  // Complete Privacy-AI gate so Field Test pages are reachable (consents = false).
+  for (const type of PRIVACY_CONSENT_TYPES) {
+    await prisma.privacyConsentDecision.create({
+      data: {
+        userId: user.id,
+        dealerId: dealer.id,
+        consentType: type,
+        value: false,
+        consentTextVersion: CONSENT_TEXT_VERSION,
+        privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+        source: "field_test_seed",
+      },
+    });
+  }
+  await prisma.legalAcceptance.create({
+    data: {
+      userId: user.id,
+      dealerId: dealer.id,
+      termsVersion: TERMS_VERSION,
+      privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+      consentTextVersion: CONSENT_TEXT_VERSION,
+      source: "field_test_seed",
+    },
+  });
+  await prisma.privacyAiOnboardingState.upsert({
+    where: { userId_dealerId: { userId: user.id, dealerId: dealer.id } },
+    create: {
+      userId: user.id,
+      dealerId: dealer.id,
+      completedAt: new Date(),
+    },
+    update: { completedAt: new Date() },
   });
 
   console.log(`seeded dealer ${tag}: ${email}`);

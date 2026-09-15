@@ -10,6 +10,9 @@
 | Postgres | Docker `rematcher-exchange-field-test-db` on `127.0.0.1:5435`, DB `rematcher_exchange_field_test` | Supabase / Production `DATABASE_URL` |
 | Media | `/srv/gal/projects/REMATCHER-Exchange/.media-field-test` | Production `MEDIA_ROOT` |
 | App process | Next on port **3100** with `.env.field-test` | Vercel `exchange.rematcher.co.il` |
+| Public host | `https://field-test-exchange.rematcher.co.il` (Caddy → `127.0.0.1:3100`) | `exchange.rematcher.co.il` |
+
+**Env gates (Field Test):** `FIELD_TEST=true`, `DATABASE_URL`/`DIRECT_URL` → `:5435/rematcher_exchange_field_test` only, `MEDIA_ROOT` under `.media-field-test`, no Supabase/Redis/cron secrets pointing at Production.
 
 ## Local start (engineering)
 
@@ -19,48 +22,37 @@ docker compose -f field-test/docker-compose.yml up -d
 # ensure .env.field-test exists (gitignored)
 set -a && source .env.field-test && set +a
 npx prisma migrate deploy
-npx tsx scripts/seed-field-test-dealers.ts
+npx tsx scripts/seed-field-test-owner-network.ts
+# optional legacy seed: scripts/seed-field-test-dealers.ts
 npm run build
 PORT=3100 npm run start
 ```
 
-## Dealers
+## Dealers (Field Test)
 
-| Dealer | Email |
-|--------|-------|
-| A | `fieldtest-a@rematcher.local` |
-| B | `fieldtest-b@rematcher.local` |
+| Role | Email |
+|------|-------|
+| Owner / Dealer A | `galsamama@gmail.com` |
+| Counterparty / Dealer B | `fieldtest-b@rematcher.local` |
 
-Initial password is set by the seed script (see script; rotate before sharing externally).  
+Owner Field-Test password is set by `scripts/seed-field-test-owner-network.ts` (override via `FIELD_TEST_OWNER_PASSWORD`).  
 **Do not paste passwords into chat or commits.**
 
-## Public reachability — status
+## Public reachability — PASS (as of RC)
 
-**Caddy (done on VPS):** host `field-test-exchange.rematcher.co.il` → `127.0.0.1:3100`  
-Backup: `/etc/caddy/Caddyfile.bak-field-test-*`  
-Existing hosts verified after reload.
+| Check | Result |
+|-------|--------|
+| Authoritative `park1.livedns.co.il` A | `65.21.200.14` (AA) |
+| Authoritative `park2.livedns.co.il` A | `65.21.200.14` (AA) |
+| Google `8.8.8.8` | `65.21.200.14` |
+| Cloudflare `1.1.1.1` | `65.21.200.14` |
+| System resolver | `65.21.200.14` |
+| Caddy reverse_proxy | `field-test-exchange.rematcher.co.il` → `127.0.0.1:3100` |
+| TLS | Let’s Encrypt YE2, SAN = hostname, HTTP→HTTPS |
 
-**DNS (OWNER ACTION REQUIRED):** zone is LiveDNS (`park1/park2.livedns.co.il`).  
-Current lookup: **NXDOMAIN** for `field-test-exchange.rematcher.co.il`.  
-No LiveDNS/API credentials are available on this server — engineering cannot create the record.
+**DNS contradiction root cause (resolved):** LiveDNS authoritative answers flapped / lagged (SOA serial catch-up + negative-cache TTL up to 14400s) after an earlier successful A answer. Public resolvers reflecting NXDOMAIN/NODATA while engineering had previously seen A was **not** ordinary multi-hop propagation alone — the authoritative zone itself temporarily lacked a stable AA A. Re-check against park1/park2 showed both NS synchronized on A=`65.21.200.14` with matching SOA; public resolvers then matched. **No Owner DNS action required now.**
 
-### Exact DNS steps (you)
-
-1. Log into the DNS panel for `rematcher.co.il` (LiveDNS / DomainTheNet — typically https://domains.livedns.co.il/ or the registrar panel that manages this domain).
-2. Create record:
-   - **Type:** `A`
-   - **Name/Host:** `field-test-exchange` (FQDN = `field-test-exchange.rematcher.co.il`)
-   - **Value:** `65.21.200.14`
-   - **TTL:** 300–3600 (default OK)
-3. Optional: do **not** create AAAA unless you also have a stable IPv6 you want Let’s Encrypt to use.
-4. Wait until public resolve works:
-   ```bash
-   dig @8.8.8.8 +short A field-test-exchange.rematcher.co.il
-   # expect: 65.21.200.14
-   ```
-5. Tell engineering “DNS live” — Caddy will obtain Let’s Encrypt cert automatically (already configured; retries on its own). Then we restart Field Test with HTTPS URLs and run external smoke.
-
-`.env.field-test` URLs are already prepared for `https://field-test-exchange.rematcher.co.il` (still points at Field Test DB/media only).
+Historical setup notes (only if record is deleted again): create A `field-test-exchange` → `65.21.200.14` in LiveDNS.
 
 ## OPENAI
 
