@@ -55,7 +55,7 @@ describe("Home visual migration wiring", () => {
     );
     expect(home).toContain("BrandMark");
     expect(home).toContain("captureEntry");
-    expect(home).toContain("/intake");
+    expect(home).toContain("/intake/handoff");
     expect(home).toContain("openAgent");
   });
 });

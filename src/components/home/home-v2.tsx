@@ -129,7 +129,7 @@ export function HomeV2({
         <p className={styles.tagline}>מה אפשר לעשות בשבילך עכשיו?</p>
       </section>
 
-      <Link href="/intake" className={styles.captureEntry}>
+      <Link href="/intake/handoff?source=home-capture" className={styles.captureEntry}>
         <span className={styles.captureCamera} aria-hidden>
           <Camera size={22} strokeWidth={2} />
         </span>

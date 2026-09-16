@@ -11,6 +11,10 @@ import { extractKnownNumber, extractKnownString } from "@/lib/schemas/ai";
 import type { DuplicateCheckResult } from "@/services/demand/duplicate-detection";
 import { EMPTY_COPY } from "@/lib/commercial-ux";
 import { cn, formatCurrency } from "@/lib/utils";
+import {
+  mergePastedTranscript,
+  normalizeWhatsAppTranscript,
+} from "@/lib/whatsapp-transcript";
 import styles from "./create-demand-flow.module.css";
 
 export type CreateDemandFlowVariant = "default" | "home";
@@ -89,28 +93,60 @@ export function CreateDemandFlow({
     setSavingPrivate(false);
   }
 
+  async function readClipboardText(): Promise<string | null> {
+    try {
+      const { Capacitor, registerPlugin } = await import("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        const Clipboard = registerPlugin<{
+          read(): Promise<{ value?: string }>;
+        }>("Clipboard");
+        const result = await Clipboard.read();
+        if (typeof result?.value === "string") return result.value;
+      }
+    } catch {
+      /* web / plugin missing — fall through */
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+      return navigator.clipboard.readText();
+    }
+    return null;
+  }
+
+  function applyPastedText(incoming: string) {
+    const next = normalizeWhatsAppTranscript(incoming);
+    if (!next) return false;
+    setRawText((prev) => mergePastedTranscript(prev, next));
+    return true;
+  }
+
   async function handlePasteFromWhatsApp() {
     setPasteHint(null);
     try {
-      if (!navigator.clipboard?.readText) {
+      const text = await readClipboardText();
+      if (text === null) {
         textareaRef.current?.focus();
-        setPasteHint("הדבק כאן עם Ctrl/Cmd+V");
+        setPasteHint("הדבק כאן עם Cmd+V — אפשר כמה הודעות יחד");
         return;
       }
-      const text = await navigator.clipboard.readText();
       if (!text.trim()) {
         textareaRef.current?.focus();
         setPasteHint("הלוח ריק — העתק מהוואטסאפ והדבק כאן");
         return;
       }
-      setRawText((prev) =>
-        prev.trim() ? `${prev.trim()}\n${text.trim()}` : text.trim()
-      );
+      applyPastedText(text);
       textareaRef.current?.focus();
     } catch {
       textareaRef.current?.focus();
-      setPasteHint("לא ניתן לקרוא מהלוח — הדבק ידנית (Ctrl/Cmd+V)");
+      setPasteHint("לא ניתן לקרוא מהלוח — הדבק ידנית עם Cmd+V");
     }
+  }
+
+  function handleTextareaPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = e.clipboardData.getData("text/plain");
+    if (!pasted.trim()) return;
+    e.preventDefault();
+    applyPastedText(pasted);
+    setPasteHint(null);
   }
 
   async function handleParse(e: React.FormEvent) {
@@ -310,6 +346,7 @@ export function CreateDemandFlow({
             placeholder={"לדוגמה: מחפש קיה ספורטאז׳ 2022 עד 120 אלף"}
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
+            onPaste={handleTextareaPaste}
             required
             rows={5}
           />

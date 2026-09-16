@@ -169,7 +169,7 @@ describe("dealer UX 2.1 product-flow guards", () => {
       "utf8"
     );
     expect(home).toContain("מה אפשר לעשות בשבילך עכשיו?");
-    expect(home).toContain("/intake");
+    expect(home).toContain("/intake/handoff");
     expect(home).toContain('variant="home"');
     expect(home).toContain("CreateDemandFlow");
     expect(flow).toContain('variant === "home"');

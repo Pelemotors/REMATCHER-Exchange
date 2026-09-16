@@ -578,8 +578,9 @@ export async function runActionGateway(params: {
         meta.policyResult = "REQUIRE_CLARIFICATION";
         return {
           intent: "UPDATE_INVENTORY",
-          message: "כדי לנסות שוב קליטה צריך מזהה אצווה. אפשר לעבור ל־/intake.",
-          suggestions: [{ label: "קליטה", href: "/intake" }],
+          message:
+            "כדי לנסות שוב קליטה צריך מזהה אצווה. אפשר לעבור ל־/intake/handoff.",
+          suggestions: [{ label: "קליטה", href: "/intake/handoff" }],
           conversation,
           meta,
         };

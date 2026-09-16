@@ -91,4 +91,20 @@ test.describe("Live Production visual", () => {
       fullPage: true,
     });
   });
+
+  test("home capture routes are not 404", async ({ request }) => {
+    const intake = await request.get(`${BASE}/intake`, {
+      maxRedirects: 0,
+    });
+    // unauthenticated: login redirect (307/302) or 200 after auth — never 404
+    expect(intake.status()).not.toBe(404);
+    const handoff = await request.get(`${BASE}/intake/handoff`, {
+      maxRedirects: 0,
+    });
+    expect(handoff.status()).not.toBe(404);
+    const intel = await request.get(`${BASE}/intelligence`, {
+      maxRedirects: 0,
+    });
+    expect(intel.status()).not.toBe(404);
+  });
 });
