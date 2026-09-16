@@ -108,8 +108,62 @@ model Dealer {
   deviceInstallations DeviceInstallation[]
   customers         Customer[]
   dealerOpportunities DealerOpportunity[]
+  catalog           DealerCatalog?
 
   @@index([cohort])
+}
+
+// ─── Digital Dealer Catalog (public storefront — ≠ Network Visibility) ───
+
+enum CatalogStatus {
+  DRAFT
+  ENABLED
+  DISABLED
+}
+
+/**
+ * Per-dealer public catalog. Separate from VehicleVisibility / network matching.
+ * OWNED does not auto-mean public; publication is explicit via CatalogPublication.
+ */
+model DealerCatalog {
+  id          String        @id @default(cuid())
+  dealerId    String        @unique
+  slug        String        @unique
+  displayName String
+  status      CatalogStatus @default(DRAFT)
+  phone       String?
+  whatsapp    String?
+  address     String?
+  description String?
+  logoUrl     String?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  dealer       Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  publications CatalogPublication[]
+
+  @@index([status, slug])
+}
+
+/**
+ * Explicit catalog listing — independent of ANONYMOUS_NETWORK visibility.
+ * Never auto-created for OFFERED_TO_ME / TRADE_IN_CANDIDATE / EXTERNAL.
+ */
+model CatalogPublication {
+  id            String    @id @default(cuid())
+  catalogId     String
+  vehicleId     String
+  isActive      Boolean   @default(true)
+  publishedAt   DateTime  @default(now())
+  unpublishedAt DateTime?
+
+  catalog DealerCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  vehicle Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogId, vehicleId])
+  @@index([catalogId, isActive, publishedAt(sort: Desc)])
+  @@index([vehicleId, isActive])
 }
 
 // ─── Customer (Person of a Dealer — ≠ Demand) ───────────────────
@@ -305,6 +359,7 @@ model Vehicle {
   media           VehicleMedia[]
   intakeCandidates VehicleCandidate[]
   dealerOpportunities DealerOpportunity[]
+  catalogPublications CatalogPublication[]
 
   /** Grandfathered inventory defaults true; new vehicles start false until EXTERIOR+INTERIOR */
   mediaReady      Boolean       @default(true)

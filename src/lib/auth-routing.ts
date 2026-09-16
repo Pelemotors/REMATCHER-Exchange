@@ -1,4 +1,3 @@
-import { isAdminRole } from "@/lib/brand-copy";
 import { sanitizeReturnPath } from "@/lib/deep-links";
 
 export interface AuthRoutingUser {
@@ -8,7 +7,7 @@ export interface AuthRoutingUser {
   verificationStatus?: string | null;
 }
 
-/** Resolve post-login destination based on user/dealer state */
+/** Resolve post-login destination for dealer auth only (never /admin). */
 export function getPostAuthRedirect(
   user: AuthRoutingUser,
   callbackUrl?: string | null
@@ -16,10 +15,6 @@ export function getPostAuthRedirect(
   const safe = sanitizeReturnPath(callbackUrl);
   if (safe) {
     return safe;
-  }
-
-  if (isAdminRole(user.role) && !user.dealerId) {
-    return "/admin";
   }
 
   if (!user.emailVerifiedAt) {

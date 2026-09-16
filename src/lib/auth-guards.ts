@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { adminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { isAdminRole } from "@/lib/brand-copy";
 import {
@@ -102,11 +103,14 @@ export async function requireVerifiedDealer(opts?: {
   return { session };
 }
 
+/** Admin APIs — admin cookie/session only (never dealer NextAuth). */
 export async function requireAdminSession() {
-  const result = await requireSession();
-  if ("error" in result) return result;
-  if (!isAdminRole(result.session.user.role)) {
+  const session = await adminAuth();
+  if (!session?.user?.id) {
+    return { error: "Unauthorized" as const, status: 401 as const };
+  }
+  if (!isAdminRole(session.user.role)) {
     return { error: "Forbidden" as const, status: 403 as const };
   }
-  return { session: result.session };
+  return { session };
 }

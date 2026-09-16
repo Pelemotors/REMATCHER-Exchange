@@ -2,8 +2,11 @@ import Link from "next/link";
 import { Surface } from "@/components/ui/brand-v2";
 import { AdminCreateDealer } from "@/components/admin/admin-create-dealer";
 import { countPendingDealersForApproval, getPendingDealers } from "@/services/admin/dealer-verification";
+import { requireAdminPageSession } from "@/lib/admin-page-gate";
 
 export default async function AdminDealersPage() {
+  if (!(await requireAdminPageSession())) return null;
+
   const [count, dealers] = await Promise.all([
     countPendingDealersForApproval(),
     getPendingDealers(),
@@ -18,7 +21,7 @@ export default async function AdminDealersPage() {
         </div>
         <div className="flex items-center gap-3">
           <AdminCreateDealer />
-          <Link href="/admin" className="text-sm text-v2-signal">Control Room</Link>
+          <Link href="/admin" className="text-sm text-v2-signal">סקירה</Link>
         </div>
       </div>
 

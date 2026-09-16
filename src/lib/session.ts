@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth";
+import { adminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { isAdminRole } from "@/lib/brand-copy";
 
 export async function getSessionUser() {
   const session = await auth();
@@ -18,9 +20,11 @@ export async function requireDealer() {
   return { user, dealerId: user.dealerId };
 }
 
+/** System admin — admin cookie/session only. */
 export async function requireAdmin() {
-  const user = await requireAuth();
-  if (user.role !== "ADMIN") throw new Error("FORBIDDEN");
+  const session = await adminAuth();
+  const user = session?.user;
+  if (!user?.id || !isAdminRole(user.role)) throw new Error("FORBIDDEN");
   return user;
 }
 

@@ -46,6 +46,7 @@
 .navBrand {
   font-weight: 600;
   color: var(--rm2-warm-white, #f3f1ec);
+  margin-inline-end: 0.5rem;
 }
 
 .navLink {
@@ -57,6 +58,17 @@
 
 .navLink:hover {
   color: rgba(255, 255, 255, 0.75);
+}
+
+.navSpacer {
+  flex: 1 1 auto;
+  min-width: 0.5rem;
+}
+
+.navMeta {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.75rem;
+  direction: ltr;
 }
 
 @media (min-width: 768px) {

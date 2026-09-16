@@ -1,55 +1,36 @@
-import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { adminAuth } from "@/lib/admin-auth";
 import { isAdminRole } from "@/lib/brand-copy";
-import { redirect } from "next/navigation";
-import { BadgeV2 } from "@/components/ui/brand-v2";
+import { AdminLoginForm } from "@/components/admin/admin-login-form";
+import { AdminShell } from "@/components/admin/admin-shell";
 import { countPendingDealersForApproval } from "@/services/admin/dealer-verification";
 import styles from "./admin-layout.module.css";
 
+/**
+ * Root admin layout: unauthenticated visitors see Admin Login only (never /login).
+ * Authenticated admins get the System Administration shell.
+ * Nested routes still render as children only when session is valid.
+ */
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await adminAuth();
   if (!session?.user?.id || !isAdminRole(session.user.role)) {
-    redirect("/login?callbackUrl=/admin");
+    return (
+      <div className={styles.root}>
+        <AdminLoginForm />
+      </div>
+    );
   }
 
   const pendingCount = await countPendingDealersForApproval();
 
   return (
     <div className={styles.root}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <nav className={styles.nav}>
-            <Link href="/admin" className={styles.navBrand}>
-              Control Room
-            </Link>
-            <Link href="/admin#dealer-management" className={styles.navLink}>
-              ניהול סוחרים
-            </Link>
-            <Link href="/admin/dealers" className={styles.navLink}>
-              סוחרים לאישור
-              {pendingCount > 0 && (
-                <BadgeV2 variant="signal" className="mr-2">
-                  {pendingCount}
-                </BadgeV2>
-              )}
-            </Link>
-            <Link href="/admin/communications" className={styles.navLink}>
-              תקשורת Push
-            </Link>
-            <Link href="/admin/intelligence" className={styles.navLink}>
-              Product Intelligence
-            </Link>
-            <Link href="/home" className={styles.navLink}>
-              Exchange
-            </Link>
-          </nav>
-        </div>
-      </header>
-      {children}
+      <AdminShell email={session.user.email} pendingCount={pendingCount}>
+        {children}
+      </AdminShell>
     </div>
   );
 }

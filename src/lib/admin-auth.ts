@@ -8,11 +8,21 @@ import {
   isLoginBlocked,
   recordFailedLogin,
 } from "@/lib/rate-limit";
-import { consumeOAuthBridgeToken } from "@/services/identity/oauth-bridge";
-import { sessionPayloadFromUser } from "@/services/identity/session-from-user";
 
-export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
+const isProd = process.env.NODE_ENV === "production";
+
+/**
+ * Separate System Admin NextAuth instance.
+ * Cookie and basePath are distinct from dealer auth (`@/lib/auth`).
+ */
+export const {
+  handlers,
+  signIn,
+  signOut,
+  auth: uncachedAdminAuth,
+} = NextAuth({
   trustHost: true,
+  basePath: "/api/admin/auth",
   providers: [
     Credentials({
       id: "credentials",
@@ -20,20 +30,8 @@ export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        bridgeToken: { label: "Bridge Token", type: "text" },
       },
       async authorize(credentials) {
-        const bridgeToken =
-          typeof credentials?.bridgeToken === "string"
-            ? credentials.bridgeToken.trim()
-            : "";
-
-        if (bridgeToken) {
-          const consumed = await consumeOAuthBridgeToken(bridgeToken);
-          if (!consumed.ok) return null;
-          return sessionPayloadFromUser(consumed.userId);
-        }
-
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = (credentials.email as string).trim().toLowerCase();
@@ -41,17 +39,33 @@ export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email },
-          include: {
-            memberships: {
-              include: { dealer: true },
-              take: 1,
-            },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            accountStatus: true,
+            passwordHash: true,
+            emailVerifiedAt: true,
           },
         });
 
-        if (!user) return null;
+        if (!user) {
+          await recordFailedLogin(email);
+          return null;
+        }
 
-        // OAuth-only users have null passwordHash — cannot password-login
+        // Platform ADMIN only — dealer OWNER / DEALER_USER never pass
+        if (user.role !== "ADMIN") {
+          await recordFailedLogin(email);
+          return null;
+        }
+
+        if (user.accountStatus !== "ACTIVE") {
+          await recordFailedLogin(email);
+          return null;
+        }
+
         if (!user.passwordHash) {
           await recordFailedLogin(email);
           return null;
@@ -68,21 +82,14 @@ export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
 
         await clearLoginFailures(email);
 
-        const membership = user.memberships[0];
-
-        // Platform ADMIN without dealer membership must use /admin login
-        if (user.role === "ADMIN" && !membership) {
-          return null;
-        }
-
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
-          dealerId: membership?.dealerId ?? null,
-          dealerName: membership?.dealer.businessName ?? null,
-          verificationStatus: membership?.dealer.verificationStatus ?? null,
+          dealerId: null,
+          dealerName: null,
+          verificationStatus: null,
           emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
         };
       },
@@ -93,11 +100,9 @@ export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
       if (user) {
         token.id = user.id!;
         token.role = (user as { role?: string }).role;
-        token.dealerId = (user as { dealerId?: string | null }).dealerId;
-        token.dealerName = (user as { dealerName?: string | null }).dealerName;
-        token.verificationStatus = (
-          user as { verificationStatus?: string | null }
-        ).verificationStatus;
+        token.dealerId = null;
+        token.dealerName = null;
+        token.verificationStatus = null;
         token.emailVerifiedAt = (
           user as { emailVerifiedAt?: string | null }
         ).emailVerifiedAt;
@@ -108,35 +113,52 @@ export const { handlers, signIn, signOut, auth: uncachedAuth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
-        session.user.dealerId = token.dealerId as string | null;
-        session.user.dealerName = token.dealerName as string | null;
-        session.user.verificationStatus = token.verificationStatus as
-          | string
-          | null;
+        session.user.dealerId = null;
+        session.user.dealerName = null;
+        session.user.verificationStatus = null;
         session.user.emailVerifiedAt = token.emailVerifiedAt as string | null;
       }
       return session;
     },
   },
   pages: {
-    signIn: "/login",
+    signIn: "/admin",
   },
-  session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
+  session: {
+    strategy: "jwt",
+    /** Shorter than dealer (30d) — 8 hours */
+    maxAge: 8 * 60 * 60,
+  },
   cookies: {
     sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-authjs.session-token"
-          : "authjs.session-token",
+      name: isProd ? "__Secure-admin-session-token" : "admin-session-token",
       options: {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: isProd,
+      },
+    },
+    csrfToken: {
+      name: isProd ? "__Host-admin.csrf-token" : "admin.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: isProd,
+      },
+    },
+    callbackUrl: {
+      name: isProd ? "__Secure-admin.callback-url" : "admin.callback-url",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: isProd,
       },
     },
   },
 });
 
-/** Per-request dedup when layout + page both resolve session */
-export const auth = cache(uncachedAuth);
+/** Per-request dedup when layout + page both resolve admin session */
+export const adminAuth = cache(uncachedAdminAuth);

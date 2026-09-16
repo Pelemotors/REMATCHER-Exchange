@@ -1,8 +1,8 @@
-import { auth } from "@/lib/auth";
+import { requireAdminPageSession } from "@/lib/admin-page-gate";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { AdminTestPushButton } from "@/components/admin/admin-test-push";
-import { ButtonV2, Surface } from "@/components/ui/brand-v2";
+import { Surface } from "@/components/ui/brand-v2";
 import { verificationLabel } from "@/lib/brand-copy";
 import {
   getAdminAttentionItems,
@@ -10,8 +10,8 @@ import {
 } from "@/services/admin/control-center";
 
 export default async function AdminPage() {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN") return null;
+  const session = await requireAdminPageSession();
+  if (!session) return null;
 
   const [attention, funnel7d, funnel30d, funnelToday] = await Promise.all([
     getAdminAttentionItems(), getAdminFunnelMetrics(7), getAdminFunnelMetrics(30), getAdminFunnelMetrics(1),
@@ -36,7 +36,7 @@ export default async function AdminPage() {
 
   return (
     <div className="container-app py-8">
-      <h1 className="mb-2 text-2xl font-bold text-v2-warm">Control Center</h1>
+      <h1 className="mb-2 text-2xl font-bold text-v2-warm">סקירה</h1>
       <p className="mb-6 text-sm text-v2-text-secondary">האם ה-Exchange פעיל, מה קורה, ומה דורש טיפול</p>
 
       <section className="mb-8">
@@ -67,7 +67,6 @@ export default async function AdminPage() {
       </section>
 
       <section><h2 className="mb-4 font-semibold text-v2-text-primary">AI Operations</h2><div className="space-y-1 text-sm">{aiLogs.map((log)=><div key={log.id} className={`rounded-lg px-3 py-2 ${log.success ? "bg-success-soft" : "bg-error-soft"}`}>{log.operation} · {log.model} · {log.success ? "OK" : log.errorMessage}</div>)}{aiLogs.length===0 && <p className="text-v2-text-muted">אין פעולות AI עדיין</p>}</div></section>
-      <ButtonV2 variant="secondary" href="/home" className="mt-8">חזרה לאפליקציה</ButtonV2>
     </div>
   );
 }

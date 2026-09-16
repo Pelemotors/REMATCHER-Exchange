@@ -429,8 +429,9 @@ export function ExchangeLanding() {
                 הפעל את הקטלוג שלי
               </Link>
               <p className={styles.comingNote}>
-                קטלוג ציבורי — יכולת מוצרית מתוכננת. ההרשמה פותחת גישה ל־Exchange;
-                הפעלת הקטלוג תושלם כשהערוץ יהיה זמין בחשבון.
+                אופציונלי לחלוטין — אחרי הרשמה אפשר לבחור כתובת כמו{" "}
+                <span dir="ltr">galeria.rematcher.co.il</span> ולפרסם רכבים
+                מהמלאי בלי להעלות שוב. REMATCHER עובדת גם בלי קטלוג.
               </p>
             </div>
           </div>

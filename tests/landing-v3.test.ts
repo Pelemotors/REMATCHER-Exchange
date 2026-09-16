@@ -47,6 +47,7 @@ describe("Marketing landing v3", () => {
   it("digital catalog CTA is honest about availability", () => {
     const src = read("src/components/landing/v3/exchange-landing.tsx");
     expect(src).toContain("הפעל את הקטלוג שלי");
-    expect(src).toContain("יכולת מוצרית מתוכננת");
+    expect(src).toContain("אופציונלי לחלוטין");
+    expect(src).not.toContain("יכולת מוצרית מתוכננת");
   });
 });

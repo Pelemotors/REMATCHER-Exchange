@@ -38,6 +38,7 @@ const pageTitles: Record<string, string> = {
   "/account": "חשבון",
   "/opportunities": "הזדמנויות",
   "/validations": "אימותים",
+  "/catalog": "קטלוג",
 };
 
 function resolveTitle(pathname: string) {

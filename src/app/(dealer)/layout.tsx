@@ -37,11 +37,7 @@ export default async function DealerLayout({
     redirect("/pending-approval");
   }
 
-  if (session.user.role === "ADMIN" && !session.user.dealerId) {
-    redirect("/admin");
-  }
-
-  if (!canAccessExchange(session.user) && session.user.role !== "ADMIN") {
+  if (!canAccessExchange(session.user)) {
     redirect("/pending-approval");
   }
 
