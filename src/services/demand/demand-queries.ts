@@ -18,6 +18,8 @@ export interface EnrichedDemand {
   status: string;
   uxStatus: DemandUxStatus;
   statusLabel: string;
+  networkVisibility: string;
+  networkLabel: string;
   rawText: string;
   title: string;
   subtitle: string;
@@ -32,6 +34,7 @@ export interface EnrichedDemand {
   authorizedMatchCount: number;
   hasAuthorizedMatch: boolean;
   matchHint: string | null;
+  customerId: string | null;
 }
 
 export async function getEnrichedDemandsForDealer(
@@ -87,6 +90,9 @@ export async function getEnrichedDemandsForDealer(
       status: d.status,
       uxStatus,
       statusLabel: demandStatusLabel(uxStatus),
+      networkVisibility: d.networkVisibility,
+      networkLabel:
+        d.networkVisibility === "ANONYMOUS_NETWORK" ? "ברשת" : "פרטי",
       rawText: d.rawText,
       title: demandTitle(confirmed),
       subtitle: demandSubtitle(confirmed),
@@ -101,6 +107,7 @@ export async function getEnrichedDemandsForDealer(
       authorizedMatchCount,
       hasAuthorizedMatch,
       matchHint,
+      customerId: d.customerId,
     });
   }
 

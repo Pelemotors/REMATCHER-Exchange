@@ -14,6 +14,7 @@ export type DemandUxStatus =
   | "DRAFT"
   | "PENDING_CONFIRMATION"
   | "ACTIVE"
+  | "PAUSED"
   | "EXPIRING"
   | "EXPIRED"
   | "CLOSED";
@@ -200,6 +201,7 @@ export function computeDemandUxStatus(
   if (status === "EXPIRED") return "EXPIRED";
   if (status === "DRAFT") return "DRAFT";
   if (status === "PENDING_CONFIRMATION") return "PENDING_CONFIRMATION";
+  if (status === "PAUSED") return "PAUSED";
   if (status === "ACTIVE" && expiresAt) {
     const msLeft = expiresAt.getTime() - Date.now();
     const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
@@ -213,6 +215,8 @@ export function demandStatusLabel(uxStatus: DemandUxStatus): string {
   switch (uxStatus) {
     case "ACTIVE":
       return "פעיל";
+    case "PAUSED":
+      return "מושהה";
     case "EXPIRING":
       return "מסתיים בקרוב";
     case "EXPIRED":
@@ -256,6 +260,8 @@ export function demandReflectionText(
           : " החיפוש פעיל.";
   } else if (uxStatus === "EXPIRING") {
     statusPart = " החיפוש עומד להסתיים בקרוב.";
+  } else if (uxStatus === "PAUSED") {
+    statusPart = " החיפוש מושהה — לא מחפש ברשת כרגע.";
   } else if (uxStatus === "EXPIRED") {
     statusPart = " החיפוש הסתיים.";
   } else if (uxStatus === "CLOSED") {

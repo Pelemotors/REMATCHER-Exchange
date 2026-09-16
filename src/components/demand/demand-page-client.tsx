@@ -28,6 +28,7 @@ function constraintLine(demand: EnrichedDemand): string {
 function humanStatus(demand: EnrichedDemand): string | null {
   if (demand.uxStatus === "EXPIRING") return "מסתיים בקרוב";
   if (demand.uxStatus === "ACTIVE") return "פעיל";
+  if (demand.uxStatus === "PAUSED") return "מושהה";
   if (demand.uxStatus === "PENDING_CONFIRMATION") return "ממתין לאישור";
   if (demand.uxStatus === "EXPIRED") return "הסתיים";
   if (demand.uxStatus === "CLOSED") return "נסגר";
@@ -274,6 +275,27 @@ export function DemandPageClient({
     if (detailDemand?.id === id) exitToList();
   }
 
+  async function handleLifecycle(
+    id: string,
+    action: "pause" | "resume" | "publish_network" | "unpublish_network"
+  ) {
+    await fetch("/api/demands/lifecycle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ demandId: id, action }),
+    });
+    await load();
+    if (detailDemand?.id === id) {
+      const res = await fetch("/api/demands?history=true", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        const all = [...(data.active ?? []), ...(data.ended ?? [])] as EnrichedDemand[];
+        const next = all.find((d) => d.id === id) ?? null;
+        if (next) setDetailDemand(next);
+      }
+    }
+  }
+
   async function handleInterest(matchId: string, action: "interested" | "reject") {
     setActionLoading(matchId);
     try {
@@ -413,6 +435,12 @@ export function DemandPageClient({
             <p className={styles.detailMeta}>{constraintLine(detailDemand)}</p>
           )}
           {status && <p className={styles.detailStatus}>{status}</p>}
+          <p className="mt-1 text-sm text-v2-text-muted">
+            {detailDemand.networkLabel ??
+              (detailDemand.networkVisibility === "ANONYMOUS_NETWORK"
+                ? "ברשת"
+                : "פרטי")}
+          </p>
           <div className={styles.detailActions}>
             {canEditDemand(detailDemand) && (
               <ButtonV2
@@ -433,7 +461,7 @@ export function DemandPageClient({
             )}
             {detailDemand.uxStatus === "EXPIRED" && (
               <ButtonV2
-                variant="signal"
+                variant="primary"
                 className="text-sm"
                 onClick={() => void handleRenew(detailDemand.id)}
               >
@@ -441,6 +469,48 @@ export function DemandPageClient({
               </ButtonV2>
             )}
             {isLive && (
+              <ButtonV2
+                variant="secondary"
+                className="text-sm"
+                onClick={() => void handleLifecycle(detailDemand.id, "pause")}
+              >
+                השהה
+              </ButtonV2>
+            )}
+            {detailDemand.uxStatus === "PAUSED" && (
+              <ButtonV2
+                variant="primary"
+                className="text-sm"
+                onClick={() => void handleLifecycle(detailDemand.id, "resume")}
+              >
+                המשך חיפוש
+              </ButtonV2>
+            )}
+            {(isLive || detailDemand.uxStatus === "PAUSED") &&
+              detailDemand.networkVisibility !== "ANONYMOUS_NETWORK" && (
+                <ButtonV2
+                  variant="primary"
+                  className="text-sm"
+                  onClick={() =>
+                    void handleLifecycle(detailDemand.id, "publish_network")
+                  }
+                >
+                  הפעל ברשת
+                </ButtonV2>
+              )}
+            {(isLive || detailDemand.uxStatus === "PAUSED") &&
+              detailDemand.networkVisibility === "ANONYMOUS_NETWORK" && (
+                <ButtonV2
+                  variant="secondary"
+                  className="text-sm"
+                  onClick={() =>
+                    void handleLifecycle(detailDemand.id, "unpublish_network")
+                  }
+                >
+                  הסר מהרשת
+                </ButtonV2>
+              )}
+            {(isLive || detailDemand.uxStatus === "PAUSED") && (
               <ButtonV2
                 variant="ghost"
                 className="text-sm"

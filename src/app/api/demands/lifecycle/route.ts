@@ -82,6 +82,25 @@ export async function POST(req: Request) {
     return NextResponse.json(result.demand);
   }
 
+  if (action === "publish_network") {
+    const updated = await prisma.demand.update({
+      where: { id: demandId },
+      data: { networkVisibility: "ANONYMOUS_NETWORK" },
+    });
+    if (updated.status === "ACTIVE") {
+      void runMatchingForDemand(demandId).catch(() => undefined);
+    }
+    return NextResponse.json(updated);
+  }
+
+  if (action === "unpublish_network") {
+    const updated = await prisma.demand.update({
+      where: { id: demandId },
+      data: { networkVisibility: "PRIVATE" },
+    });
+    return NextResponse.json(updated);
+  }
+
   if (action === "renew") {
     const updated = await prisma.demand.update({
       where: { id: demandId },

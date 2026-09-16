@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   );
 
   const active = demands.filter((d) =>
-    ["ACTIVE", "EXPIRING", "PENDING_CONFIRMATION"].includes(d.uxStatus)
+    ["ACTIVE", "EXPIRING", "PENDING_CONFIRMATION", "PAUSED"].includes(d.uxStatus)
   );
   const ended = demands.filter((d) =>
     ["EXPIRED", "CLOSED"].includes(d.uxStatus)
