@@ -54,17 +54,24 @@ export async function getConsentState(dealerId: string): Promise<ConsentState> {
   return state;
 }
 
+const privacyCompleteCache = new Map<string, { ok: boolean; exp: number }>();
+
 export async function hasCompletedPrivacyAiV1(params: {
   userId: string;
   dealerId: string;
 }): Promise<boolean> {
+  const key = `${params.userId}:${params.dealerId}`;
+  const hit = privacyCompleteCache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.ok;
   const row = await prisma.privacyAiOnboardingState.findUnique({
     where: {
       userId_dealerId: { userId: params.userId, dealerId: params.dealerId },
     },
     select: { completedAt: true },
   });
-  return Boolean(row?.completedAt);
+  const ok = Boolean(row?.completedAt);
+  privacyCompleteCache.set(key, { ok, exp: Date.now() + 60_000 });
+  return ok;
 }
 
 export async function mayPersistDealerMemory(dealerId: string): Promise<boolean> {

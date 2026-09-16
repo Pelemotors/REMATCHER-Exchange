@@ -1,0 +1,86 @@
+{
+  "files": [
+    "batch16/v1a.jpg",
+    "batch16/v1b.jpg",
+    "batch16/v1c.jpg",
+    "batch16/v2a.jpg",
+    "batch16/v2b.jpg",
+    "batch16/v2c.jpg",
+    "batch16/v3a.jpg",
+    "batch16/v3b.jpg",
+    "batch16/v4a.jpg",
+    "batch16/v4b.jpg",
+    "batch16/v5a.jpg",
+    "batch16/v5b.jpg",
+    "batch16/v6a.jpg",
+    "batch16/v6b.jpg",
+    "batch16/v7a.jpg",
+    "batch16/unknown-interior.jpg"
+  ],
+  "vehicles": [
+    {
+      "plate": "12-345-67",
+      "label": "Mazda CX-5",
+      "files": [
+        "v1a.jpg",
+        "v1b.jpg",
+        "v1c.jpg"
+      ],
+      "fill": "#2c3a4a"
+    },
+    {
+      "plate": "98-765-43",
+      "label": "BMW X3",
+      "files": [
+        "v2a.jpg",
+        "v2b.jpg",
+        "v2c.jpg"
+      ],
+      "fill": "#3a2c2c"
+    },
+    {
+      "plate": "11-222-33",
+      "label": "Toyota RAV4",
+      "files": [
+        "v3a.jpg",
+        "v3b.jpg"
+      ],
+      "fill": "#2c3a2c"
+    },
+    {
+      "plate": "22-333-44",
+      "label": "Kia Sportage",
+      "files": [
+        "v4a.jpg",
+        "v4b.jpg"
+      ],
+      "fill": "#2c2c3a"
+    },
+    {
+      "plate": "33-444-55",
+      "label": "Hyundai Tucson",
+      "files": [
+        "v5a.jpg",
+        "v5b.jpg"
+      ],
+      "fill": "#3a3a2c"
+    },
+    {
+      "plate": "44-555-66",
+      "label": "Skoda Kodiaq",
+      "files": [
+        "v6a.jpg",
+        "v6b.jpg"
+      ],
+      "fill": "#2a3340"
+    },
+    {
+      "plate": "55-666-77",
+      "label": "Volvo XC60",
+      "files": [
+        "v7a.jpg"
+      ],
+      "fill": "#203040"
+    }
+  ]
+}

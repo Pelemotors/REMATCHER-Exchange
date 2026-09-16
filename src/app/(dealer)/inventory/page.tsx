@@ -1,12 +1,9 @@
 import { Suspense } from "react";
-import { auth } from "@/lib/auth";
 import {
   InventoryPageClient,
   type InventoryFilterId,
 } from "@/components/inventory/inventory-page-client";
-import { InventoryEnrichmentPanel } from "@/components/inventory/inventory-enrichment-panel";
-import { ActionCardLoadingSkeleton } from "@/components/ui/brand-v2";
-import { getInventoryList } from "@/services/inventory/list-inventory";
+import { ListLoadingSkeleton } from "@/components/ui/brand-v2";
 
 const FILTERS: InventoryFilterId[] = [
   "all",
@@ -20,8 +17,6 @@ const FILTERS: InventoryFilterId[] = [
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 async function InventoryContent({ searchParams }: { searchParams: SearchParams }) {
-  const session = await auth();
-  const dealerId = session!.user!.dealerId!;
   const params = await searchParams;
   const requestedFilter = Array.isArray(params.filter)
     ? params.filter[0]
@@ -32,34 +27,17 @@ async function InventoryContent({ searchParams }: { searchParams: SearchParams }
     ? (requestedFilter as InventoryFilterId)
     : "active";
 
-  const initialData = await getInventoryList({
-    dealerId,
-    page: 1,
-    pageSize: 50,
-    filter: initialFilter,
-  });
-
-  const focus = Array.isArray(params.focus) ? params.focus[0] : params.focus;
-  const enrich = Array.isArray(params.enrich) ? params.enrich[0] : params.enrich;
-  const enrichmentVehicle =
-    enrich === "1" && focus
-      ? initialData.vehicles.find((vehicle) => vehicle.id === focus) ?? null
-      : null;
-
   return (
-    <>
-      {enrichmentVehicle && <InventoryEnrichmentPanel vehicle={enrichmentVehicle} />}
-      <InventoryPageClient
-        initialData={initialData}
-        initialFilter={initialFilter}
-      />
-    </>
+    <InventoryPageClient
+      initialData={null}
+      initialFilter={initialFilter}
+    />
   );
 }
 
 export default function InventoryPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={<ActionCardLoadingSkeleton />}>
+    <Suspense fallback={<ListLoadingSkeleton />}>
       <InventoryContent searchParams={searchParams} />
     </Suspense>
   );

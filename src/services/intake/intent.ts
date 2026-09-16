@@ -97,7 +97,7 @@ export function parseIntakeIntentText(message: string): ParsedIntakeIntent {
 
 export function intentFromButton(value: string): IntakeIntentKind | null {
   const v = value.trim();
-  if (v === "OWNED" || v === "למלאי") return "OWNED";
+  if (v === "OWNED" || v === "למלאי" || v === "למלאי שלי") return "OWNED";
   if (v === "OFFERED_TO_ME" || v === "מציעים לי") return "OFFERED_TO_ME";
   if (v === "TRADE_IN_CANDIDATE" || v === "טרייד") return "TRADE_IN_CANDIDATE";
   if (v === "EXTERNAL" || v === "רק בודק") return "EXTERNAL";

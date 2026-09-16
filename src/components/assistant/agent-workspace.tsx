@@ -289,7 +289,9 @@ export function AgentWorkspace() {
   } = useAgentWorkspace();
 
   const open = presentationMode !== "closed";
-  const showFab = !(isDesktop && open) && presentationMode !== "focus";
+  // Pixel-faithful dealer shell: no permanent Agent FAB / sidebar.
+  // Agent opens from contextual actions ("מה יש לי עליו?", Home, etc.).
+  const showFab = false;
 
   useEffect(() => {
     if (presentationMode !== "focus") return;

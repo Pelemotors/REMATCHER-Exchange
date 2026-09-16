@@ -121,18 +121,38 @@ function openInventoryAssistant() {
   );
 }
 
+const EMPTY_INVENTORY: InventoryInitialData = {
+  vehicles: [],
+  snapshot: {
+    total: 0,
+    sold: 0,
+    all: 0,
+    needsAttention: 0,
+    withInterest: 0,
+    pendingValidation: 0,
+    missingPrivatePrice: 0,
+  },
+  pagination: {
+    page: 1,
+    pageSize: 20,
+    totalCount: 0,
+    hasMore: false,
+  },
+};
+
 export function InventoryPageClient({
   initialData,
   initialFilter,
 }: {
-  initialData: InventoryInitialData;
+  initialData: InventoryInitialData | null;
   initialFilter: InventoryFilterId;
 }) {
   const searchParams = useSearchParams();
-  const [vehicles, setVehicles] = useState<InventoryVehicle[]>(initialData.vehicles);
-  const [snapshot, setSnapshot] = useState(initialData.snapshot);
-  const [pagination, setPagination] = useState(initialData.pagination);
-  const [loading, setLoading] = useState(false);
+  const seed = initialData ?? EMPTY_INVENTORY;
+  const [vehicles, setVehicles] = useState<InventoryVehicle[]>(seed.vehicles);
+  const [snapshot, setSnapshot] = useState(seed.snapshot);
+  const [pagination, setPagination] = useState(seed.pagination);
+  const [loading, setLoading] = useState(!initialData);
   const [filter, setFilter] = useState<InventoryFilterId>(initialFilter);
   const [query, setQuery] = useState("");
   const firstFilterEffect = useRef(true);
@@ -152,6 +172,13 @@ export function InventoryPageClient({
   }>({ loading: false, text: null });
 
   useSetAgentPageContext({ surface: "inventory", route: "/inventory" }, []);
+
+  useEffect(() => {
+    if (initialData) return;
+    setLoading(true);
+    void load({ page: 1, filter: initialFilter, q: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function load(opts?: { page?: number; filter?: InventoryFilterId; q?: string }) {
     const page = opts?.page ?? pagination.page;
@@ -620,6 +647,10 @@ export function InventoryPageClient({
                     src={v.thumbUrl}
                     alt=""
                     className={styles.thumbImg}
+                    loading="lazy"
+                    decoding="async"
+                    width={56}
+                    height={56}
                   />
                 ) : (
                   <div className={styles.thumb} aria-hidden />

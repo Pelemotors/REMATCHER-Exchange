@@ -3,12 +3,10 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User } from "lucide-react";
-import { BrandLockup } from "@/components/brand/brand-mark";
-import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
+import { Plus, User } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { AgentWorkspaceProvider } from "@/components/assistant/agent-workspace-provider";
 import { useAgentShellFlags } from "@/components/layout/agent-shell-chrome";
-import { BRAND } from "@/config/brand";
 import { MOBILE_BOTTOM_NAV_ITEMS, SECONDARY_NAV_ITEMS } from "@/config/mobile-nav";
 import { cn } from "@/lib/utils";
 import styles from "./app-shell-v2.module.css";
@@ -29,105 +27,123 @@ const PushOnboardingPrompt = dynamic(
   { ssr: false }
 );
 
-const pageTitles: Record<string, string> = {
-  "/home": "בית",
-  "/inventory": "המלאי שלי",
-  "/demand": "החיפושים שלי",
-  "/matches": "התאמות",
-  "/activity": "פעילות",
-  "/account": "חשבון",
-  "/opportunities": "הזדמנויות",
-  "/validations": "אימותים",
-  "/catalog": "קטלוג",
-};
-
-function resolveTitle(pathname: string) {
-  const match = Object.entries(pageTitles).find(([path]) =>
-    pathname.startsWith(path)
-  );
-  return match?.[1] ?? BRAND.productShort;
+function isActive(pathname: string, href: string) {
+  if (href === "/home") return pathname === "/home" || pathname === "/";
+  return pathname.startsWith(href);
 }
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const title = resolveTitle(pathname);
-  const { hideMobileNav, desktopAgentOpen } = useAgentShellFlags();
+  const { hideMobileNav } = useAgentShellFlags();
+  const intake = pathname.startsWith("/intake");
 
   return (
-    <div
-      data-app-shell="true"
-      className={cn(
-        styles.shell,
-        desktopAgentOpen && styles.shellWithAgent
-      )}
-    >
+    <div data-app-shell="true" className={styles.shell}>
       <aside className={styles.sidebar}>
-        <Link href="/home" className={styles.brandLockup}>
-          <BrandLockup markSize={32} />
+        <Link href="/home" className={styles.brandLockup} aria-label="REMATCHER Exchange">
+          <BrandMark variant="gold" size={28} />
         </Link>
-
         <nav className={styles.sidebarNav} aria-label="ניווט ראשי">
           {MOBILE_BOTTOM_NAV_ITEMS.map((item) => (
-            <NavItemV2
+            <Link
               key={item.href}
               href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={pathname.startsWith(item.href)}
-            />
+              prefetch
+              aria-current={isActive(pathname, item.href) ? "page" : undefined}
+              className={cn(
+                styles.navItem,
+                isActive(pathname, item.href) && styles.navItemActive
+              )}
+            >
+              {item.capture ? (
+                <span className={styles.captureFab} style={{ marginTop: 0, width: 40, height: 40, borderRadius: 12 }}>
+                  <Plus size={20} strokeWidth={2.4} />
+                </span>
+              ) : (
+                <item.icon size={20} strokeWidth={1.75} aria-hidden />
+              )}
+              <span className={styles.navLabel}>{item.label}</span>
+            </Link>
           ))}
         </nav>
-
         <div className={styles.sidebarFooter}>
-          {SECONDARY_NAV_ITEMS.map((item) => (
-            <NavItemV2
+          {SECONDARY_NAV_ITEMS.slice(0, 3).map((item) => (
+            <Link
               key={item.href}
               href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={pathname.startsWith(item.href)}
-            />
+              prefetch
+              className={cn(
+                styles.navItem,
+                isActive(pathname, item.href) && styles.navItemActive
+              )}
+            >
+              <item.icon size={18} strokeWidth={1.75} aria-hidden />
+              <span className={styles.navLabel}>{item.label}</span>
+            </Link>
           ))}
         </div>
       </aside>
 
       <div className={styles.mainColumn}>
-        <header className={styles.mobileHeader}>
-          <span className={styles.headerSpacer} aria-hidden />
-          <span className={styles.mobileTitle}>{title}</span>
-          <Link
-            href="/account"
-            className={styles.accountButton}
-            aria-label="חשבון"
-          >
-            <User className="h-5 w-5" strokeWidth={1.75} />
-          </Link>
-        </header>
+        {!intake ? (
+          <header className={styles.mobileHeader}>
+            <Link href="/home" className={styles.headerBrand}>
+              <BrandMark variant="gold" size={22} />
+              <span className={styles.brandText}>
+                <span className={styles.brandName}>REMATCHER</span>
+                <span className={styles.brandSub}>Exchange</span>
+              </span>
+            </Link>
+            <Link href="/account" className={styles.accountButton} aria-label="חשבון">
+              <User className="h-5 w-5" strokeWidth={1.75} />
+            </Link>
+          </header>
+        ) : null}
 
-        <main className={styles.content}>{children}</main>
+        <main className={cn(styles.content, intake && styles.contentFlush)}>
+          {children}
+        </main>
         <PushOnboardingPrompt />
         <ExchangeAssistant />
       </div>
 
       <nav
-        className={cn(
-          styles.mobileNav,
-          hideMobileNav && styles.mobileNavHidden
-        )}
+        className={cn(styles.mobileNav, hideMobileNav && styles.mobileNavHidden)}
         aria-label="ניווט תחתון"
         hidden={hideMobileNav}
       >
         <div className={styles.mobileNavInner}>
-          {MOBILE_BOTTOM_NAV_ITEMS.map((item) => (
-            <NavItemV2
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={pathname.startsWith(item.href)}
-              compact
-            />
-          ))}
+          {MOBILE_BOTTOM_NAV_ITEMS.map((item) => {
+            const active = isActive(pathname, item.href);
+            if (item.capture) {
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  prefetch
+                  aria-current={active ? "page" : undefined}
+                  className={cn(styles.captureSlot, active && styles.captureSlotActive)}
+                >
+                  <span className={styles.captureFab}>
+                    <Plus size={26} strokeWidth={2.5} aria-hidden />
+                  </span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            }
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch
+                aria-current={active ? "page" : undefined}
+                className={cn(styles.navItem, active && styles.navItemActive)}
+              >
+                <item.icon size={20} strokeWidth={active ? 2 : 1.7} aria-hidden />
+                <span className={styles.navLabel}>{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

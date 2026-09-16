@@ -168,8 +168,8 @@ describe("navigation simplification", () => {
     expect(MOBILE_BOTTOM_NAV_ITEMS.map((i) => i.href)).toEqual([
       "/home",
       "/inventory",
+      "/intake/handoff",
       "/demand",
-      "/matches",
       "/account",
     ]);
     expect(SECONDARY_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(true);

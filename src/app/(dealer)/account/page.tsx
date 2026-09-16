@@ -96,6 +96,9 @@ export default function AccountPage() {
 
       <Surface depth="raised" className="mb-4 space-y-3 p-4">
         <h3 className="font-semibold text-v2-text-primary">עבודה</h3>
+        <ButtonV2 variant="secondary" href="/matches" className="w-full">
+          התאמות
+        </ButtonV2>
         <ButtonV2 variant="secondary" href="/customers" className="w-full">
           לקוחות
         </ButtonV2>

@@ -2,7 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  ChevronRight,
+  MoreHorizontal,
+  Image as ImageIcon,
+  Camera,
+  FileText,
+  Plus,
+  Mic,
+  Package,
+  Tag,
+  RefreshCw,
+  Search,
+  User,
+  Check,
+} from "lucide-react";
 import { useAgentWorkspaceOptional } from "@/components/assistant/agent-workspace-provider";
+import { AgentOrb, AgentAvatar } from "@/components/brand/agent-orb";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { formatIsraeliPlate } from "@/services/intake/discovery";
 import styles from "./intake-conversation.module.css";
 
@@ -68,14 +86,21 @@ type BatchDto = {
 };
 
 const INTENTS = [
-  { value: "OWNED", label: "למלאי", primary: true },
-  { value: "OFFERED_TO_ME", label: "מציעים לי", primary: false },
-  { value: "TRADE_IN_CANDIDATE", label: "טרייד", primary: false },
-  { value: "EXTERNAL", label: "רק בודק", primary: false },
+  { value: "OWNED", label: "למלאי שלי", tone: "owned", Icon: Package },
+  { value: "OFFERED_TO_ME", label: "מציעים לי", tone: "offered", Icon: Tag },
+  { value: "TRADE_IN_CANDIDATE", label: "טרייד", tone: "trade", Icon: RefreshCw },
+  { value: "EXTERNAL", label: "רק בודק", tone: "check", Icon: Search },
 ] as const;
 
+const INTENT_TONE: Record<string, string> = {
+  owned: styles.actionOwned,
+  offered: styles.actionOffered,
+  trade: styles.actionTrade,
+  check: styles.actionCheck,
+};
+
 const INTENT_LABEL: Record<string, string> = {
-  OWNED: "למלאי",
+  OWNED: "למלאי שלי",
   OFFERED_TO_ME: "מציעים לי",
   TRADE_IN_CANDIDATE: "טרייד",
   EXTERNAL: "רק בודק",
@@ -141,6 +166,7 @@ export function IntakeHandoffClient() {
   const [demandConfirmed, setDemandConfirmed] = useState(false);
   const seenCandidateCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
 
   const identified = batch?.candidates ?? [];
   const unresolved = batch?.unresolvedMedia ?? [];
@@ -447,26 +473,52 @@ export function IntakeHandoffClient() {
     return localThumbs;
   }, [batch, localThumbs]);
 
-  const readyCount = identified.filter(
-    (c) => c.status === "READY" || c.status === "COMMITTED" || c.make
-  ).length;
+  const processSteps = [
+    { key: "detect", label: "מזהה רכבים בתמונות", done: !processing || identified.length > 0 || mediaCount === 0 },
+    { key: "details", label: "בודק פרטי רכב", done: !processing && identified.length > 0 },
+    { key: "finish", label: "משלים את הזיהוי", done: !processing },
+  ];
 
   return (
     <div className={styles.page} dir="rtl">
       <div className={styles.column}>
         <header className={styles.header}>
-          <div className={styles.headerMark} aria-hidden>
-            R
-          </div>
-          <div>
-            <h1 className={styles.headerTitle}>קליטת רכב</h1>
-            <p className={styles.headerSub}>REMATCHER Exchange</p>
-          </div>
+          {phase === "capture" ? (
+            <>
+              <div className={styles.headerMark} aria-hidden>
+                <BrandMark variant="gold" size={22} />
+              </div>
+              <div className={styles.headerBrand}>
+                <p className={styles.headerTitle}>REMATCHER</p>
+                <p className={styles.headerSub}>Exchange</p>
+              </div>
+              <Link href="/account" className={styles.headerIcon} aria-label="חשבון">
+                <User size={18} strokeWidth={1.75} />
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/home" className={styles.headerIcon} aria-label="חזרה">
+                <ChevronRight size={22} strokeWidth={1.75} />
+              </Link>
+              <div className={styles.headerBrand}>
+                <p className={styles.headerTitle}>REMATCHER</p>
+                <p className={styles.headerSub}>Exchange</p>
+              </div>
+              <Link href="/account" className={styles.headerIcon} aria-label="עוד">
+                <MoreHorizontal size={20} strokeWidth={1.75} />
+              </Link>
+            </>
+          )}
         </header>
 
         <div className={styles.scroll} ref={scrollRef}>
           {phase === "capture" ? (
             <div className={styles.capture}>
+              <div className={styles.orbWrap}>
+                <AgentOrb size={118} />
+              </div>
+              <h1 className={styles.captureTitle}>קליטת רכב</h1>
               <p className={styles.lead}>שלח לי את הרכב — אני כבר אטפל בשאר.</p>
               {isNativeShare ? (
                 <p className={styles.headerSub}>
@@ -474,9 +526,18 @@ export function IntakeHandoffClient() {
                 </p>
               ) : (
                 <div className={styles.captureActions}>
-                  <label className={styles.primaryAction}>
-                    {uploading ? "מעלה…" : "בחר מהגלריה"}
+                  <label className={styles.actionCard}>
+                    <span className={styles.actionIcon} aria-hidden>
+                      <ImageIcon size={20} strokeWidth={1.75} />
+                    </span>
+                    <span className={styles.actionCopy}>
+                      <span className={styles.actionLabel}>
+                        {uploading ? "מעלה…" : "בחר מהגלריה"}
+                      </span>
+                      <span className={styles.actionHint}>בחר תמונות מהמכשיר</span>
+                    </span>
                     <input
+                      ref={galleryRef}
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       multiple
@@ -485,8 +546,14 @@ export function IntakeHandoffClient() {
                       onChange={(e) => void onFiles(e.target.files)}
                     />
                   </label>
-                  <label className={styles.secondaryAction}>
-                    {uploading ? "מעלה…" : "צלם רכב"}
+                  <label className={styles.actionCard}>
+                    <span className={styles.actionIcon} aria-hidden>
+                      <Camera size={20} strokeWidth={1.75} />
+                    </span>
+                    <span className={styles.actionCopy}>
+                      <span className={styles.actionLabel}>צלם רכב</span>
+                      <span className={styles.actionHint}>צלם עכשיו</span>
+                    </span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
@@ -498,10 +565,16 @@ export function IntakeHandoffClient() {
                   </label>
                   <button
                     type="button"
-                    className={styles.tertiaryAction}
+                    className={styles.actionCard}
                     onClick={() => setShowPaste((v) => !v)}
                   >
-                    הדבק טקסט / מידע
+                    <span className={styles.actionIcon} aria-hidden>
+                      <FileText size={20} strokeWidth={1.75} />
+                    </span>
+                    <span className={styles.actionCopy}>
+                      <span className={styles.actionLabel}>הדבק טקסט / מידע</span>
+                      <span className={styles.actionHint}>למשל: מספר רכב, הערות וכו׳</span>
+                    </span>
                   </button>
                   {showPaste ? (
                     <>
@@ -523,34 +596,47 @@ export function IntakeHandoffClient() {
                   ) : null}
                 </div>
               )}
+              <p className={styles.whatsappHint}>
+                <span className={styles.whatsappIcon} aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12.04 2C6.58 2 2.15 6.43 2.15 11.89c0 1.95.51 3.86 1.48 5.54L2 22l4.71-1.55a9.86 9.86 0 0 0 5.33 1.44h.01c5.46 0 9.89-4.43 9.89-9.89C21.94 6.43 17.5 2 12.04 2zm5.76 14.01c-.24.68-1.4 1.26-1.95 1.34-.5.07-1.13.1-1.82-.11-.42-.13-.96-.31-1.65-.61-2.9-1.26-4.79-4.2-4.94-4.4-.14-.2-1.18-1.57-1.18-3 0-1.42.75-2.12 1.01-2.41.27-.28.59-.35.78-.35h.56c.18 0 .42-.07.66.5.24.59.82 2.04.89 2.19.07.15.12.32.02.52-.1.2-.15.32-.3.5-.14.17-.3.39-.43.52-.14.14-.29.29-.12.56.16.28.73 1.2 1.57 1.94 1.08.96 1.99 1.26 2.27 1.4.28.14.44.12.6-.07.16-.2.7-.81.88-1.09.19-.28.37-.23.62-.14.26.1 1.63.77 1.91.91.28.14.46.21.53.32.07.12.07.68-.17 1.36z" />
+                  </svg>
+                </span>
+                <span>
+                  או שתף ישירות מ־WhatsApp — שלח לכאן תמונות או הודעה
+                </span>
+              </p>
             </div>
           ) : (
             <>
-              <div className={styles.userRow}>
-                <div className={styles.userBubble}>
-                  <div className={styles.mediaCluster}>
-                    {thumbs.slice(0, 4).map((src, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={i} src={src} alt="" className={styles.thumb} />
-                    ))}
-                    {mediaCount > 4 ? (
-                      <div className={styles.moreCount}>+{mediaCount - 4}</div>
-                    ) : null}
-                  </div>
-                  <div className={styles.mediaCaption}>
-                    {mediaCount === 1 ? "תמונה אחת" : `${mediaCount} תמונות`}
+              {mediaCount > 0 ? (
+                <div className={styles.userRow}>
+                  <div className={styles.userBubble}>
+                    <div className={styles.mediaCluster}>
+                      {thumbs.slice(0, 4).map((src, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={i} src={src} alt="" className={styles.thumb} />
+                      ))}
+                    </div>
+                    <div className={styles.mediaCaption}>
+                      {mediaCount === 1 ? "תמונה אחת" : `${mediaCount} תמונות`}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : caption.trim() ? (
+                <div className={styles.userRow}>
+                  <div className={styles.userBubble}>{caption.trim()}</div>
+                </div>
+              ) : null}
 
               <div className={styles.agentRow}>
+                <AgentAvatar size={28} />
                 <div className={styles.agentBubble}>
                   {processing ? (
                     <>
-                      <span className={styles.processingDot} />
                       קיבלתי 👍
                       {"\n"}
-                      {caption.trim() && !localThumbs.length
+                      {caption.trim() && !localThumbs.length && !mediaCount
                         ? "בודק מה הלקוח מחפש..."
                         : "בודק את הרכבים..."}
                     </>
@@ -560,31 +646,45 @@ export function IntakeHandoffClient() {
                         ? `קיבלתי ${mediaCount} תמונות.`
                         : "קיבלתי את ההודעה."}
                       {identified.length
-                        ? `\nזיהיתי כאן ${identified.length} רכבים 👇`
-                        : ""}
-                      {readyCount && readyCount !== identified.length
-                        ? `\n${readyCount} מוכנים להחלטה.`
+                        ? `\nסיימתי לבדוק.\nזיהיתי כאן ${identified.length} רכבים 👇`
                         : ""}
                     </>
                   )}
                 </div>
               </div>
 
+              {processing && mediaCount > 0 ? (
+                <div className={styles.processCard} data-testid="intake-process-card">
+                  {processSteps.map((step) => (
+                    <div key={step.key} className={styles.processRow}>
+                      {step.done ? (
+                        <Check size={16} className={styles.processOk} aria-hidden />
+                      ) : (
+                        <span className={styles.processSpin} aria-hidden />
+                      )}
+                      <span>{step.label}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               {batch?.demandDraft?.summaryHe && !demandConfirmed ? (
-                <div className={styles.card}>
-                  <p className={styles.cardTitle}>ביקוש לקוח</p>
-                  <p className={styles.cardMeta} style={{ whiteSpace: "pre-line" }}>
-                    {batch.demandDraft.summaryHe}
-                  </p>
-                  <div className={styles.actions} style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className={`${styles.action} ${styles.actionPrimary}`}
-                      disabled={demandBusy}
-                      onClick={() => void confirmDemandDraft()}
-                    >
-                      {demandBusy ? "שומר…" : "נכון, שמור"}
-                    </button>
+                <div className={styles.card} style={{ gridTemplateColumns: "1fr" }}>
+                  <div>
+                    <p className={styles.cardTitle}>ביקוש לקוח</p>
+                    <p className={styles.cardMeta} style={{ whiteSpace: "pre-line" }}>
+                      {batch.demandDraft.summaryHe}
+                    </p>
+                    <div className={styles.actions} style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className={`${styles.action} ${styles.actionOwned}`}
+                        disabled={demandBusy}
+                        onClick={() => void confirmDemandDraft()}
+                      >
+                        {demandBusy ? "שומר…" : "נכון, שמור"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -623,21 +723,21 @@ export function IntakeHandoffClient() {
                       <p className={styles.cardMeta}>
                         {INTENT_LABEL[c.dealerIntent] ?? c.dealerIntent}
                       </p>
-                      {c.dealerIntent === "OWNED" ? (
-                        <div className={styles.followups}>
-                          <button
-                            type="button"
-                            className={styles.follow}
-                            onClick={() => {
-                              agent?.openAgent({
-                                vehicleId: c.committedVehicleId!,
-                                preferFocusOnMobile: true,
-                              });
-                              void agent?.send("מה יש לי עליו?");
-                            }}
-                          >
-                            מה יש לי עליו?
-                          </button>
+                      <div className={styles.followups}>
+                        <button
+                          type="button"
+                          className={styles.follow}
+                          onClick={() => {
+                            agent?.openAgent({
+                              vehicleId: c.committedVehicleId!,
+                              preferFocusOnMobile: true,
+                            });
+                            void agent?.send("מה יש לי עליו?");
+                          }}
+                        >
+                          מה יש לי עליו?
+                        </button>
+                        {c.dealerIntent === "OWNED" ? (
                           <button
                             type="button"
                             className={styles.follow}
@@ -645,24 +745,8 @@ export function IntakeHandoffClient() {
                           >
                             פרסם גם בקטלוג
                           </button>
-                        </div>
-                      ) : (
-                        <div className={styles.followups}>
-                          <button
-                            type="button"
-                            className={styles.follow}
-                            onClick={() => {
-                              agent?.openAgent({
-                                vehicleId: c.committedVehicleId!,
-                                preferFocusOnMobile: true,
-                              });
-                              void agent?.send("מה יש לי עליו?");
-                            }}
-                          >
-                            מה יש לי עליו?
-                          </button>
-                        </div>
-                      )}
+                        ) : null}
+                      </div>
                       {priceDraft[c.committedVehicleId] != null ? (
                         <div className={styles.followups}>
                           <input
@@ -690,7 +774,7 @@ export function IntakeHandoffClient() {
                   );
                 }
                 return (
-                  <div key={c.id} className={styles.card}>
+                  <div key={c.id} className={styles.card} data-testid="vehicle-candidate-card">
                     {c.thumbUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={c.thumbUrl} alt="" className={styles.cardThumb} />
@@ -700,6 +784,11 @@ export function IntakeHandoffClient() {
                     <div>
                       <p className={styles.cardTitle}>{v.title}</p>
                       <p className={styles.cardMeta}>{v.meta}</p>
+                      {c.plateNormalized || c.detectedPlate ? (
+                        <p className={styles.cardPlate}>
+                          {formatIsraeliPlate(c.plateNormalized || c.detectedPlate)}
+                        </p>
+                      ) : null}
                       {c.status === "NEEDS_INFO" && !c.make ? (
                         <p className={styles.cardAsk}>
                           את הרכב הזה עוד לא הצלחתי לזהות בוודאות. יש לך מספר רכב?
@@ -712,7 +801,7 @@ export function IntakeHandoffClient() {
                           <button
                             key={intent.value}
                             type="button"
-                            className={`${styles.action} ${intent.primary ? styles.actionPrimary : ""}`}
+                            className={`${styles.action} ${INTENT_TONE[intent.tone]}`}
                             disabled={busyIntent != null}
                             onClick={() =>
                               void sendIntent({
@@ -721,12 +810,13 @@ export function IntakeHandoffClient() {
                               })
                             }
                           >
+                            <intent.Icon size={14} strokeWidth={2.2} aria-hidden />
                             {intent.label}
                           </button>
                         ))}
                         <button
                           type="button"
-                          className={styles.action}
+                          className={styles.discard}
                           disabled={busyIntent != null}
                           onClick={() =>
                             void sendIntent({
@@ -745,6 +835,7 @@ export function IntakeHandoffClient() {
 
               {unresolved.length > 0 ? (
                 <div className={styles.agentRow}>
+                  <AgentAvatar size={28} />
                   <div className={styles.agentBubble}>
                     נשארו לי {unresolved.length} תמונות שאני עדיין לא בטוח לאיזה רכב הן שייכות.
                     <div className={styles.mediaCluster} style={{ marginTop: 8 }}>
@@ -812,15 +903,32 @@ export function IntakeHandoffClient() {
               void sendIntent({ message: text });
             }}
           >
+            <button
+              type="button"
+              className={styles.composerPlus}
+              aria-label="הוסף תמונות"
+              onClick={() => galleryRef.current?.click()}
+            >
+              <Plus size={20} strokeWidth={2.2} />
+            </button>
             <textarea
               className={styles.composerInput}
               rows={1}
               placeholder="כתוב ל-REMATCHER..."
               value={composer}
               onChange={(e) => setComposer(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+                }
+              }}
             />
+            <button type="button" className={styles.composerMic} aria-label="הקלטה">
+              <Mic size={18} strokeWidth={1.8} />
+            </button>
             <button className={styles.send} type="submit" disabled={!composer.trim() || phase === "capture"}>
-              ➤
+              שלח
             </button>
           </form>
         </div>
