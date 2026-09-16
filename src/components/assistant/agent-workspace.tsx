@@ -304,6 +304,7 @@ export function AgentWorkspace() {
 
   return (
     <>
+      {showFab ? (
       <button
         type="button"
         onClick={toggleFab}
@@ -313,6 +314,7 @@ export function AgentWorkspace() {
       >
         <MessageSquare className={styles.fabIcon} strokeWidth={1.75} size={20} />
       </button>
+      ) : null}
 
       {open && isDesktop && (
         <AgentPanelChrome variant="desktop" />

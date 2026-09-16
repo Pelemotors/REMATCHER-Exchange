@@ -31,6 +31,12 @@ function loadCreds(which: "buyer" | "seller" = "buyer"): { email: string; passwo
   return { email, password: passMatch[1]! };
 }
 
+async function uploadGallery(page: Page, files: string[]) {
+  const gallery = page.locator('input[type="file"][multiple]');
+  await expect(gallery).toBeEnabled({ timeout: 25000 });
+  await gallery.setInputFiles(files);
+}
+
 async function loginDealer(page: Page, creds: { email: string; password: string }) {
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.locator("#email").fill(creds.email);
@@ -103,7 +109,7 @@ async function captureShot(page: Page, name: string) {
   await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true });
 }
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "default" });
 
 test.describe("Pixel-faithful Production live", () => {
   test("A Capture geometry + screenshots 390", async ({ page }) => {
@@ -145,7 +151,7 @@ test.describe("Pixel-faithful Production live", () => {
     await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible({ timeout: 20000 });
 
     const t0 = Date.now();
-    await page.locator('input[type="file"]').first().setInputFiles(files.slice(0, 16));
+    await uploadGallery(page, files.slice(0, 16));
     const uploadStart = Date.now() - t0;
     await expect(page.getByText(/קיבלתי/)).toBeVisible({ timeout: 15000 });
     const ackMs = Date.now() - t0;
@@ -272,7 +278,7 @@ test.describe("Pixel-faithful Production live", () => {
       await page.goto(`${BASE}/intake/handoff`, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible({ timeout: 20000 });
       const t0 = Date.now();
-      await page.locator('input[type="file"]').first().setInputFiles(files);
+      await uploadGallery(page, files);
       const marks: Record<string, number> = { upload_start: 0 };
       await expect(page.getByText(/קיבלתי/)).toBeVisible({ timeout: 20000 });
       marks.ack = Date.now() - t0;
@@ -317,7 +323,7 @@ test.describe("Pixel-faithful Production live", () => {
       await page.goto(`${BASE}/intake/handoff`, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible({ timeout: 20000 });
       const t0 = Date.now();
-      await page.locator('input[type="file"]').first().setInputFiles(files);
+      await uploadGallery(page, files);
       await expect(page.getByText(/קיבלתי/)).toBeVisible({ timeout: 15000 });
       const ack = Date.now() - t0;
       await expect(page.getByText("ביקוש לקוח").or(page.getByText(/CX-?5|מאזדה|לקוח/i))).toBeVisible({
