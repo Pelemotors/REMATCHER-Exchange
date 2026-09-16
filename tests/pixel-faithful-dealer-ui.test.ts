@@ -32,6 +32,7 @@ describe("Pixel-faithful dealer shell", () => {
     const src = read("src/components/layout/app-shell-v2.tsx");
     expect(src).toContain('from "next/link"');
     expect(src).toContain("captureFab");
+    expect(src).toContain("navFallbackTimer");
     expect(src).not.toMatch(/<a\s+href=\{item\.href\}/);
   });
 

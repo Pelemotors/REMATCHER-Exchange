@@ -6,338 +6,338 @@
     "untouched": true
   },
   "batch": {
-    "id": "cmu4o6xyg004wjkcsu1qokk6v",
+    "id": "cmu4owfpq004bjk2q4uxxlene",
     "status": "NEEDS_REVIEW",
-    "createdAt": "2026-09-16T22:26:19.624Z"
+    "createdAt": "2026-09-16T22:46:09.038Z"
   },
   "submittedMedia": 16,
   "persistedMedia": 16,
   "perMedia": [
     {
-      "id": "cmu4o6yat0054jkcs1gkzkks5",
+      "id": "cmu4owfvw004jjk2qd3z4zzsq",
       "originalOrder": 0,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
         "ocrPlate": null,
-        "skipReason": null,
-        "ocrAttempted": false,
+        "skipReason": "ocr_no_plate",
+        "ocrAttempted": true,
         "ocrConfidence": null,
         "groupingResult": "order_before_first_plate",
-        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+        "groupingCandidateKey": "cmu4owlw7006ljk2qoy6a0159"
       },
       "attachedCandidateIds": [
-        "cmu4o76xa0078jkcsqj4j9nsy"
+        "cmu4owlw7006ljk2qoy6a0159"
       ]
     },
     {
-      "id": "cmu4o6yaq0050jkcsyp1jb0jv",
+      "id": "cmu4owfvs004djk2qxsh2g12g",
       "originalOrder": 1,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "1234567",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+        "groupingCandidateKey": "cmu4owlw7006ljk2qoy6a0159"
       },
       "attachedCandidateIds": [
-        "cmu4o76xa0078jkcsqj4j9nsy"
+        "cmu4owlw7006ljk2qoy6a0159"
       ]
     },
     {
-      "id": "cmu4o6yaq0052jkcsrtw3lzo3",
+      "id": "cmu4owfvu004gjk2qnbo7qp3w",
       "originalOrder": 2,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "1234567",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+        "groupingCandidateKey": "cmu4owlw7006ljk2qoy6a0159"
       },
       "attachedCandidateIds": [
-        "cmu4o76xa0078jkcsqj4j9nsy"
+        "cmu4owlw7006ljk2qoy6a0159"
       ]
     },
     {
-      "id": "cmu4o6yaq004yjkcspi7hukyq",
+      "id": "cmu4owfvu004hjk2qf4fsnvmd",
       "originalOrder": 3,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "1234567",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+        "groupingCandidateKey": "cmu4owlw7006ljk2qoy6a0159"
       },
       "attachedCandidateIds": [
-        "cmu4o76xa0078jkcsqj4j9nsy"
+        "cmu4owlw7006ljk2qoy6a0159"
       ]
     },
     {
-      "id": "cmu4o6yd4005ajkcsw7iijsj4",
+      "id": "cmu4owfy9004ljk2qp5vebkpc",
       "originalOrder": 4,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "9876543",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76y3007fjkcs2w8jhcbj"
+        "groupingCandidateKey": "cmu4owlx9006sjk2qxffdbt6j"
       },
       "attachedCandidateIds": [
-        "cmu4o76y3007fjkcs2w8jhcbj"
+        "cmu4owlx9006sjk2qxffdbt6j"
       ]
     },
     {
-      "id": "cmu4o6yd5005cjkcssshtoyjq",
+      "id": "cmu4owfyf004njk2qlf461cic",
       "originalOrder": 5,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "9876543",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76y3007fjkcs2w8jhcbj"
+        "groupingCandidateKey": "cmu4owlx9006sjk2qxffdbt6j"
       },
       "attachedCandidateIds": [
-        "cmu4o76y3007fjkcs2w8jhcbj"
+        "cmu4owlx9006sjk2qxffdbt6j"
       ]
     },
     {
-      "id": "cmu4o6yd20058jkcsptuu4f0j",
+      "id": "cmu4owfz0004rjk2q5puo4z7k",
       "originalOrder": 6,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "9876543",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76y3007fjkcs2w8jhcbj"
+        "groupingCandidateKey": "cmu4owlx9006sjk2qxffdbt6j"
       },
       "attachedCandidateIds": [
-        "cmu4o76y3007fjkcs2w8jhcbj"
+        "cmu4owlx9006sjk2qxffdbt6j"
       ]
     },
     {
-      "id": "cmu4o6yd10056jkcsv0urnbms",
+      "id": "cmu4owfyl004pjk2qgkmxxb2g",
       "originalOrder": 7,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "1122233",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76yw007ljkcsejbuqi4h"
+        "groupingCandidateKey": "cmu4owly5006yjk2qik42gzuw"
       },
       "attachedCandidateIds": [
-        "cmu4o76yw007ljkcsejbuqi4h"
+        "cmu4owly5006yjk2qik42gzuw"
       ]
     },
     {
-      "id": "cmu4o6yf7005kjkcslqm53sot",
+      "id": "cmu4owg0e004tjk2qqvy09phd",
       "originalOrder": 8,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "1122233",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76yw007ljkcsejbuqi4h"
+        "groupingCandidateKey": "cmu4owly5006yjk2qik42gzuw"
       },
       "attachedCandidateIds": [
-        "cmu4o76yw007ljkcsejbuqi4h"
+        "cmu4owly5006yjk2qik42gzuw"
       ]
     },
     {
-      "id": "cmu4o6yf6005ijkcsjs5grcv4",
+      "id": "cmu4owg0t004vjk2qa73acx1v",
       "originalOrder": 9,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
         "ocrPlate": null,
-        "skipReason": null,
-        "ocrAttempted": false,
+        "skipReason": "ocr_no_plate",
+        "ocrAttempted": true,
         "ocrConfidence": null,
-        "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76zn007qjkcsumpl1jlq"
+        "groupingResult": "order_after_plate",
+        "groupingCandidateKey": "cmu4owly5006yjk2qik42gzuw"
       },
       "attachedCandidateIds": [
-        "cmu4o76zn007qjkcsumpl1jlq"
+        "cmu4owly5006yjk2qik42gzuw"
       ]
     },
     {
-      "id": "cmu4o6yf1005gjkcs57zttz16",
+      "id": "cmu4owg0x004xjk2qljz1l2pj",
       "originalOrder": 10,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "2233344",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o76zn007qjkcsumpl1jlq"
+        "groupingCandidateKey": "cmu4owlys0074jk2qvqi8x8r4"
       },
       "attachedCandidateIds": [
-        "cmu4o76zn007qjkcsumpl1jlq"
+        "cmu4owlys0074jk2qvqi8x8r4"
       ]
     },
     {
-      "id": "cmu4o6yex005ejkcs208z16g2",
+      "id": "cmu4owg12004zjk2qobizfjbz",
       "originalOrder": 11,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "3344455",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o7708007vjkcsthyo2ay7"
+        "groupingCandidateKey": "cmu4owlzl0078jk2qa1blwuxv"
       },
       "attachedCandidateIds": [
-        "cmu4o7708007vjkcsthyo2ay7"
+        "cmu4owlzl0078jk2qa1blwuxv"
       ]
     },
     {
-      "id": "cmu4o6ygu005mjkcsp7fcgnpg",
+      "id": "cmu4owg290051jk2qhbyew8ge",
       "originalOrder": 12,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "3344455",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o7708007vjkcsthyo2ay7"
+        "groupingCandidateKey": "cmu4owlzl0078jk2qa1blwuxv"
       },
       "attachedCandidateIds": [
-        "cmu4o7708007vjkcsthyo2ay7"
+        "cmu4owlzl0078jk2qa1blwuxv"
       ]
     },
     {
-      "id": "cmu4o6yh0005ojkcsh33p5g2e",
+      "id": "cmu4owg2l0053jk2q0mcc54zb",
       "originalOrder": 13,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "4455566",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o770x0080jkcsf1sh706s"
+        "groupingCandidateKey": "cmu4owm0e007djk2qc83umu4j"
       },
       "attachedCandidateIds": [
-        "cmu4o770x0080jkcsf1sh706s"
+        "cmu4owm0e007djk2qc83umu4j"
       ]
     },
     {
-      "id": "cmu4o6yh5005sjkcsi2p2zxhp",
+      "id": "cmu4owg2q0055jk2qk0ro4vyw",
       "originalOrder": 14,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "4455566",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o770x0080jkcsf1sh706s"
+        "groupingCandidateKey": "cmu4owm0e007djk2qc83umu4j"
       },
       "attachedCandidateIds": [
-        "cmu4o770x0080jkcsf1sh706s"
+        "cmu4owm0e007djk2qc83umu4j"
       ]
     },
     {
-      "id": "cmu4o6yh4005qjkcsb72h9swg",
+      "id": "cmu4owg2t0057jk2qa6ta9ipf",
       "originalOrder": 15,
       "processingStatus": "READY",
       "categoryHint": null,
-      "ocrAttempted": false,
+      "ocrAttempted": true,
       "plateFound": null,
       "grouping": null,
       "discoveryJson": {
-        "ocrPlate": null,
+        "ocrPlate": "5566677",
         "skipReason": null,
-        "ocrAttempted": false,
-        "ocrConfidence": null,
+        "ocrAttempted": true,
+        "ocrConfidence": 0.99,
         "groupingResult": "plate",
-        "groupingCandidateKey": "cmu4o771m0085jkcsbzerfpd5"
+        "groupingCandidateKey": "cmu4owm0y007ijk2q3ytxa4e5"
       },
       "attachedCandidateIds": [
-        "cmu4o771m0085jkcsbzerfpd5"
+        "cmu4owm0y007ijk2q3ytxa4e5"
       ]
     }
   ],
   "candidates": [
     {
-      "id": "cmu4o76xa0078jkcsqj4j9nsy",
-      "status": "COMMITTED",
+      "id": "cmu4owlw7006ljk2qoy6a0159",
+      "status": "NEEDS_CONFIRMATION",
       "plateNormalized": "1234567",
       "govState": "FOUND",
       "govIdentityJson": {
@@ -374,17 +374,17 @@
         "model": "ALFA ROMEO 159",
         "plate": "1234567",
         "source": "data.gov.il",
-        "lookedUpAt": "2026-09-16T22:26:31.966Z",
+        "lookedUpAt": "2026-09-16T22:46:20.508Z",
         "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
       },
       "dealerIntent": "OWNED",
-      "committedVehicleId": "cmu4o7g6b008tjkcsr89ocng8",
+      "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
       "mediaCount": 4
     },
     {
-      "id": "cmu4o76y3007fjkcs2w8jhcbj",
+      "id": "cmu4owlx9006sjk2qxffdbt6j",
       "status": "NEEDS_INFO",
       "plateNormalized": "9876543",
       "govState": "NOT_FOUND",
@@ -396,8 +396,8 @@
       "mediaCount": 3
     },
     {
-      "id": "cmu4o76yw007ljkcsejbuqi4h",
-      "status": "COMMITTED",
+      "id": "cmu4owly5006yjk2qik42gzuw",
+      "status": "READY",
       "plateNormalized": "1122233",
       "govState": "FOUND",
       "govIdentityJson": {
@@ -434,30 +434,30 @@
         "model": "FIAT 500 ABARTH",
         "plate": "1122233",
         "source": "data.gov.il",
-        "lookedUpAt": "2026-09-16T22:26:31.953Z",
+        "lookedUpAt": "2026-09-16T22:46:21.279Z",
         "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
       },
-      "dealerIntent": "OFFERED_TO_ME",
-      "committedVehicleId": "cmu4ovu0v002zjk2q5zngnkgx",
+      "dealerIntent": null,
+      "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
-      "mediaCount": 2
+      "mediaCount": 3
     },
     {
-      "id": "cmu4o76zn007qjkcsumpl1jlq",
+      "id": "cmu4owlys0074jk2qvqi8x8r4",
       "status": "NEEDS_INFO",
       "plateNormalized": "2233344",
       "govState": "NOT_FOUND",
       "govIdentityJson": null,
-      "dealerIntent": "TRADE_IN_CANDIDATE",
+      "dealerIntent": null,
       "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
-      "mediaCount": 2
+      "mediaCount": 1
     },
     {
-      "id": "cmu4o7708007vjkcsthyo2ay7",
-      "status": "COMMITTED",
+      "id": "cmu4owlzl0078jk2qa1blwuxv",
+      "status": "READY",
       "plateNormalized": "3344455",
       "govState": "FOUND",
       "govIdentityJson": {
@@ -494,104 +494,40 @@
         "model": "XT5",
         "plate": "3344455",
         "source": "data.gov.il",
-        "lookedUpAt": "2026-09-16T22:26:32.345Z",
+        "lookedUpAt": "2026-09-16T22:46:17.938Z",
         "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
       },
-      "dealerIntent": "EXTERNAL",
-      "committedVehicleId": "cmu4ovwof003hjk2qogearv6g",
-      "failureCode": null,
-      "failureMessage": null,
-      "mediaCount": 2
-    },
-    {
-      "id": "cmu4o770x0080jkcsf1sh706s",
-      "status": "NEEDS_INFO",
-      "plateNormalized": "4455566",
-      "govState": "NOT_FOUND",
-      "govIdentityJson": null,
-      "dealerIntent": "OWNED",
+      "dealerIntent": null,
       "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
       "mediaCount": 2
     },
     {
-      "id": "cmu4o771m0085jkcsbzerfpd5",
+      "id": "cmu4owm0e007djk2qc83umu4j",
+      "status": "NEEDS_INFO",
+      "plateNormalized": "4455566",
+      "govState": "NOT_FOUND",
+      "govIdentityJson": null,
+      "dealerIntent": null,
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 2
+    },
+    {
+      "id": "cmu4owm0y007ijk2q3ytxa4e5",
       "status": "NEEDS_INFO",
       "plateNormalized": "5566677",
       "govState": "NOT_FOUND",
       "govIdentityJson": null,
-      "dealerIntent": "EXTERNAL",
+      "dealerIntent": null,
       "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
       "mediaCount": 1
     }
   ],
-  "vehicles": [
-    {
-      "id": "cmu4o7g6b008tjkcsr89ocng8",
-      "make": "Alfa Romeo",
-      "model": "159",
-      "year": 2009,
-      "dealerRelationship": "OWNED",
-      "visibility": "PRIVATE",
-      "status": "ACTIVE",
-      "mediaReady": false,
-      "media": [
-        {
-          "id": "cmu4o7g99008xjkcsxe03v24f"
-        },
-        {
-          "id": "cmu4o7gbj008zjkcsnm7sc617"
-        },
-        {
-          "id": "cmu4o7gdb0091jkcs2dkzcjvz"
-        },
-        {
-          "id": "cmu4o7gfa0093jkcs8pnhhgeh"
-        }
-      ],
-      "catalogPublications": []
-    },
-    {
-      "id": "cmu4ovu0v002zjk2q5zngnkgx",
-      "make": "Fiat",
-      "model": "500 Abarth",
-      "year": 2015,
-      "dealerRelationship": "OFFERED_TO_ME",
-      "visibility": "PRIVATE",
-      "status": "ACTIVE",
-      "mediaReady": false,
-      "media": [
-        {
-          "id": "cmu4ovu4m0033jk2qsefyizzk"
-        },
-        {
-          "id": "cmu4ovu6o0035jk2qavq8xrj7"
-        }
-      ],
-      "catalogPublications": []
-    },
-    {
-      "id": "cmu4ovwof003hjk2qogearv6g",
-      "make": "null",
-      "model": "null",
-      "year": 2017,
-      "dealerRelationship": "EXTERNAL",
-      "visibility": "PRIVATE",
-      "status": "ACTIVE",
-      "mediaReady": false,
-      "media": [
-        {
-          "id": "cmu4ovwrd003ljk2q6rbzk4zj"
-        },
-        {
-          "id": "cmu4ovwte003njk2q59u6gs5u"
-        }
-      ],
-      "catalogPublications": []
-    }
-  ],
+  "vehicles": [],
   "unresolvedMedia": []
 }

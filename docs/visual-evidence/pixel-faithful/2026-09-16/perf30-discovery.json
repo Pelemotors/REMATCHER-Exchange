@@ -1,0 +1,466 @@
+{
+  "batchId": "cmu4o864o00hijkcswg5wqyq4",
+  "forensicUntouched": true,
+  "submittedMedia": 30,
+  "persistedMedia": 30,
+  "candidateCount": 7,
+  "unresolvedCount": 0,
+  "discovery": [
+    {
+      "index": 0,
+      "id": "cmu4o869o00hmjkcsm4eso0qm",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqh00ogjkcstm3ny8vd"
+      }
+    },
+    {
+      "index": 1,
+      "id": "cmu4o869v00hqjkcsp2nqkr6b",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqw00onjkcs03vto6rq"
+      }
+    },
+    {
+      "index": 2,
+      "id": "cmu4o869l00hkjkcs9y8k1v6z",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrd00ovjkcs9sc55usf"
+      }
+    },
+    {
+      "index": 3,
+      "id": "cmu4o869q00hojkcs7gfsvrvv",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrq00p2jkcsy7l6u377"
+      }
+    },
+    {
+      "index": 4,
+      "id": "cmu4o86bk00hsjkcs68qn5s4b",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsa00p9jkcspnyia3gn"
+      }
+    },
+    {
+      "index": 5,
+      "id": "cmu4o86bk00hujkcs9tfexf31",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsp00pgjkcsg1wmd8xi"
+      }
+    },
+    {
+      "index": 6,
+      "id": "cmu4o86bo00hyjkcs9oeci0pe",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8ht500pnjkcsib8rf50w"
+      }
+    },
+    {
+      "index": 7,
+      "id": "cmu4o86bm00hwjkcspgoeitc0",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "order_after_plate",
+        "groupingCandidateKey": "cmu4o8ht500pnjkcsib8rf50w"
+      }
+    },
+    {
+      "index": 8,
+      "id": "cmu4o86dl00i6jkcssosl18so",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqw00onjkcs03vto6rq"
+      }
+    },
+    {
+      "index": 9,
+      "id": "cmu4o86de00i2jkcsua60qq3p",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrd00ovjkcs9sc55usf"
+      }
+    },
+    {
+      "index": 10,
+      "id": "cmu4o86dj00i4jkcslve9dl97",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrq00p2jkcsy7l6u377"
+      }
+    },
+    {
+      "index": 11,
+      "id": "cmu4o86dd00i0jkcsh0bt9wsb",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsa00p9jkcspnyia3gn"
+      }
+    },
+    {
+      "index": 12,
+      "id": "cmu4o86f400i8jkcsfsuxkttr",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsp00pgjkcsg1wmd8xi"
+      }
+    },
+    {
+      "index": 13,
+      "id": "cmu4o86f800icjkcsig6mli8s",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8ht500pnjkcsib8rf50w"
+      }
+    },
+    {
+      "index": 14,
+      "id": "cmu4o86f500iajkcsqgww8ech",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqh00ogjkcstm3ny8vd"
+      }
+    },
+    {
+      "index": 15,
+      "id": "cmu4o86fk00iejkcs90pyfyq7",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqw00onjkcs03vto6rq"
+      }
+    },
+    {
+      "index": 16,
+      "id": "cmu4o86gq00igjkcsmu8mlzca",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrd00ovjkcs9sc55usf"
+      }
+    },
+    {
+      "index": 17,
+      "id": "cmu4o86gv00ikjkcsmixqgvnj",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrq00p2jkcsy7l6u377"
+      }
+    },
+    {
+      "index": 18,
+      "id": "cmu4o86gr00iijkcsokhmts6u",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsa00p9jkcspnyia3gn"
+      }
+    },
+    {
+      "index": 19,
+      "id": "cmu4o86h100imjkcsbhcopq7o",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsp00pgjkcsg1wmd8xi"
+      }
+    },
+    {
+      "index": 20,
+      "id": "cmu4o86ic00iojkcsleevyllc",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8ht500pnjkcsib8rf50w"
+      }
+    },
+    {
+      "index": 21,
+      "id": "cmu4o86ik00isjkcsi8k7r0vt",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqh00ogjkcstm3ny8vd"
+      }
+    },
+    {
+      "index": 22,
+      "id": "cmu4o86it00iujkcsz7bev3h5",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqw00onjkcs03vto6rq"
+      }
+    },
+    {
+      "index": 23,
+      "id": "cmu4o86ie00iqjkcsk7hzkarv",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrd00ovjkcs9sc55usf"
+      }
+    },
+    {
+      "index": 24,
+      "id": "cmu4o86kc00j0jkcs45vahfw7",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hrq00p2jkcsy7l6u377"
+      }
+    },
+    {
+      "index": 25,
+      "id": "cmu4o86k100iwjkcs3qg2b0mg",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsa00p9jkcspnyia3gn"
+      }
+    },
+    {
+      "index": 26,
+      "id": "cmu4o86k300iyjkcsy35cpyme",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hsp00pgjkcsg1wmd8xi"
+      }
+    },
+    {
+      "index": 27,
+      "id": "cmu4o86kl00j2jkcsv4dxlniv",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8ht500pnjkcsib8rf50w"
+      }
+    },
+    {
+      "index": 28,
+      "id": "cmu4o86m100j4jkcsnukiy459",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqh00ogjkcstm3ny8vd"
+      }
+    },
+    {
+      "index": 29,
+      "id": "cmu4o86m100j6jkcs5zriox7j",
+      "categoryHint": null,
+      "discovery": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o8hqw00onjkcs03vto6rq"
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "id": "cmu4o8hqh00ogjkcstm3ny8vd",
+      "intent": "OWNED",
+      "vehicleId": null,
+      "plate": "1234567",
+      "status": "NEEDS_CONFIRMATION",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    },
+    {
+      "id": "cmu4o8hqw00onjkcs03vto6rq",
+      "intent": "OWNED",
+      "vehicleId": null,
+      "plate": "9876543",
+      "status": "NEEDS_INFO",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    },
+    {
+      "id": "cmu4o8hrd00ovjkcs9sc55usf",
+      "intent": null,
+      "vehicleId": null,
+      "plate": "1122233",
+      "status": "NEEDS_INFO",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    },
+    {
+      "id": "cmu4o8hrq00p2jkcsy7l6u377",
+      "intent": null,
+      "vehicleId": null,
+      "plate": "2233344",
+      "status": "NEEDS_INFO",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    },
+    {
+      "id": "cmu4o8hsa00p9jkcspnyia3gn",
+      "intent": null,
+      "vehicleId": null,
+      "plate": "3344455",
+      "status": "NEEDS_INFO",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    },
+    {
+      "id": "cmu4o8hsp00pgjkcsg1wmd8xi",
+      "intent": null,
+      "vehicleId": null,
+      "plate": "4455566",
+      "status": "NEEDS_INFO",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    },
+    {
+      "id": "cmu4o8ht500pnjkcsib8rf50w",
+      "intent": null,
+      "vehicleId": null,
+      "plate": "5566677",
+      "status": "NEEDS_INFO",
+      "govState": "UNAVAILABLE",
+      "failureCode": null
+    }
+  ],
+  "vehicles": []
+}

@@ -397,7 +397,7 @@
     },
     {
       "id": "cmu4o76yw007ljkcsejbuqi4h",
-      "status": "COMMITTED",
+      "status": "READY",
       "plateNormalized": "1122233",
       "govState": "FOUND",
       "govIdentityJson": {
@@ -437,8 +437,8 @@
         "lookedUpAt": "2026-09-16T22:26:31.953Z",
         "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
       },
-      "dealerIntent": "OFFERED_TO_ME",
-      "committedVehicleId": "cmu4ovu0v002zjk2q5zngnkgx",
+      "dealerIntent": null,
+      "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
       "mediaCount": 2
@@ -449,7 +449,7 @@
       "plateNormalized": "2233344",
       "govState": "NOT_FOUND",
       "govIdentityJson": null,
-      "dealerIntent": "TRADE_IN_CANDIDATE",
+      "dealerIntent": null,
       "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
@@ -457,7 +457,7 @@
     },
     {
       "id": "cmu4o7708007vjkcsthyo2ay7",
-      "status": "COMMITTED",
+      "status": "READY",
       "plateNormalized": "3344455",
       "govState": "FOUND",
       "govIdentityJson": {
@@ -497,8 +497,8 @@
         "lookedUpAt": "2026-09-16T22:26:32.345Z",
         "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
       },
-      "dealerIntent": "EXTERNAL",
-      "committedVehicleId": "cmu4ovwof003hjk2qogearv6g",
+      "dealerIntent": null,
+      "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
       "mediaCount": 2
@@ -509,7 +509,7 @@
       "plateNormalized": "4455566",
       "govState": "NOT_FOUND",
       "govIdentityJson": null,
-      "dealerIntent": "OWNED",
+      "dealerIntent": null,
       "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
@@ -521,7 +521,7 @@
       "plateNormalized": "5566677",
       "govState": "NOT_FOUND",
       "govIdentityJson": null,
-      "dealerIntent": "EXTERNAL",
+      "dealerIntent": null,
       "committedVehicleId": null,
       "failureCode": null,
       "failureMessage": null,
@@ -550,44 +550,6 @@
         },
         {
           "id": "cmu4o7gfa0093jkcs8pnhhgeh"
-        }
-      ],
-      "catalogPublications": []
-    },
-    {
-      "id": "cmu4ovu0v002zjk2q5zngnkgx",
-      "make": "Fiat",
-      "model": "500 Abarth",
-      "year": 2015,
-      "dealerRelationship": "OFFERED_TO_ME",
-      "visibility": "PRIVATE",
-      "status": "ACTIVE",
-      "mediaReady": false,
-      "media": [
-        {
-          "id": "cmu4ovu4m0033jk2qsefyizzk"
-        },
-        {
-          "id": "cmu4ovu6o0035jk2qavq8xrj7"
-        }
-      ],
-      "catalogPublications": []
-    },
-    {
-      "id": "cmu4ovwof003hjk2qogearv6g",
-      "make": "null",
-      "model": "null",
-      "year": 2017,
-      "dealerRelationship": "EXTERNAL",
-      "visibility": "PRIVATE",
-      "status": "ACTIVE",
-      "mediaReady": false,
-      "media": [
-        {
-          "id": "cmu4ovwrd003ljk2q6rbzk4zj"
-        },
-        {
-          "id": "cmu4ovwte003njk2q59u6gs5u"
         }
       ],
       "catalogPublications": []

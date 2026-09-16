@@ -38,6 +38,9 @@ function reachedHref(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+let navFallbackTimer: number | null = null;
+let navFallbackHref: string | null = null;
+
 function ShellLink({
   href,
   className,
@@ -59,11 +62,15 @@ function ShellLink({
       onClick={() => {
         if (active) return;
         setPending(true);
-        window.setTimeout(() => {
-          if (!reachedHref(window.location.pathname, href)) {
-            window.location.assign(href);
+        if (navFallbackTimer != null) window.clearTimeout(navFallbackTimer);
+        navFallbackHref = href;
+        navFallbackTimer = window.setTimeout(() => {
+          const target = navFallbackHref;
+          navFallbackTimer = null;
+          if (target && !reachedHref(window.location.pathname, target)) {
+            window.location.assign(target);
           }
-        }, 700);
+        }, 900);
       }}
     >
       {children}

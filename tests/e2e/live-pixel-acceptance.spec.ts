@@ -542,13 +542,10 @@ test.describe("Pixel-faithful Production live", () => {
     const fresh = (batches as Array<{ id: string; mediaCount?: number; candidateCount?: number }>)
       .filter((b) => b.id !== FORENSIC)
       .sort((a, b) => String(b.id).localeCompare(String(a.id)));
-    let batchId = fresh.find((b) => (b.candidateCount ?? 0) >= 3)?.id ?? fresh[0]?.id;
-    if (!batchId) {
-      const known = await page.request.get(
-        `${BASE}/api/intake/batch?batchId=cmu4o6xyg004wjkcsu1qokk6v`
-      );
-      if (known.ok()) batchId = "cmu4o6xyg004wjkcsu1qokk6v";
-    }
+    let batchId =
+      process.env.BATCH_ID ??
+      fresh.find((b) => (b.mediaCount ?? 0) === 16)?.id ??
+      "cmu4o6xyg004wjkcsu1qokk6v";
     expect(batchId, "fresh multi-vehicle batch").toBeTruthy();
     expect(batchId).not.toBe(FORENSIC);
 
@@ -586,6 +583,21 @@ test.describe("Pixel-faithful Production live", () => {
         await box.press("Enter");
         await page.waitForTimeout(1800);
       }
+    }
+
+    const mid = await (await page.request.get(`${BASE}/api/intake/batch?batchId=${batchId}`)).json();
+    const stillOpen = (mid.candidates ?? []).filter(
+      (c: { dealerIntent: string | null }) => !c.dealerIntent
+    );
+    const fallback = ["OFFERED_TO_ME", "TRADE_IN_CANDIDATE", "EXTERNAL", "OWNED"] as const;
+    for (let i = 0; i < stillOpen.length; i++) {
+      await page.request.post(`${BASE}/api/intake/intent`, {
+        data: {
+          batchId,
+          candidateId: stillOpen[i].id,
+          intent: fallback[i] ?? "EXTERNAL",
+        },
+      });
     }
 
     const after = await (await page.request.get(`${BASE}/api/intake/batch?batchId=${batchId}`)).json();

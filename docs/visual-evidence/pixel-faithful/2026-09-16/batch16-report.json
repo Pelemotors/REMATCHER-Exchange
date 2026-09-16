@@ -3,11 +3,11 @@
   "persistedMedia": 16,
   "candidateCount": 7,
   "unresolvedCount": 0,
-  "firstAckMs": 372,
-  "uploadStartMs": 367,
-  "firstCandidateMs": 13521,
+  "firstAckMs": 165,
+  "uploadStartMs": 157,
+  "firstCandidateMs": 8214,
   "cardCount": 7,
-  "networkRequests": 169,
+  "networkRequests": 167,
   "failedRequests": [
     {
       "url": "https://exchange.rematcher.co.il/?_rsc=j7s84HGI7papZ6oY",
@@ -38,11 +38,11 @@
       "error": "net::ERR_ABORTED"
     },
     {
-      "url": "https://exchange.rematcher.co.il/demand?_rsc=QagHeDQZq_B7xYUl",
+      "url": "https://exchange.rematcher.co.il/home?_rsc=QagHeDQZq_B7xYUl",
       "error": "net::ERR_ABORTED"
     },
     {
-      "url": "https://exchange.rematcher.co.il/home?_rsc=QagHeDQZq_B7xYUl",
+      "url": "https://exchange.rematcher.co.il/demand?_rsc=QagHeDQZq_B7xYUl",
       "error": "net::ERR_ABORTED"
     },
     {
@@ -56,54 +56,58 @@
     {
       "url": "https://exchange.rematcher.co.il/demand?_rsc=xseyjYtG7In4PYhr",
       "error": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://exchange.rematcher.co.il/home?_rsc=xseyjYtG7In4PYhr",
+      "error": "net::ERR_ABORTED"
     }
   ],
   "autoOwnedBeforeIntent": 0,
   "afterIntents": [
     {
-      "id": "cmu4o76xa0078jkcsqj4j9nsy",
+      "id": "cmu4owlw7006ljk2qoy6a0159",
       "intent": "OWNED",
-      "vehicleId": "cmu4o7g6b008tjkcsr89ocng8",
+      "vehicleId": null,
       "plate": "1234567",
-      "status": "COMMITTED"
+      "status": "NEEDS_CONFIRMATION"
     },
     {
-      "id": "cmu4o76y3007fjkcs2w8jhcbj",
+      "id": "cmu4owlx9006sjk2qxffdbt6j",
       "intent": "OWNED",
       "vehicleId": null,
       "plate": "9876543",
       "status": "NEEDS_INFO"
     },
     {
-      "id": "cmu4o76yw007ljkcsejbuqi4h",
+      "id": "cmu4owly5006yjk2qik42gzuw",
       "intent": null,
       "vehicleId": null,
       "plate": "1122233",
       "status": "READY"
     },
     {
-      "id": "cmu4o76zn007qjkcsumpl1jlq",
+      "id": "cmu4owlys0074jk2qvqi8x8r4",
       "intent": null,
       "vehicleId": null,
       "plate": "2233344",
       "status": "NEEDS_INFO"
     },
     {
-      "id": "cmu4o7708007vjkcsthyo2ay7",
+      "id": "cmu4owlzl0078jk2qa1blwuxv",
       "intent": null,
       "vehicleId": null,
       "plate": "3344455",
       "status": "READY"
     },
     {
-      "id": "cmu4o770x0080jkcsf1sh706s",
+      "id": "cmu4owm0e007djk2qc83umu4j",
       "intent": null,
       "vehicleId": null,
       "plate": "4455566",
       "status": "NEEDS_INFO"
     },
     {
-      "id": "cmu4o771m0085jkcsbzerfpd5",
+      "id": "cmu4owm0y007ijk2q3ytxa4e5",
       "intent": null,
       "vehicleId": null,
       "plate": "5566677",
