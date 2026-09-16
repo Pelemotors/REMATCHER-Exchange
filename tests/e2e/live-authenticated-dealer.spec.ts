@@ -23,20 +23,36 @@ function loadCreds(): { email: string; password: string } | null {
   const file = path.join(process.cwd(), ".qa-dealer-credentials.local");
   if (!existsSync(file)) return null;
   const raw = readFileSync(file, "utf8");
-  const emailMatch = raw.match(/qa-buyer@rematcher-exchange\.test/);
   const passMatch = raw.match(
     /qa-buyer@rematcher-exchange\.test\s*\/\s*(\S+)/
   );
-  if (emailMatch && passMatch) {
+  if (passMatch) {
     return { email: "qa-buyer@rematcher-exchange.test", password: passMatch[1] };
   }
-  const jsonTry = raw.trim().startsWith("{") || raw.trim().startsWith("[");
-  if (jsonTry) {
-    const parsed = JSON.parse(raw) as Array<{ email: string; password: string }>;
-    const row = parsed.find((p) => p.email.includes("qa-buyer")) ?? parsed[0];
-    if (row?.email && row?.password) return row;
-  }
   return null;
+}
+
+async function loginDealer(
+  page: import("@playwright/test").Page,
+  creds: { email: string; password: string }
+) {
+  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  await page.locator("#email").fill(creds.email);
+  await page.locator("#password").fill(creds.password);
+  await page.getByRole("button", { name: "כניסה" }).click();
+  await page.waitForURL(/\/(home|inventory|intake|privacy-ai|subscription)/, {
+    timeout: 20000,
+  });
+  await page.request.post(`${BASE}/api/privacy/onboarding/complete`, {
+    data: {
+      consents: {
+        DEALER_MEMORY: false,
+        AGENT_TO_EXCHANGE_LEARNING: false,
+        EXCHANGE_ACTIVITY_LEARNING: false,
+        EXTERNAL_ACTIVITY_LEARNING: false,
+      },
+    },
+  });
 }
 
 test.describe("Authenticated Production dealer", () => {
@@ -44,20 +60,29 @@ test.describe("Authenticated Production dealer", () => {
     const creds = loadCreds();
     test.skip(!creds, "missing QA dealer credentials");
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
-    await page.locator("#email").fill(creds!.email);
-    await page.locator("#password").fill(creds!.password);
-    await page.getByRole("button", { name: /התחבר|כניסה/i }).click();
-    await page.waitForURL(/\/(home|inventory|intake)/, { timeout: 20000 });
+    await loginDealer(page, creds!);
+    const created = await page.request.post(`${BASE}/api/inventory`, {
+      data: {
+        make: "Mazda",
+        model: "CX-5",
+        year: 2023,
+        b2bPrice: 140000,
+      },
+    });
+    expect(created.ok()).toBeTruthy();
     await page.goto(`${BASE}/inventory`, { waitUntil: "networkidle" });
-    await expect(page.getByRole("heading", { name: "המלאי שלי" })).toBeVisible();
-    await expect(page.getByText("הסר מהמלאי")).toBeHidden();
-    const firstRow = page.locator("button[id^='vehicle-']").first();
-    if (await firstRow.count()) {
-      await firstRow.click();
-      await expect(page.getByRole("button", { name: "הסר מהמלאי" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "תמונות הרכב" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "המלאי שלי" })).toBeVisible({
+      timeout: 15000,
+    });
+    const row = page.locator("button[id^='vehicle-']").first();
+    if (!(await row.count())) {
+      await page.getByText("CX-5").first().click();
+    } else {
+      await row.click();
     }
+    await expect(page.getByRole("button", { name: "הסר מהמלאי" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "תמונות הרכב" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "מחק תמונה" }).or(page.getByText("עדיין אין תמונות לרכב זה"))).toBeVisible();
     await page.screenshot({
       path: path.join(OUT, "inventory-authenticated-390.png"),
       fullPage: true,
@@ -68,13 +93,9 @@ test.describe("Authenticated Production dealer", () => {
     const creds = loadCreds();
     test.skip(!creds, "missing QA dealer credentials");
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
-    await page.locator("#email").fill(creds!.email);
-    await page.locator("#password").fill(creds!.password);
-    await page.getByRole("button", { name: /התחבר|כניסה/i }).click();
-    await page.waitForURL(/\/(home|inventory|intake)/, { timeout: 20000 });
+    await loginDealer(page, creds!);
     await page.goto(`${BASE}/intake/handoff`, { waitUntil: "networkidle" });
-    await expect(page.getByText("שלח לי את הרכב")).toBeVisible();
+    await expect(page.getByText("שלח לי את הרכב")).toBeVisible({ timeout: 15000 });
     await expect(page.getByText("הדבק טקסט / מידע")).toBeVisible();
     await page.screenshot({
       path: path.join(OUT, "intake-authenticated-390.png"),

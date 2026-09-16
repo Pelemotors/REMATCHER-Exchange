@@ -13,6 +13,7 @@ import {
 import { applyLaterMessageWins, mergeConversationSnippets } from "@/services/intake/conversation-text";
 import { parseDemandFallback } from "@/services/ai/demand-parser";
 import { summarizeDemandHe } from "@/services/intake/demand-summary";
+import { confirmedFromJson } from "@/lib/demand-display";
 
 describe("dealer complete experience — vehicle intent", () => {
   it("כולם שלי חוץ מהאחרון does not mark the last as inventory", () => {
@@ -116,6 +117,19 @@ describe("dealer complete experience — demand understanding", () => {
     expect(parseDemandFallback("לקוח רוצה ראב 4 לא השכרה עד 160").model?.value).toBe(
       "RAV4"
     );
+  });
+
+  it("confirmedJson status fields unwrap for matching", () => {
+    const c = confirmedFromJson({
+      make: { value: "Mazda", status: "known" },
+      model: { value: "CX-5", status: "known" },
+      yearMin: { value: 2022, status: "known" },
+      budgetMax: { value: 140000, status: "known" },
+    });
+    expect(c.make).toBe("Mazda");
+    expect(c.model).toBe("CX-5");
+    expect(c.yearMin).toBe(2022);
+    expect(c.budgetMax).toBe(140000);
   });
 });
 

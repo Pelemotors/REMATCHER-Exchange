@@ -47,7 +47,12 @@ async function upsertQaDealer(entry: (typeof QA_DEALERS)[number]) {
   if (existing) {
     await prisma.user.update({
       where: { email: entry.email },
-      data: { passwordHash, name: entry.name, role: "DEALER_USER" },
+      data: {
+        passwordHash,
+        name: entry.name,
+        role: "DEALER_USER",
+        emailVerifiedAt: new Date(),
+      },
     });
     for (const m of existing.memberships) {
       await prisma.dealer.update({
@@ -73,6 +78,7 @@ async function upsertQaDealer(entry: (typeof QA_DEALERS)[number]) {
       passwordHash,
       name: entry.name,
       role: "DEALER_USER",
+      emailVerifiedAt: new Date(),
       memberships: { create: { dealerId: dealer.id, role: "OWNER" } },
     },
   });

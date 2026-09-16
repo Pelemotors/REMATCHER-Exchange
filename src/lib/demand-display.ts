@@ -71,18 +71,28 @@ function cleanBudget(value: unknown): number | null {
   return n < 1000 ? n * 1000 : n;
 }
 
+function unwrapField(value: unknown): unknown {
+  if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
+    const inner = (value as { value?: unknown }).value;
+    const status = (value as { status?: unknown }).status;
+    if (status === "unknown" || status === "ambiguous") return null;
+    return inner;
+  }
+  return value;
+}
+
 export function confirmedFromJson(json: unknown): DemandConfirmed {
   const c = (json ?? {}) as Record<string, unknown>;
   const colors = Array.isArray(c.colorExclusions)
     ? c.colorExclusions.map(cleanString).filter((v): v is string => Boolean(v))
     : [];
   return {
-    make: cleanString(c.make),
-    model: cleanString(c.model),
-    yearMin: cleanYear(c.yearMin),
-    yearMax: cleanYear(c.yearMax),
-    budgetMax: cleanBudget(c.budgetMax),
-    trimPreference: cleanString(c.trimPreference),
+    make: cleanString(unwrapField(c.make)),
+    model: cleanString(unwrapField(c.model)),
+    yearMin: cleanYear(unwrapField(c.yearMin)),
+    yearMax: cleanYear(unwrapField(c.yearMax)),
+    budgetMax: cleanBudget(unwrapField(c.budgetMax)),
+    trimPreference: cleanString(unwrapField(c.trimPreference)),
     colorExclusions: colors,
   };
 }
