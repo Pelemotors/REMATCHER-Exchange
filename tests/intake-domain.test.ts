@@ -211,12 +211,14 @@ describe("intake domain surface", () => {
 
     const ocr = readFileSync(join(root, "src/services/intake/plate-ocr.ts"), "utf8");
     expect(ocr).toContain("chatCompletionLength");
+    expect(ocr).toContain("AI_MODELS.agentLoop");
     expect(ocr).not.toMatch(/max_tokens:\s*200/);
     const vision = readFileSync(
       join(root, "src/services/intake/media-vision.ts"),
       "utf8"
     );
     expect(vision).toContain("chatCompletionLength");
+    expect(vision).toContain("AI_MODELS.agentLoop");
     expect(vision).not.toMatch(/max_tokens:\s*350/);
   });
 });

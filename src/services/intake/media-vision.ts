@@ -40,8 +40,8 @@ export async function understandIntakeMediaSample(
   const start = Date.now();
   const model =
     process.env.OPENAI_INTAKE_VISION_MODEL ||
-    AI_MODELS.inventoryUnderstanding ||
-    "gpt-4o-mini";
+    AI_MODELS.agentLoop ||
+    "gpt-5.4-mini";
 
   try {
     const openai = getOpenAIClient();

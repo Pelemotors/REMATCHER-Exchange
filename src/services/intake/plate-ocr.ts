@@ -102,8 +102,8 @@ export async function extractPlateFromImageBytes(
     const b64 = prepared.bytes.toString("base64");
     const model =
       process.env.OPENAI_INTAKE_VISION_MODEL ||
-      AI_MODELS.inventoryUnderstanding ||
-      "gpt-4o-mini";
+      AI_MODELS.agentLoop ||
+      "gpt-5.4-mini";
     const completion = await openai.chat.completions.create({
       model,
       temperature: 0,
