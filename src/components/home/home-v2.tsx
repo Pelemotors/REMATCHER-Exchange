@@ -147,17 +147,17 @@ export function HomeV2({
         role="navigation"
         aria-label="פעולות ליבה"
       >
-        <Link href="/inventory" className={styles.quickTile}>
-          <Package size={22} />
-          <span>הוסף רכב</span>
-        </Link>
-        <Link href="/demand" className={styles.quickTile}>
+        <Link href="/home#composer" className={styles.quickTile}>
           <Search size={22} />
-          <span>חיפושים</span>
+          <span>יש לי לקוח</span>
         </Link>
-        <Link href="/matches" className={styles.quickTile}>
+        <Link href="/intake/handoff" className={styles.quickTile}>
+          <Package size={22} />
+          <span>יש לי רכב</span>
+        </Link>
+        <Link href="/intelligence" className={styles.quickTile}>
           <Sparkles size={22} />
-          <span>התאמות</span>
+          <span>מה ברשת?</span>
         </Link>
         <button
           type="button"
@@ -165,7 +165,7 @@ export function HomeV2({
           onClick={() => agent?.openAgent()}
         >
           <Sparkles size={22} />
-          <span>בקש מה־Agent</span>
+          <span>שאל את REMATCHER</span>
         </button>
       </div>
 
@@ -206,7 +206,7 @@ export function HomeV2({
         </section>
       )}
 
-      <section className={styles.composer} aria-label="חיפוש ברשת">
+      <section className={styles.composer} id="composer" aria-label="חיפוש ברשת">
         <h2 className={styles.sectionTitle}>התחל חיפוש</h2>
         <CreateDemandFlow variant="home" />
       </section>

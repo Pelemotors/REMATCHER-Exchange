@@ -99,6 +99,9 @@ export default function AccountPage() {
         <ButtonV2 variant="secondary" href="/customers" className="w-full">
           לקוחות
         </ButtonV2>
+        <ButtonV2 variant="ghost" href="/intelligence" className="w-full">
+          מה קורה ברשת?
+        </ButtonV2>
         <ButtonV2 variant="ghost" href="/opportunities" className="w-full">
           הזדמנויות
         </ButtonV2>

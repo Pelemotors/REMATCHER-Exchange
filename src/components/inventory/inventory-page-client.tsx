@@ -145,6 +145,10 @@ export function InventoryPageClient({
   const [saving, setSaving] = useState(false);
   const [soldConfirm, setSoldConfirm] = useState<InventoryVehicle | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [privateIntel, setPrivateIntel] = useState<{
+    loading: boolean;
+    text: string | null;
+  }>({ loading: false, text: null });
 
   useSetAgentPageContext({ surface: "inventory", route: "/inventory" }, []);
 
@@ -236,7 +240,56 @@ export function InventoryPageClient({
     window.setTimeout(() => setToast(null), 3200);
   }
 
+  async function askPrivateIntel(v: InventoryVehicle) {
+    setPrivateIntel({ loading: true, text: null });
+    try {
+      const [privRes, netRes] = await Promise.all([
+        fetch("/api/intelligence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "private_match", vehicleId: v.id }),
+        }),
+        fetch("/api/intelligence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "network_intel",
+            make: v.make,
+            model: v.model,
+            yearMin: v.year,
+            yearMax: v.year,
+          }),
+        }),
+      ]);
+      const priv = await privRes.json();
+      const net = await netRes.json();
+      const localCount = priv.ok ? priv.matchCount ?? 0 : 0;
+      const netDemand =
+        net.ok && !net.demand?.insufficientData ? net.demand.activeCount : null;
+      const high =
+        net.ok && !net.demand?.insufficientData
+          ? net.demand.highMatchEstimate
+          : null;
+      const lines = [
+        `אצלך: ${localCount} לקוחות רלוונטיים`,
+        netDemand != null
+          ? `ברשת: ${netDemand} חיפושים רלוונטיים${
+              high != null ? ` · ${high} בהתאמה גבוהה` : ""
+            }`
+          : "ברשת: אין כרגע מספיק מידע אמין להצגה",
+        "הרכב נשאר פרטי — בלי פרסום ובלי זהויות.",
+      ];
+      setPrivateIntel({ loading: false, text: lines.join("\n") });
+    } catch {
+      setPrivateIntel({
+        loading: false,
+        text: "לא הצלחנו לבדוק כרגע. נסה שוב.",
+      });
+    }
+  }
+
   function beginEdit(v: InventoryVehicle) {
+    setPrivateIntel({ loading: false, text: null });
     const price = askingPrice(v);
     setEditVehicle(v);
     setEditForm({
@@ -427,8 +480,15 @@ export function InventoryPageClient({
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            <ButtonV2 variant="signal" onClick={saveEdit} disabled={saving}>
+            <ButtonV2 variant="primary" onClick={saveEdit} disabled={saving}>
               {saving ? "שומר..." : "שמור"}
+            </ButtonV2>
+            <ButtonV2
+              variant="secondary"
+              onClick={() => void askPrivateIntel(editVehicle)}
+              disabled={saving || privateIntel.loading}
+            >
+              {privateIntel.loading ? "בודקים…" : "מה יש לי על הרכב הזה?"}
             </ButtonV2>
             <ButtonV2 variant="secondary" onClick={() => setSoldConfirm(editVehicle)} disabled={saving}>
               סמן כנמכר
@@ -437,6 +497,11 @@ export function InventoryPageClient({
               ביטול
             </ButtonV2>
           </div>
+          {privateIntel.text && (
+            <Surface depth="secondary" className="whitespace-pre-line p-3 text-sm text-v2-text-primary">
+              {privateIntel.text}
+            </Surface>
+          )}
           <VehicleMediaPanel vehicleId={editVehicle.id} />
         </Surface>
       )}

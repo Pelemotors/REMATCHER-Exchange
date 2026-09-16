@@ -154,7 +154,7 @@ export function SignupForm() {
 
         <OAuthButtons mode="signup" />
 
-        <ButtonV2 type="submit" variant="signal" className="w-full" disabled={loading}>
+        <ButtonV2 type="submit" variant="primary" className="w-full" disabled={loading}>
           {loading ? "נרשם..." : "הצטרפות ל-Exchange"}
         </ButtonV2>
 
