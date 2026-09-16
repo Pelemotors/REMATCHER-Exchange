@@ -49,4 +49,46 @@ test.describe("Live Production visual", () => {
       fullPage: true,
     });
   });
+
+  test("landing desktop 1440", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "אל תחפש ברשת"
+    );
+    await expect(page.locator('[data-landing="v3"]')).toBeVisible();
+    await expect(page.locator('img[src*="rematcher-r-gold"]').first()).toBeVisible();
+    // no horizontal overflow
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    );
+    expect(overflow).toBe(false);
+    await page.screenshot({
+      path: path.join(OUT, "landing-desktop-1440.png"),
+      fullPage: false,
+    });
+    await page.screenshot({
+      path: path.join(OUT, "landing-desktop-full.png"),
+      fullPage: true,
+    });
+  });
+
+  test("landing mobile 390", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByText("מה עובר אצלך היום?")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    );
+    expect(overflow).toBe(false);
+    await page.screenshot({
+      path: path.join(OUT, "landing-mobile-390.png"),
+      fullPage: false,
+    });
+    await page.screenshot({
+      path: path.join(OUT, "landing-mobile-full.png"),
+      fullPage: true,
+    });
+  });
 });
