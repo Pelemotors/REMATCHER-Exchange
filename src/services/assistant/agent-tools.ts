@@ -54,6 +54,11 @@ export const INTAKE_AGENT_TOOL_NAMES = [
   "get_my_intake_candidate",
   "diagnose_my_search_matches",
   "get_my_attention_opportunities",
+  "get_my_customers",
+  "find_my_customer",
+  "private_match_vehicle_to_my_demands",
+  "get_network_intelligence",
+  "get_my_dealer_opportunities",
 ] as const;
 
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
@@ -459,6 +464,53 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   tool(
     "get_my_attention_opportunities",
     "Proactive attention list for THIS dealer: expiring searches, stale inventory, intake needing info, open matches/opportunities. Own flags only — do not invent urgency beyond system counts."
+  ),
+  tool(
+    "get_my_customers",
+    "List THIS dealer's Customers (people) with linked Demand summaries. Customer ≠ Demand. Never returns phone digits to the model. Own dealer scope only."
+  ),
+  tool(
+    "find_my_customer",
+    "Find THIS dealer's Customer by name/phone query and list their Demands. Same-phone soft-dedupe is server-side. Never merge different phones automatically.",
+    {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        name: nullableString,
+      },
+      required: ["query"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "private_match_vehicle_to_my_demands",
+    "Match a vehicle in THIS dealer's workspace (offer/trade-in/owned) against THIS dealer's active Demands. Private matching — does NOT publish to network and does not expose other dealers.",
+    {
+      type: "object",
+      properties: {
+        vehicleId: { type: "string" },
+      },
+      required: ["vehicleId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "get_network_intelligence",
+    "Anonymous network demand/supply aggregates for a make/model/year query + THIS dealer's private counts. Never returns identities. If insufficientData, say safely that there is not enough network data.",
+    {
+      type: "object",
+      properties: {
+        make: nullableString,
+        model: nullableString,
+        yearMin: nullableNumber,
+        yearMax: nullableNumber,
+      },
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "get_my_dealer_opportunities",
+    "List proactive DealerOpportunity rows for THIS dealer (deduped). Separate from bilateral SellerOpportunity after BuyerInterest."
   ),
   tool(
     "propose_mutation",

@@ -106,8 +106,39 @@ model Dealer {
   entitlement       DealerEntitlement?
   subscriptions     DealerSubscription[]
   deviceInstallations DeviceInstallation[]
+  customers         Customer[]
+  dealerOpportunities DealerOpportunity[]
 
   @@index([cohort])
+}
+
+// ─── Customer (Person of a Dealer — ≠ Demand) ───────────────────
+
+model Customer {
+  id               String         @id @default(cuid())
+  dealerId         String
+  name             String?
+  /** Digits-only E.164-ish IL normalize (05… → 9725…) — null if unknown */
+  normalizedPhone  String?
+  rawPhone         String?
+  status           CustomerStatus @default(ACTIVE)
+  /** Capture provenance: source, intakeBatchId, confidence */
+  sourceJson       Json?
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  dealer  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  demands Demand[]
+
+  @@index([dealerId, status, updatedAt(sort: Desc)])
+  @@index([dealerId, normalizedPhone])
+  @@unique([dealerId, normalizedPhone])
+}
+
+enum CustomerStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 // ─── Dealer Memory (Agent long-term business context) ───────────
@@ -225,6 +256,17 @@ model Vehicle {
   dealerId        String
   status          VehicleStatus @default(ACTIVE)
 
+  /**
+   * Dealer↔Vehicle relationship (Ownership/workspace) — independent of Visibility.
+   * OWNED/INVENTORY: dealer's stock. OFFERED_TO_ME/TRADE_IN/EXTERNAL: private workspace.
+   */
+  dealerRelationship DealerVehicleRelationship @default(OWNED)
+  /**
+   * Publication visibility — independent of relationship.
+   * Only ANONYMOUS_NETWORK + mediaReady + ACTIVE participates in Network Matching.
+   */
+  visibility         VehicleVisibility @default(PRIVATE)
+
   // Raw & normalized data
   rawInput        String?
   make            String?
@@ -262,18 +304,36 @@ model Vehicle {
   informationRequests InformationRequest[]
   media           VehicleMedia[]
   intakeCandidates VehicleCandidate[]
+  dealerOpportunities DealerOpportunity[]
 
   /** Grandfathered inventory defaults true; new vehicles start false until EXTERIOR+INTERIOR */
   mediaReady      Boolean       @default(true)
 
   @@index([dealerId, status, updatedAt(sort: Desc)])
   @@index([dealerId, status, freshnessState])
+  @@index([dealerId, dealerRelationship, visibility])
+  @@index([visibility, status, mediaReady])
 }
 
 enum VehicleStatus {
   ACTIVE
   SOLD
   ARCHIVED
+}
+
+/** How this Dealer relates to the vehicle (≠ Visibility). */
+enum DealerVehicleRelationship {
+  OWNED
+  INVENTORY
+  OFFERED_TO_ME
+  TRADE_IN_CANDIDATE
+  EXTERNAL
+}
+
+/** Publication state — must never be inferred from relationship alone. */
+enum VehicleVisibility {
+  PRIVATE
+  ANONYMOUS_NETWORK
 }
 
 enum VehicleMediaType {
@@ -341,7 +401,11 @@ enum ImportStatus {
 model Demand {
   id              String       @id @default(cuid())
   dealerId        String
+  /** Optional Customer — Demand ≠ Customer; closing Demand never deletes Customer */
+  customerId      String?
   status          DemandStatus @default(DRAFT)
+  /** Network participation for anonymous demand intelligence / matching as demand side */
+  networkVisibility DemandNetworkVisibility @default(ANONYMOUS_NETWORK)
 
   rawText         String
   parsedJson      Json?
@@ -351,6 +415,7 @@ model Demand {
 
   expiresAt       DateTime?
   renewedAt       DateTime?
+  pausedAt        DateTime?
 
   /** Active Search Intent version id (Matching & Learning 2.0) */
   activeSearchIntentVersionId String? @unique
@@ -359,23 +424,33 @@ model Demand {
   updatedAt       DateTime     @updatedAt
 
   dealer          Dealer       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  customer        Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   constraints     DemandConstraint[]
   candidateMatches CandidateMatch[]
   buyerInterests  BuyerInterest[]
   searchIntentVersions SearchIntentVersion[]
   activeSearchIntentVersion SearchIntentVersion? @relation("DemandActiveIntent", fields: [activeSearchIntentVersionId], references: [id], onDelete: SetNull)
   informationRequests InformationRequest[]
+  dealerOpportunities DealerOpportunity[]
 
   @@index([dealerId, status, updatedAt(sort: Desc)])
   @@index([dealerId, status, expiresAt])
+  @@index([customerId, status])
+  @@index([status, networkVisibility])
 }
 
 enum DemandStatus {
   DRAFT
   PENDING_CONFIRMATION
   ACTIVE
+  PAUSED
   EXPIRED
   CANCELLED
+}
+
+enum DemandNetworkVisibility {
+  PRIVATE
+  ANONYMOUS_NETWORK
 }
 
 enum SearchIntentStatus {
@@ -575,6 +650,57 @@ enum OpportunityStatus {
   REJECTED
   NO_RESPONSE
   CLOSED
+}
+
+/**
+ * Proactive dealer opportunity (beyond bilateral SellerOpportunity after BuyerInterest).
+ * Dedupe via unique (dealerId, dedupeKey). Never contains cross-dealer identity.
+ */
+model DealerOpportunity {
+  id            String                    @id @default(cuid())
+  dealerId      String
+  type          DealerOpportunityType
+  status        DealerOpportunityLifecycle @default(OPEN)
+  priority      Int                       @default(50)
+  dedupeKey     String
+  title         String
+  reasonJson    Json?
+  vehicleId     String?
+  demandId      String?
+  customerId    String?
+  score         Float?
+  dismissedAt   DateTime?
+  resolvedAt    DateTime?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  dealer   Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  demand   Demand?  @relation(fields: [demandId], references: [id], onDelete: SetNull)
+
+  @@unique([dealerId, dedupeKey])
+  @@index([dealerId, status, priority, createdAt(sort: Desc)])
+  @@index([vehicleId])
+  @@index([demandId])
+}
+
+enum DealerOpportunityType {
+  NETWORK_SUPPLY_FOR_MY_DEMAND
+  NETWORK_DEMAND_FOR_MY_VEHICLE
+  PRIVATE_VEHICLE_FOR_MY_CUSTOMER
+  PRICE_OPENED_MATCH
+  DEMAND_FLEXIBILITY_OPENED_MATCH
+  INTEREST_WAITING
+  MUTUAL_INTEREST
+  UNMET_DEMAND
+  OTHER
+}
+
+enum DealerOpportunityLifecycle {
+  OPEN
+  DISMISSED
+  RESOLVED
+  SUPPRESSED
 }
 
 model SellerInterest {

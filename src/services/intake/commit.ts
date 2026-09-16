@@ -171,6 +171,9 @@ export async function commitOneCandidate(
     source: "domain",
     skipRematch: true,
     requireIdentity: false,
+    // Share/intake → workspace candidate, PRIVATE by default (never auto Network Supply)
+    dealerRelationship: "OFFERED_TO_ME",
+    visibility: "PRIVATE",
     fields: {
       make: gov?.make ?? null,
       model: gov?.model ?? null,

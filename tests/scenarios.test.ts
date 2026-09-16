@@ -29,6 +29,8 @@ const baseVehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
   createdAt: new Date(),
   updatedAt: new Date(),
   mediaReady: true,
+  dealerRelationship: "OWNED",
+  visibility: "ANONYMOUS_NETWORK",
   archivedAt: null,
   ...overrides,
 });

@@ -14,6 +14,7 @@ import {
   type StructuredSearchIntent,
 } from "@/services/matching/search-intent-types";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
+import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
 
 export type NearMatchSummary = {
   failField: string;
@@ -79,10 +80,7 @@ export async function diagnoseDemandMatches(
   }
 
   const vehicles = await prisma.vehicle.findMany({
-    where: {
-      status: "ACTIVE",
-      dealerId: { not: dealerId },
-    },
+    where: networkSupplyWhere(dealerId),
     take: 400,
   });
 

@@ -60,6 +60,28 @@ export async function POST(req: Request) {
     return NextResponse.json(updated);
   }
 
+  if (action === "pause") {
+    const { pauseDemandForDealer } = await import(
+      "@/services/demand/demand-mutations"
+    );
+    const result = await pauseDemandForDealer({ dealerId, demandId });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 404 });
+    }
+    return NextResponse.json(result.demand);
+  }
+
+  if (action === "resume") {
+    const { resumeDemandForDealer } = await import(
+      "@/services/demand/demand-mutations"
+    );
+    const result = await resumeDemandForDealer({ dealerId, demandId });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 404 });
+    }
+    return NextResponse.json(result.demand);
+  }
+
   if (action === "renew") {
     const updated = await prisma.demand.update({
       where: { id: demandId },

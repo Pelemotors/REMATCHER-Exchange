@@ -28,6 +28,8 @@ import {
   toSellerOpportunityView,
 } from "@/lib/privacy-views";
 import { computeFreshnessState } from "@/services/inventory/freshness";
+import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
+import { maybeOpportunityFromNetworkMatch } from "@/services/opportunities/dealer-opportunity";
 import { COPY, BRAND } from "@/config/brand";
 
 import { createRevealFromMutualInterest } from "@/services/commercial/reveal-flow";
@@ -53,11 +55,7 @@ export async function runMatchingForDemand(demandId: string) {
   );
 
   const vehicles = await prisma.vehicle.findMany({
-    where: {
-      status: "ACTIVE",
-      mediaReady: true,
-      dealerId: { not: demand.dealerId },
-    },
+    where: networkSupplyWhere(demand.dealerId),
   });
 
   const results = [];
@@ -232,6 +230,14 @@ export async function runMatchingForDemand(demandId: string) {
         ),
       },
     });
+
+    void maybeOpportunityFromNetworkMatch({
+      buyerDealerId: demand.dealerId,
+      demandId,
+      candidateMatchId: match.id,
+      scoreBand: String(evaluationV2.band ?? evaluation.overallBand),
+      score: evaluation.score,
+    }).catch(() => undefined);
 
     if (isPotential) {
       await emitExchangeEvent({

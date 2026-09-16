@@ -265,3 +265,41 @@ export async function activateDemandForDealer(params: {
 
   return { ok: true as const, demand: updated, title: demandTitle(confirmed) };
 }
+
+/** Pause active demand — does not delete Customer. */
+export async function pauseDemandForDealer(params: {
+  dealerId: string;
+  demandId: string;
+}) {
+  const demand = await prisma.demand.findFirst({
+    where: { id: params.demandId, dealerId: params.dealerId, status: "ACTIVE" },
+  });
+  if (!demand) return { ok: false as const, error: "not_found" as const };
+  const updated = await prisma.demand.update({
+    where: { id: demand.id },
+    data: { status: "PAUSED", pausedAt: new Date() },
+  });
+  return { ok: true as const, demand: updated };
+}
+
+/** Resume paused demand → ACTIVE + rematch. */
+export async function resumeDemandForDealer(params: {
+  dealerId: string;
+  demandId: string;
+}) {
+  const demand = await prisma.demand.findFirst({
+    where: { id: params.demandId, dealerId: params.dealerId, status: "PAUSED" },
+  });
+  if (!demand) return { ok: false as const, error: "not_found" as const };
+  const updated = await prisma.demand.update({
+    where: { id: demand.id },
+    data: {
+      status: "ACTIVE",
+      pausedAt: null,
+      expiresAt: computeDemandExpiry(),
+      renewedAt: new Date(),
+    },
+  });
+  await runMatchingForDemand(demand.id);
+  return { ok: true as const, demand: updated };
+}

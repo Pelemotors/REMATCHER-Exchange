@@ -14,6 +14,11 @@ export const INTAKE_AGENT_TOOL_NAMES = [
   "get_my_intake_candidate",
   "diagnose_my_search_matches",
   "get_my_attention_opportunities",
+  "get_my_customers",
+  "find_my_customer",
+  "private_match_vehicle_to_my_demands",
+  "get_network_intelligence",
+  "get_my_dealer_opportunities",
 ] as const;
 
 export type IntakeAgentToolName = (typeof INTAKE_AGENT_TOOL_NAMES)[number];
@@ -121,6 +126,114 @@ export async function executeIntakeTool(
       count: items.length,
       opportunities: items,
       note: "System flags only — do not invent urgency beyond these counts.",
+    };
+  }
+
+  if (name === "get_my_customers") {
+    const { listCustomersForDealer } = await import("@/services/customers");
+    const customers = await listCustomersForDealer(dealerId, {
+      take: typeof args.take === "number" ? args.take : 30,
+    });
+    return {
+      ok: true,
+      count: customers.length,
+      customers: customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        hasPhone: Boolean(c.normalizedPhone),
+        demandCount: c.demands.length,
+        demands: c.demands.map((d) => ({
+          id: d.id,
+          status: d.status,
+          summary: d.rawText.slice(0, 120),
+        })),
+      })),
+      note: "Own customers only. Phone digits are never returned to the model — ask UI if needed after Reveal rules.",
+    };
+  }
+
+  if (name === "find_my_customer") {
+    const { listCustomersForDealer } = await import("@/services/customers");
+    const q = String(args.query ?? args.name ?? "").trim();
+    if (!q) return { ok: false, error: "query_required" };
+    const customers = await listCustomersForDealer(dealerId, { q, take: 10 });
+    return {
+      ok: true,
+      count: customers.length,
+      customers: customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        hasPhone: Boolean(c.normalizedPhone),
+        activeDemands: c.demands.map((d) => ({
+          id: d.id,
+          status: d.status,
+          summary: d.rawText.slice(0, 160),
+        })),
+      })),
+      note: "Never invent customer facts. Closing a demand does not delete the customer.",
+    };
+  }
+
+  if (name === "private_match_vehicle_to_my_demands") {
+    const vehicleId = String(args.vehicleId ?? "");
+    if (!vehicleId) return { ok: false, error: "vehicleId_required" };
+    const { matchPrivateVehicleToMyDemands } = await import(
+      "@/services/matching/private-matching"
+    );
+    const result = await matchPrivateVehicleToMyDemands({ dealerId, vehicleId });
+    if (!result.ok) return { ok: false, error: result.error };
+    return {
+      ...result,
+      // Strip phones from agent-facing payload (privacy even private-side for LLM)
+      matches: result.matches.map((m) => ({
+        demandId: m.demandId,
+        customerId: m.customerId,
+        customerName: m.customerName,
+        band: m.band,
+        score: m.score,
+        summary: m.summary,
+      })),
+      note: "Private match within THIS dealer only. Does not publish vehicle to network.",
+    };
+  }
+
+  if (name === "get_network_intelligence") {
+    const { getNetworkIntelligenceSnapshot, assertNetworkIntelSafe } =
+      await import("@/services/network-intelligence");
+    const snap = await getNetworkIntelligenceSnapshot({
+      dealerId,
+      make: typeof args.make === "string" ? args.make : null,
+      model: typeof args.model === "string" ? args.model : null,
+      yearMin: typeof args.yearMin === "number" ? args.yearMin : null,
+      yearMax: typeof args.yearMax === "number" ? args.yearMax : null,
+    });
+    if (!assertNetworkIntelSafe(snap)) {
+      return { ok: false, error: "privacy_guard_blocked" };
+    }
+    return {
+      ok: true,
+      intelligence: snap,
+      note: "Anonymous aggregates only. If insufficientData, say there is not enough safe network data — never invent counts or identities.",
+    };
+  }
+
+  if (name === "get_my_dealer_opportunities") {
+    const { listOpenDealerOpportunities } = await import(
+      "@/services/opportunities/dealer-opportunity"
+    );
+    const rows = await listOpenDealerOpportunities(dealerId);
+    return {
+      ok: true,
+      count: rows.length,
+      opportunities: rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        priority: r.priority,
+        vehicleId: r.vehicleId,
+        demandId: r.demandId,
+      })),
+      note: "Proactive opportunities for THIS dealer. No cross-dealer identity.",
     };
   }
 

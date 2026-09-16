@@ -107,12 +107,18 @@ describe("vehicle media schema + API surface", () => {
     expect(src).not.toContain("scoreBand: string");
   });
 
-  it("matching only considers mediaReady vehicles", () => {
+  it("matching only considers mediaReady + network-visible vehicles", () => {
     const flow = readFileSync(
       join(root, "src/services/domain/matching-flow.ts"),
       "utf8"
     );
-    expect(flow).toContain("mediaReady: true");
+    expect(flow).toContain("networkSupplyWhere");
+    const gate = readFileSync(
+      join(root, "src/services/vehicles/relationship-visibility.ts"),
+      "utf8"
+    );
+    expect(gate).toContain("mediaReady: true");
+    expect(gate).toContain("ANONYMOUS_NETWORK");
   });
 
   it("buyer match view may expose imageUrl but not dealerId/b2bPrice", () => {

@@ -39,7 +39,7 @@ export async function getEnrichedDemandsForDealer(
   options?: { includeHistory?: boolean; lightweight?: boolean }
 ): Promise<EnrichedDemand[]> {
   const statuses: DemandStatus[] = options?.includeHistory
-    ? ["ACTIVE", "EXPIRED", "CANCELLED", "PENDING_CONFIRMATION", "DRAFT"]
+    ? ["ACTIVE", "PAUSED", "EXPIRED", "CANCELLED", "PENDING_CONFIRMATION", "DRAFT"]
     : ["ACTIVE", "EXPIRED"];
 
   const demands = await prisma.demand.findMany({

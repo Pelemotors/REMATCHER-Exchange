@@ -68,6 +68,10 @@ export async function createVehicleForDealer(input: {
   lastAvailabilityConfirmedAt?: Date | null;
   skipRematch?: boolean;
   db?: InventoryDbClient;
+  /** Default OWNED. Intake Share of external/offer should pass OFFERED_TO_ME. */
+  dealerRelationship?: import("@prisma/client").DealerVehicleRelationship;
+  /** Default PRIVATE — never auto-publish on create. */
+  visibility?: import("@prisma/client").VehicleVisibility;
 }) {
   const db = input.db ?? prisma;
   const requireIdentity = input.requireIdentity !== false;
@@ -230,6 +234,9 @@ export async function createVehicleForDealer(input: {
       // Existing inventory remains mediaReady=true via migration DEFAULT only.
       // No source-based bypass (including import) for newly created vehicles.
       mediaReady: false,
+      // Ownership ≠ Visibility: new creates stay PRIVATE until explicit publish.
+      dealerRelationship: input.dealerRelationship ?? "OWNED",
+      visibility: input.visibility ?? "PRIVATE",
       ...(input.lastAvailabilityConfirmedAt !== undefined
         ? { lastAvailabilityConfirmedAt: input.lastAvailabilityConfirmedAt }
         : {}),
