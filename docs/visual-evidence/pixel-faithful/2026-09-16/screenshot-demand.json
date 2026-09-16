@@ -1,0 +1,418 @@
+{
+  "one": {
+    "ack": 111,
+    "ready": 5018,
+    "batchId": "cmu4oa53000sbjkcsxjbnw5cl",
+    "demand": {
+      "parsed": {
+        "make": {
+          "value": "Mazda",
+          "source": "ai",
+          "status": "known"
+        },
+        "model": {
+          "value": "CX-5",
+          "source": "ai",
+          "status": "known"
+        },
+        "yearMax": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "yearMin": {
+          "value": 2022,
+          "status": "known"
+        },
+        "features": [],
+        "fuelType": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "seatsMin": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "budgetMax": {
+          "value": 140000,
+          "status": "known"
+        },
+        "exclusions": [],
+        "mileageMax": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "rawSummary": "יוסי מחפש Mazda CX-5 משנת 2022 ומעלה, בתקציב של עד 140,000 ש\"ח, עם העדפה לצבע לבן.",
+        "ambiguities": [],
+        "ownershipHand": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "ownershipType": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "trimPreference": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "colorExclusions": [],
+        "hardConstraints": [],
+        "softPreferences": [],
+        "colorPreferences": [
+          "white"
+        ],
+        "engineDisplacementCc": {
+          "value": "unknown",
+          "status": "unknown"
+        }
+      },
+      "status": "PENDING_DEALER_CONFIRM",
+      "rawText": "יוסי\nCX5 מחפש\n22 ומעלה\nעד 140\nעדיף לבן",
+      "mediaIds": [
+        "cmu4oa56400sdjkcsv7u1vha6"
+      ],
+      "summaryHe": "הבנתי 👍\nהלקוח מחפש Mazda CX-5.\nמ-2022 ומעלה.\nעד 140,000 ₪.\nצבע: white."
+    },
+    "media": [
+      {
+        "id": "cmu4oa56400sdjkcsv7u1vha6",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa53000sbjkcsxjbnw5cl/display-73190eb7529ab77f39476d4ae1aeab65.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa53000sbjkcsxjbnw5cl/thumb-73190eb7529ab77f39476d4ae1aeab65.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa53000sbjkcsxjbnw5cl/display-73190eb7529ab77f39476d4ae1aeab65.webp",
+        "originalOrder": 0,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      }
+    ]
+  },
+  "three": {
+    "ack": 136,
+    "ready": 8614,
+    "batchId": "cmu4oa92f00sojkcsu7tbexo2",
+    "demand": {
+      "parsed": {
+        "make": {
+          "value": "Mazda",
+          "source": "ai",
+          "status": "known"
+        },
+        "model": {
+          "value": "CX-5",
+          "source": "ai",
+          "status": "known"
+        },
+        "yearMax": {
+          "value": null,
+          "status": "unknown"
+        },
+        "yearMin": {
+          "value": 2022,
+          "status": "known"
+        },
+        "features": [],
+        "fuelType": {
+          "value": null,
+          "status": "unknown"
+        },
+        "seatsMin": {
+          "value": null,
+          "status": "unknown"
+        },
+        "budgetMax": {
+          "value": 140000,
+          "status": "known"
+        },
+        "exclusions": [
+          {
+            "field": "accident",
+            "value": true,
+            "description": "without accidents"
+          }
+        ],
+        "mileageMax": {
+          "value": 80000,
+          "status": "known"
+        },
+        "rawSummary": "יוסי מחפש CX-5, שנת 22 ומעלה, תקציב עד 140, עדיף לבן, בלי תאונות, רצוי עד 80 אלף קמ.",
+        "ambiguities": [
+          "trade_in:..."
+        ],
+        "ownershipHand": {
+          "value": null,
+          "status": "unknown"
+        },
+        "ownershipType": {
+          "value": null,
+          "status": "unknown"
+        },
+        "trimPreference": {
+          "value": null,
+          "status": "unknown"
+        },
+        "colorExclusions": [],
+        "customerTradeIn": {
+          "notes": "...",
+          "provenance": "agent_inferred"
+        },
+        "hardConstraints": [],
+        "softPreferences": [],
+        "colorPreferences": [
+          "WHITE"
+        ],
+        "engineDisplacementCc": {
+          "value": null,
+          "status": "unknown"
+        }
+      },
+      "status": "PENDING_DEALER_CONFIRM",
+      "rawText": "יוסי\nCX5 מחפש\n22 ומעלה\nעד 140\nעדיף לבן\nבלי תאונות\nרצוי עד 80 אלף קמ\nמתי אפשר לראות?\nאשמח היום אחר הצהר",
+      "mediaIds": [
+        "cmu4oa96j00ssjkcsbxnvj2iu",
+        "cmu4oa96j00sujkcs0hatd2we",
+        "cmu4oa96i00sqjkcs79gzu4px"
+      ],
+      "summaryHe": "הבנתי 👍\nהלקוח מחפש Mazda CX-5.\nמ-2022 ומעלה.\nעד 140,000 ₪.\nעדיפות לWHITE."
+    },
+    "media": [
+      {
+        "id": "cmu4oa96j00ssjkcsbxnvj2iu",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/display-fe2206ba8bcb7db8d95d422d78598b4f.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/thumb-fe2206ba8bcb7db8d95d422d78598b4f.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/display-fe2206ba8bcb7db8d95d422d78598b4f.webp",
+        "originalOrder": 0,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      },
+      {
+        "id": "cmu4oa96j00sujkcs0hatd2we",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/display-1fcebe18d1dc9115dca0e814cd4425ad.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/thumb-1fcebe18d1dc9115dca0e814cd4425ad.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/display-1fcebe18d1dc9115dca0e814cd4425ad.webp",
+        "originalOrder": 1,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      },
+      {
+        "id": "cmu4oa96i00sqjkcs79gzu4px",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/display-701d077d54cfda3a00b46b0070e9231d.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/thumb-701d077d54cfda3a00b46b0070e9231d.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oa92f00sojkcsu7tbexo2/display-701d077d54cfda3a00b46b0070e9231d.webp",
+        "originalOrder": 2,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      }
+    ]
+  },
+  "five": {
+    "ack": 124,
+    "ready": 10136,
+    "batchId": "cmu4oafuc00t7jkcsa3l72w1n",
+    "demand": {
+      "parsed": {
+        "make": {
+          "value": "Mazda",
+          "source": "ai",
+          "status": "known"
+        },
+        "model": {
+          "value": "CX-5",
+          "source": "ai",
+          "status": "known"
+        },
+        "yearMax": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "yearMin": {
+          "value": 2022,
+          "status": "known"
+        },
+        "features": [],
+        "fuelType": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "seatsMin": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "budgetMax": {
+          "value": 140000,
+          "status": "known"
+        },
+        "exclusions": [
+          {
+            "field": "accidents",
+            "value": true,
+            "description": "no accidents"
+          }
+        ],
+        "mileageMax": {
+          "value": 80000,
+          "status": "known"
+        },
+        "rawSummary": "יוסי מחפש CX-5 2022 ומעלה, עד 140 אלף ש\"ח, עדיף לבן, בלי תאונות, רצוי עד 80 אלף ק\"מ. בנוסף, מחפש קורולה 2020 ומעלה, עד 90 אלף ש\"ח, עדיף אפור.",
+        "ambiguities": [
+          "trade_in:...",
+          "yearMax:unknown",
+          "mileageMax:unknown"
+        ],
+        "ownershipHand": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "ownershipType": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "trimPreference": {
+          "value": "unknown",
+          "status": "unknown"
+        },
+        "colorExclusions": [],
+        "customerTradeIn": {
+          "notes": "...",
+          "provenance": "agent_inferred"
+        },
+        "hardConstraints": [],
+        "softPreferences": [],
+        "colorPreferences": [
+          "WHITE"
+        ],
+        "engineDisplacementCc": {
+          "value": "unknown",
+          "status": "unknown"
+        }
+      },
+      "status": "PENDING_DEALER_CONFIRM",
+      "rawText": "יוסי\nCX5 מחפש\n22 ומעלה\nעד 140\nעדיף לבן\nבלי תאונות\nרצוי עד 80 אלף קמ\nמתי אפשר לראות?\nאשמח היום אחר הצהר\nמחפשת קורולה\nומעלה 2020\nעד 90 אלף\nעדיף אפור",
+      "mediaIds": [
+        "cmu4oafyn00tfjkcs13t00uk3",
+        "cmu4oafyj00t9jkcsl90rq7oj",
+        "cmu4oafyn00tdjkcsnqs6s0nw",
+        "cmu4oafym00tbjkcs4aar8x7q",
+        "cmu4oafzz00thjkcsni8gpflt"
+      ],
+      "summaryHe": "הבנתי 👍\nהלקוח מחפש Mazda CX-5.\nמ-2022 ומעלה.\nעד 140,000 ₪.\nעדיפות לWHITE."
+    },
+    "media": [
+      {
+        "id": "cmu4oafyn00tfjkcs13t00uk3",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-c469ec18309e792c25c1f913097b59d4.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/thumb-c469ec18309e792c25c1f913097b59d4.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-c469ec18309e792c25c1f913097b59d4.webp",
+        "originalOrder": 0,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      },
+      {
+        "id": "cmu4oafyj00t9jkcsl90rq7oj",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-2a2b32358de0d6d7920c1693004678d2.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/thumb-2a2b32358de0d6d7920c1693004678d2.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-2a2b32358de0d6d7920c1693004678d2.webp",
+        "originalOrder": 1,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      },
+      {
+        "id": "cmu4oafyn00tdjkcsnqs6s0nw",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-ccb3b3b7ee06b6c800d55704a5ebe5af.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/thumb-ccb3b3b7ee06b6c800d55704a5ebe5af.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-ccb3b3b7ee06b6c800d55704a5ebe5af.webp",
+        "originalOrder": 2,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      },
+      {
+        "id": "cmu4oafym00tbjkcs4aar8x7q",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-e3f2345cc49d454a74b5049f51d2cc02.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/thumb-e3f2345cc49d454a74b5049f51d2cc02.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-e3f2345cc49d454a74b5049f51d2cc02.webp",
+        "originalOrder": 3,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      },
+      {
+        "id": "cmu4oafzz00thjkcsni8gpflt",
+        "url": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-ea219cab83e67aa21b7ac1310968692e.webp",
+        "thumbUrl": "https://exchange.rematcher.co.il/api/media/intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/thumb-ea219cab83e67aa21b7ac1310968692e.webp",
+        "storageKey": "intake/cmu4mts8j0000jkfubz7jyh7s/cmu4oafuc00t7jkcsa3l72w1n/display-ea219cab83e67aa21b7ac1310968692e.webp",
+        "originalOrder": 4,
+        "categoryHint": null,
+        "processingStatus": "READY",
+        "discovery": {
+          "ocrPlate": null,
+          "skipReason": "unresolved_identity",
+          "ocrAttempted": false,
+          "ocrConfidence": null,
+          "groupingResult": "unresolved",
+          "groupingCandidateKey": null
+        }
+      }
+    ]
+  }
+}

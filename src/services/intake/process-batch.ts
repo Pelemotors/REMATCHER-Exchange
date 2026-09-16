@@ -112,6 +112,7 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
       string,
       { value: string; confidence: number }
     >();
+    const tracesByMedia = new Map<string, DiscoveryTrace>();
 
     await mapWithConcurrency(mediaRows, INTAKE_OCR_CONCURRENCY, async (media) => {
       if (classified.skipOcrMediaIds.has(media.id)) {
@@ -133,6 +134,14 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
               groupingResult: "skipped_non_vehicle",
             }),
           },
+        });
+        tracesByMedia.set(media.id, {
+          ocrAttempted: false,
+          ocrPlate: existing?.ocrPlate ?? null,
+          ocrConfidence: existing?.ocrConfidence ?? null,
+          groupingCandidateKey: existing?.groupingCandidateKey ?? null,
+          groupingResult: "skipped_non_vehicle",
+          skipReason: "conversation_or_document",
         });
         return;
       }
@@ -184,6 +193,7 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
         groupingResult: null,
         skipReason,
       };
+      tracesByMedia.set(media.id, trace);
       await prisma.intakeMedia.update({
         where: { id: media.id },
         data: { discoveryJson: toPrismaJson(trace) },
@@ -338,23 +348,31 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
       for (const mediaId of group.mediaIds) {
         const a = assignmentByMedia.get(mediaId);
         const media = mediaRows.find((row) => row.id === mediaId);
-        const prev = (media?.discoveryJson as DiscoveryTrace | null) ?? {
-          ocrAttempted: false,
-          ocrPlate: null,
-          ocrConfidence: null,
-          groupingCandidateKey: null,
-          groupingResult: null,
-          skipReason: null,
+        const ocr = ocrByMedia.get(mediaId);
+        const prev =
+          tracesByMedia.get(mediaId) ??
+          (media?.discoveryJson as DiscoveryTrace | null) ?? {
+            ocrAttempted: false,
+            ocrPlate: null,
+            ocrConfidence: null,
+            groupingCandidateKey: null,
+            groupingResult: null,
+            skipReason: null,
+          };
+        const next: DiscoveryTrace = {
+          ...prev,
+          ocrAttempted: prev.ocrAttempted || Boolean(ocr),
+          ocrPlate: ocr?.value ?? prev.ocrPlate,
+          ocrConfidence: ocr?.confidence ?? prev.ocrConfidence,
+          groupingCandidateKey: candidateId,
+          groupingResult: a?.reason ?? group.groupingReason,
+          skipReason: prev.skipReason,
         };
+        tracesByMedia.set(mediaId, next);
         await prisma.intakeMedia.update({
           where: { id: mediaId },
           data: {
-            discoveryJson: toPrismaJson({
-              ...prev,
-              groupingCandidateKey: candidateId,
-              groupingResult: a?.reason ?? group.groupingReason,
-              skipReason: prev.skipReason,
-            }),
+            discoveryJson: toPrismaJson(next),
           },
         });
       }
@@ -363,19 +381,25 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
     const assignedIds = new Set(groups.flatMap((g) => g.mediaIds));
     for (const media of mediaRows) {
       if (assignedIds.has(media.id)) continue;
-      const prev = (media.discoveryJson as DiscoveryTrace | null) ?? {
-        ocrAttempted: false,
-        ocrPlate: null,
-        ocrConfidence: null,
-        groupingCandidateKey: null,
-        groupingResult: null,
-        skipReason: null,
-      };
+      const ocr = ocrByMedia.get(media.id);
+      const prev =
+        tracesByMedia.get(media.id) ??
+        (media.discoveryJson as DiscoveryTrace | null) ?? {
+          ocrAttempted: false,
+          ocrPlate: null,
+          ocrConfidence: null,
+          groupingCandidateKey: null,
+          groupingResult: null,
+          skipReason: null,
+        };
       await prisma.intakeMedia.update({
         where: { id: media.id },
         data: {
           discoveryJson: toPrismaJson({
             ...prev,
+            ocrAttempted: prev.ocrAttempted || Boolean(ocr),
+            ocrPlate: ocr?.value ?? prev.ocrPlate,
+            ocrConfidence: ocr?.confidence ?? prev.ocrConfidence,
             groupingCandidateKey: null,
             groupingResult: "unresolved",
             skipReason: prev.skipReason ?? "unresolved_identity",

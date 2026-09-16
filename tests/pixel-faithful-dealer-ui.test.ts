@@ -77,6 +77,7 @@ describe("Pixel-faithful Capture / conversation", () => {
   it("intent grid is 2×2 with colored actions", () => {
     const css = read("src/components/intake/intake-conversation.module.css");
     expect(css).toContain("grid-template-columns: 1fr 1fr");
+    expect(css).toContain(".cardTop");
     expect(css).toContain(".actionOwned");
     expect(css).toContain(".actionOffered");
     expect(css).toContain(".actionTrade");

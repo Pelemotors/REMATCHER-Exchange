@@ -1,6 +1,9 @@
 .shell {
   display: flex;
+  height: 100dvh;
+  max-height: 100dvh;
   min-height: 100dvh;
+  overflow: hidden;
   flex-direction: column;
   background: #070c14;
 }
@@ -22,6 +25,7 @@
   top: 0;
   z-index: 40;
   display: flex;
+  direction: ltr;
   min-height: calc(52px + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
@@ -89,6 +93,7 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
   padding: 0;
   padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
 }
@@ -99,6 +104,7 @@
   bottom: 0;
   z-index: 50;
   display: flex;
+  direction: ltr;
   background: rgba(7, 12, 20, 0.97);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -202,6 +208,10 @@
 @media (min-width: 768px) {
   .shell {
     display: grid;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    min-height: 100dvh;
     grid-template-columns: 88px minmax(0, 1fr);
   }
 

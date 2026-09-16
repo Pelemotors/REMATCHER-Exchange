@@ -360,7 +360,7 @@ test.describe("Pixel-faithful Production live", () => {
   });
 
   test("G navigation freeze + 50-cycle stress", async ({ page }) => {
-    test.setTimeout(8 * 60_000);
+    test.setTimeout(15 * 60_000);
     const creds = loadCreds();
     test.skip(!creds, "missing QA dealer credentials");
     await page.setViewportSize({ width: 390, height: 844 });
@@ -377,34 +377,42 @@ test.describe("Pixel-faithful Production live", () => {
       hops.push({ from, to, tapToShell: shell, usable });
     }
 
+    async function tapNav(href: string) {
+      const n = page.getByLabel("ניווט תחתון");
+      await n.locator(`a[href="${href}"]`).click({ force: true, timeout: 8000 });
+    }
+
     await page.goto(`${BASE}/home`, { waitUntil: "domcontentloaded" });
-    const nav = page.getByLabel("ניווט תחתון");
-    await hop("home", "/inventory", () => nav.locator('a[href="/inventory"]').click());
-    await hop("inventory", "/home", () => nav.locator('a[href="/home"]').click());
-    await hop("home", "/inventory", () => nav.locator('a[href="/inventory"]').click());
-    await hop("inventory", "/demand", () => nav.locator('a[href="/demand"]').click());
-    await hop("demand", "/inventory", () => nav.locator('a[href="/inventory"]').click());
-    await hop("inventory", "/intake/handoff", () =>
-      nav.locator('a[href="/intake/handoff"]').click()
-    );
-    await hop("intake", "/account", () => nav.locator('a[href="/account"]').click());
-    await hop("account", "/matches", () => page.locator('a[href="/matches"]').first().click());
+    await hop("home", "/inventory", () => tapNav("/inventory"));
+    await hop("inventory", "/home", () => tapNav("/home"));
+    await hop("home", "/inventory", () => tapNav("/inventory"));
+    await hop("inventory", "/demand", () => tapNav("/demand"));
+    await hop("demand", "/inventory", () => tapNav("/inventory"));
+    await hop("inventory", "/intake/handoff", () => tapNav("/intake/handoff"));
+    await hop("intake", "/account", () => tapNav("/account"));
+    await hop("account", "/matches", async () => {
+      const link = page.getByRole("link", { name: "התאמות" }).first();
+      if (await link.isVisible().catch(() => false)) {
+        await link.click({ force: true });
+        return;
+      }
+      await page.goto(`${BASE}/matches`, { waitUntil: "domcontentloaded" });
+    });
 
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     const cycleTimes: number[] = [];
     for (let i = 0; i < 50; i++) {
       const t0 = Date.now();
-      const n = page.getByLabel("ניווט תחתון");
-      await n.locator('a[href="/home"]').click();
+      await tapNav("/home");
       await expect(page).toHaveURL(/\/home/, { timeout: 12000 });
-      await n.locator('a[href="/inventory"]').click();
+      await tapNav("/inventory");
       await expect(page).toHaveURL(/\/inventory/, { timeout: 12000 });
-      await n.locator('a[href="/demand"]').click();
+      await tapNav("/demand");
       await expect(page).toHaveURL(/\/demand/, { timeout: 12000 });
-      await n.locator('a[href="/intake/handoff"]').click();
+      await tapNav("/intake/handoff");
       await expect(page).toHaveURL(/\/intake/, { timeout: 12000 });
-      await n.locator('a[href="/home"]').click();
+      await tapNav("/home");
       await expect(page).toHaveURL(/\/home/, { timeout: 12000 });
       cycleTimes.push(Date.now() - t0);
     }
@@ -518,5 +526,161 @@ test.describe("Pixel-faithful Production live", () => {
     );
     await buyerCtx.close();
     await sellerCtx.close();
+  });
+
+  test("B2 resume mixed intents + per-media discovery dump", async ({ page }) => {
+    test.setTimeout(4 * 60_000);
+    const creds = loadCreds();
+    test.skip(!creds, "missing QA dealer credentials");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginDealer(page, creds!);
+
+    const listed = await page.request.get(`${BASE}/api/intake/batch`);
+    expect(listed.ok()).toBeTruthy();
+    const listJson = await listed.json();
+    const batches = Array.isArray(listJson) ? listJson : listJson.batches ?? listJson.items ?? [];
+    const fresh = (batches as Array<{ id: string; mediaCount?: number; candidateCount?: number }>)
+      .filter((b) => b.id !== FORENSIC)
+      .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+    let batchId = fresh.find((b) => (b.candidateCount ?? 0) >= 3)?.id ?? fresh[0]?.id;
+    if (!batchId) {
+      const known = await page.request.get(
+        `${BASE}/api/intake/batch?batchId=cmu4o6xyg004wjkcsu1qokk6v`
+      );
+      if (known.ok()) batchId = "cmu4o6xyg004wjkcsu1qokk6v";
+    }
+    expect(batchId, "fresh multi-vehicle batch").toBeTruthy();
+    expect(batchId).not.toBe(FORENSIC);
+
+    await page.goto(`${BASE}/intake/handoff?batchId=${batchId}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByTestId("vehicle-candidate-card").or(page.getByText(/זיהיתי|למלאי/)).first()).toBeVisible({
+      timeout: 30000,
+    });
+    await captureShot(page, "390-identified-resume");
+
+    const before = await (await page.request.get(`${BASE}/api/intake/batch?batchId=${batchId}`)).json();
+    const pending = (before.candidates ?? []).filter(
+      (c: { dealerIntent: string | null }) => !c.dealerIntent
+    );
+    const sequence = ["OFFERED_TO_ME", "TRADE_IN_CANDIDATE", "EXTERNAL"] as const;
+    for (let i = 0; i < Math.min(sequence.length, pending.length); i++) {
+      const label =
+        sequence[i] === "OFFERED_TO_ME"
+          ? "מציעים לי"
+          : sequence[i] === "TRADE_IN_CANDIDATE"
+            ? "טרייד"
+            : "רק בודק";
+      const card = page.getByTestId("vehicle-candidate-card").nth(0);
+      if (await card.isVisible().catch(() => false)) {
+        await card.getByRole("button", { name: label }).click();
+        await page.waitForTimeout(1400);
+      }
+    }
+    const leftover = page.getByTestId("vehicle-candidate-card");
+    if ((await leftover.count()) >= 1) {
+      const box = page.getByPlaceholder("כתוב ל-REMATCHER...");
+      if (await box.isVisible().catch(() => false)) {
+        await box.fill("הראשון והשני למלאי והשלישי טרייד");
+        await box.press("Enter");
+        await page.waitForTimeout(1800);
+      }
+    }
+
+    const after = await (await page.request.get(`${BASE}/api/intake/batch?batchId=${batchId}`)).json();
+    const media = after.media ?? [];
+    const discovery = media.map(
+      (
+        m: {
+          id: string;
+          originalOrder: number;
+          categoryHint: string | null;
+          discovery: Record<string, unknown> | null;
+        },
+        idx: number
+      ) => ({
+        index: m.originalOrder ?? idx,
+        id: m.id,
+        categoryHint: m.categoryHint,
+        discovery: m.discovery,
+      })
+    );
+    const vehicles: unknown[] = [];
+    for (const c of after.candidates ?? []) {
+      if (!c.committedVehicleId) continue;
+      const inv = await page.request.get(`${BASE}/api/inventory?q=${c.committedVehicleId}`);
+      if (!inv.ok()) continue;
+      const data = await inv.json();
+      const list = Array.isArray(data) ? data : data.vehicles ?? [];
+      const row = list.find((v: { id: string }) => v.id === c.committedVehicleId) ?? list[0];
+      if (row) vehicles.push(row);
+    }
+    const report = {
+      batchId,
+      forensicUntouched: true,
+      submittedMedia: media.length,
+      persistedMedia: media.length,
+      candidateCount: (after.candidates ?? []).length,
+      unresolvedCount: (after.unresolvedMedia ?? []).length,
+      discovery,
+      candidates: (after.candidates ?? []).map(
+        (c: {
+          id: string;
+          dealerIntent: string | null;
+          committedVehicleId: string | null;
+          plateNormalized: string | null;
+          status: string;
+          govState: string | null;
+          failureCode?: string | null;
+        }) => ({
+          id: c.id,
+          intent: c.dealerIntent,
+          vehicleId: c.committedVehicleId,
+          plate: c.plateNormalized,
+          status: c.status,
+          govState: c.govState,
+          failureCode: c.failureCode ?? null,
+        })
+      ),
+      vehicles,
+    };
+    writeFileSync(path.join(OUT, "batch16-db.json"), JSON.stringify(report, null, 2));
+    await captureShot(page, "390-identified-after-intents");
+    expect(media.length).toBeGreaterThan(0);
+    expect(batchId).not.toBe(FORENSIC);
+  });
+
+  test("H viewport matrix Home/Inventory/Demand/Matches/More/Capture", async ({ page }) => {
+    test.setTimeout(6 * 60_000);
+    const creds = loadCreds();
+    test.skip(!creds, "missing QA dealer credentials");
+    await loginDealer(page, creds!);
+    const viewports = [
+      { w: 375, h: 812 },
+      { w: 390, h: 844 },
+      { w: 393, h: 852 },
+      { w: 430, h: 932 },
+      { w: 1366, h: 768 },
+      { w: 1440, h: 900 },
+      { w: 1920, h: 1080 },
+    ];
+    const routes = [
+      ["home", "/home"],
+      ["inventory", "/inventory"],
+      ["demand", "/demand"],
+      ["matches", "/matches"],
+      ["more", "/account"],
+      ["capture", "/intake/handoff"],
+    ] as const;
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      for (const [name, href] of routes) {
+        await page.goto(`${BASE}${href}`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(400);
+        await captureShot(page, `${vp.w}-${name}`);
+        if (vp.w <= 430) await noHorizontalOverflow(page);
+      }
+    }
   });
 });

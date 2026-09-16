@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ChevronRight,
+  ChevronLeft,
   MoreHorizontal,
   Image as ImageIcon,
   Camera,
@@ -499,7 +499,7 @@ export function IntakeHandoffClient() {
           ) : (
             <>
               <Link href="/home" className={styles.headerIcon} aria-label="חזרה">
-                <ChevronRight size={22} strokeWidth={1.75} />
+                <ChevronLeft size={22} strokeWidth={1.75} />
               </Link>
               <div className={styles.headerBrand}>
                 <p className={styles.headerTitle}>REMATCHER</p>
@@ -603,9 +603,7 @@ export function IntakeHandoffClient() {
                     <path d="M12.04 2C6.58 2 2.15 6.43 2.15 11.89c0 1.95.51 3.86 1.48 5.54L2 22l4.71-1.55a9.86 9.86 0 0 0 5.33 1.44h.01c5.46 0 9.89-4.43 9.89-9.89C21.94 6.43 17.5 2 12.04 2zm5.76 14.01c-.24.68-1.4 1.26-1.95 1.34-.5.07-1.13.1-1.82-.11-.42-.13-.96-.31-1.65-.61-2.9-1.26-4.79-4.2-4.94-4.4-.14-.2-1.18-1.57-1.18-3 0-1.42.75-2.12 1.01-2.41.27-.28.59-.35.78-.35h.56c.18 0 .42-.07.66.5.24.59.82 2.04.89 2.19.07.15.12.32.02.52-.1.2-.15.32-.3.5-.14.17-.3.39-.43.52-.14.14-.29.29-.12.56.16.28.73 1.2 1.57 1.94 1.08.96 1.99 1.26 2.27 1.4.28.14.44.12.6-.07.16-.2.7-.81.88-1.09.19-.28.37-.23.62-.14.26.1 1.63.77 1.91.91.28.14.46.21.53.32.07.12.07.68-.17 1.36z" />
                   </svg>
                 </span>
-                <span>
-                  או שתף ישירות מ־WhatsApp — שלח לכאן תמונות או הודעה
-                </span>
+                <span>או שתף ישירות מ־WhatsApp</span>
               </p>
             </div>
           ) : (
@@ -776,59 +774,61 @@ export function IntakeHandoffClient() {
                 }
                 return (
                   <div key={c.id} className={styles.card} data-testid="vehicle-candidate-card">
-                    {c.thumbUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.thumbUrl} alt="" className={styles.cardThumb} />
-                    ) : (
-                      <div className={styles.cardThumb} />
-                    )}
-                    <div>
-                      <p className={styles.cardTitle}>{v.title}</p>
-                      <p className={styles.cardMeta}>{v.meta}</p>
-                      {c.plateNormalized || c.detectedPlate ? (
-                        <p className={styles.cardPlate}>
-                          {formatIsraeliPlate(c.plateNormalized || c.detectedPlate)}
-                        </p>
-                      ) : null}
-                      {c.status === "NEEDS_INFO" && !c.make ? (
-                        <p className={styles.cardAsk}>
-                          את הרכב הזה עוד לא הצלחתי לזהות בוודאות. יש לך מספר רכב?
-                        </p>
+                    <div className={styles.cardTop}>
+                      {c.thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.thumbUrl} alt="" className={styles.cardThumb} />
                       ) : (
-                        <p className={styles.cardAsk}>מה הרכב הזה בשבילך?</p>
+                        <div className={styles.cardThumb} />
                       )}
-                      <div className={styles.actions}>
-                        {INTENTS.map((intent) => (
-                          <button
-                            key={intent.value}
-                            type="button"
-                            className={`${styles.action} ${INTENT_TONE[intent.tone]}`}
-                            disabled={busyIntent != null}
-                            onClick={() =>
-                              void sendIntent({
-                                candidateId: c.id,
-                                intent: intent.value,
-                              })
-                            }
-                          >
-                            <intent.Icon size={14} strokeWidth={2.2} aria-hidden />
-                            {intent.label}
-                          </button>
-                        ))}
+                      <div className={styles.cardIdentity}>
+                        <p className={styles.cardTitle}>{v.title}</p>
+                        <p className={styles.cardMeta}>{v.meta}</p>
+                        {c.plateNormalized || c.detectedPlate ? (
+                          <p className={styles.cardPlate}>
+                            {formatIsraeliPlate(c.plateNormalized || c.detectedPlate)}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    {c.status === "NEEDS_INFO" && !c.make ? (
+                      <p className={styles.cardAsk}>
+                        את הרכב הזה עוד לא הצלחתי לזהות בוודאות. יש לך מספר רכב?
+                      </p>
+                    ) : (
+                      <p className={styles.cardAsk}>מה הרכב הזה בשבילך?</p>
+                    )}
+                    <div className={styles.actions}>
+                      {INTENTS.map((intent) => (
                         <button
+                          key={intent.value}
                           type="button"
-                          className={styles.discard}
+                          className={`${styles.action} ${INTENT_TONE[intent.tone]}`}
                           disabled={busyIntent != null}
                           onClick={() =>
                             void sendIntent({
                               candidateId: c.id,
-                              intent: "DISCARD",
+                              intent: intent.value,
                             })
                           }
                         >
-                          מחק / טעות
+                          <intent.Icon size={14} strokeWidth={2.2} aria-hidden />
+                          {intent.label}
                         </button>
-                      </div>
+                      ))}
+                      <button
+                        type="button"
+                        className={styles.discard}
+                        disabled={busyIntent != null}
+                        onClick={() =>
+                          void sendIntent({
+                            candidateId: c.id,
+                            intent: "DISCARD",
+                          })
+                        }
+                      >
+                        מחק / טעות
+                      </button>
                     </div>
                   </div>
                 );

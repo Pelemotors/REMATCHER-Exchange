@@ -1,0 +1,23 @@
+{
+  "suffix": "557faa",
+  "forensic": {
+    "forensicUntouched": true,
+    "forensicId": "cmu4k7t8v003yjktzkcr5anbu",
+    "forensicStatus": "COMMITTED"
+  },
+  "journey5": {
+    "ok": true,
+    "gapWasYear": true,
+    "matchesBeforeConstraintChange": 0,
+    "matchesAfter": 1,
+    "demandId": "cmu4nw7bw0001jknc1puphex4",
+    "vehicleId": "cmu4nw7c10003jkncowmgheuq",
+    "matchId": "cmu4nw7zx0029jknce6ndxjuh"
+  },
+  "journey6": {
+    "ok": true,
+    "matchId": "cmu4nw8uo005jjkncfusej768",
+    "revealId": "cmu4nw8xl006fjknckpnh1bqm",
+    "identitiesHiddenBeforeAndAfterFirstInterest": true
+  }
+}

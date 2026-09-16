@@ -1,0 +1,24 @@
+{
+  "id": "cmu4o8uoc00qrjkcslmhzeq7g",
+  "row": {
+    "id": "cmu4o8uoc00qrjkcslmhzeq7g",
+    "make": "Toyota",
+    "model": "RAV4",
+    "year": 2021,
+    "mileage": null,
+    "b2bPrice": null,
+    "retailPrice": null,
+    "trim": null,
+    "color": null,
+    "status": "ACTIVE",
+    "freshnessState": "FRESH",
+    "mediaReady": false,
+    "dealerRelationship": "OFFERED_TO_ME",
+    "visibility": "PRIVATE",
+    "updatedAt": "2026-09-16T22:27:48.743Z",
+    "createdAt": "2026-09-16T22:27:48.684Z",
+    "openInterestCount": 0,
+    "pendingValidationCount": 0
+  },
+  "relationship": "OFFERED_TO_ME"
+}

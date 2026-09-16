@@ -1,0 +1,559 @@
+{
+  "forensic": {
+    "id": "cmu4k7t8v003yjktzkcr5anbu",
+    "status": "COMMITTED",
+    "updatedAt": "2026-09-16T20:35:28.955Z",
+    "untouched": true
+  },
+  "batch": {
+    "id": "cmu4o6xyg004wjkcsu1qokk6v",
+    "status": "NEEDS_REVIEW",
+    "createdAt": "2026-09-16T22:26:19.624Z"
+  },
+  "submittedMedia": 16,
+  "persistedMedia": 16,
+  "perMedia": [
+    {
+      "id": "cmu4o6yat0054jkcs1gkzkks5",
+      "originalOrder": 0,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "order_before_first_plate",
+        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76xa0078jkcsqj4j9nsy"
+      ]
+    },
+    {
+      "id": "cmu4o6yaq0050jkcsyp1jb0jv",
+      "originalOrder": 1,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76xa0078jkcsqj4j9nsy"
+      ]
+    },
+    {
+      "id": "cmu4o6yaq0052jkcsrtw3lzo3",
+      "originalOrder": 2,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76xa0078jkcsqj4j9nsy"
+      ]
+    },
+    {
+      "id": "cmu4o6yaq004yjkcspi7hukyq",
+      "originalOrder": 3,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76xa0078jkcsqj4j9nsy"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76xa0078jkcsqj4j9nsy"
+      ]
+    },
+    {
+      "id": "cmu4o6yd4005ajkcsw7iijsj4",
+      "originalOrder": 4,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76y3007fjkcs2w8jhcbj"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76y3007fjkcs2w8jhcbj"
+      ]
+    },
+    {
+      "id": "cmu4o6yd5005cjkcssshtoyjq",
+      "originalOrder": 5,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76y3007fjkcs2w8jhcbj"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76y3007fjkcs2w8jhcbj"
+      ]
+    },
+    {
+      "id": "cmu4o6yd20058jkcsptuu4f0j",
+      "originalOrder": 6,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76y3007fjkcs2w8jhcbj"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76y3007fjkcs2w8jhcbj"
+      ]
+    },
+    {
+      "id": "cmu4o6yd10056jkcsv0urnbms",
+      "originalOrder": 7,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76yw007ljkcsejbuqi4h"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76yw007ljkcsejbuqi4h"
+      ]
+    },
+    {
+      "id": "cmu4o6yf7005kjkcslqm53sot",
+      "originalOrder": 8,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76yw007ljkcsejbuqi4h"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76yw007ljkcsejbuqi4h"
+      ]
+    },
+    {
+      "id": "cmu4o6yf6005ijkcsjs5grcv4",
+      "originalOrder": 9,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76zn007qjkcsumpl1jlq"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76zn007qjkcsumpl1jlq"
+      ]
+    },
+    {
+      "id": "cmu4o6yf1005gjkcs57zttz16",
+      "originalOrder": 10,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o76zn007qjkcsumpl1jlq"
+      },
+      "attachedCandidateIds": [
+        "cmu4o76zn007qjkcsumpl1jlq"
+      ]
+    },
+    {
+      "id": "cmu4o6yex005ejkcs208z16g2",
+      "originalOrder": 11,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o7708007vjkcsthyo2ay7"
+      },
+      "attachedCandidateIds": [
+        "cmu4o7708007vjkcsthyo2ay7"
+      ]
+    },
+    {
+      "id": "cmu4o6ygu005mjkcsp7fcgnpg",
+      "originalOrder": 12,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o7708007vjkcsthyo2ay7"
+      },
+      "attachedCandidateIds": [
+        "cmu4o7708007vjkcsthyo2ay7"
+      ]
+    },
+    {
+      "id": "cmu4o6yh0005ojkcsh33p5g2e",
+      "originalOrder": 13,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o770x0080jkcsf1sh706s"
+      },
+      "attachedCandidateIds": [
+        "cmu4o770x0080jkcsf1sh706s"
+      ]
+    },
+    {
+      "id": "cmu4o6yh5005sjkcsi2p2zxhp",
+      "originalOrder": 14,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o770x0080jkcsf1sh706s"
+      },
+      "attachedCandidateIds": [
+        "cmu4o770x0080jkcsf1sh706s"
+      ]
+    },
+    {
+      "id": "cmu4o6yh4005qjkcsb72h9swg",
+      "originalOrder": 15,
+      "processingStatus": "READY",
+      "categoryHint": null,
+      "ocrAttempted": false,
+      "plateFound": null,
+      "grouping": null,
+      "discoveryJson": {
+        "ocrPlate": null,
+        "skipReason": null,
+        "ocrAttempted": false,
+        "ocrConfidence": null,
+        "groupingResult": "plate",
+        "groupingCandidateKey": "cmu4o771m0085jkcsbzerfpd5"
+      },
+      "attachedCandidateIds": [
+        "cmu4o771m0085jkcsbzerfpd5"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "id": "cmu4o76xa0078jkcsqj4j9nsy",
+      "status": "COMMITTED",
+      "plateNormalized": "1234567",
+      "govState": "FOUND",
+      "govIdentityJson": {
+        "raw": {
+          "_id": 540868,
+          "baalut": "פרטי",
+          "degem_cd": 321,
+          "degem_nm": "939AXB11",
+          "misgeret": "ZAR93900007252501",
+          "tokef_dt": "2026-07-15",
+          "tzeva_cd": 10,
+          "sug_degem": "P",
+          "tozeret_cd": 74,
+          "tozeret_nm": "אלפא רומיאו_אי",
+          "zmig_ahori": "235/45R18",
+          "zmig_kidmi": "235/45R18",
+          "degem_manoa": "939A5000",
+          "ramat_gimur": "CLASSICOPLUS",
+          "shnat_yitzur": 2009,
+          "sug_delek_nm": "בנזין",
+          "tzeva_rechev": "שחור",
+          "horaat_rishum": null,
+          "kinuy_mishari": "ALFA ROMEO 159",
+          "kvutzat_zihum": 15,
+          "mispar_rechev": 1234567,
+          "mivchan_acharon_dt": "2025-10-06",
+          "moed_aliya_lakvish": "2009-7",
+          "ramat_eivzur_betihuty": null
+        },
+        "make": "אלפא רומיאו_אי",
+        "trim": "939AXB11",
+        "year": 2009,
+        "color": "שחור",
+        "model": "ALFA ROMEO 159",
+        "plate": "1234567",
+        "source": "data.gov.il",
+        "lookedUpAt": "2026-09-16T22:26:31.966Z",
+        "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
+      },
+      "dealerIntent": "OWNED",
+      "committedVehicleId": "cmu4o7g6b008tjkcsr89ocng8",
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 4
+    },
+    {
+      "id": "cmu4o76y3007fjkcs2w8jhcbj",
+      "status": "NEEDS_INFO",
+      "plateNormalized": "9876543",
+      "govState": "NOT_FOUND",
+      "govIdentityJson": null,
+      "dealerIntent": "OWNED",
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 3
+    },
+    {
+      "id": "cmu4o76yw007ljkcsejbuqi4h",
+      "status": "READY",
+      "plateNormalized": "1122233",
+      "govState": "FOUND",
+      "govIdentityJson": {
+        "raw": {
+          "_id": 916781,
+          "baalut": "פרטי",
+          "degem_cd": 99,
+          "degem_nm": "312AXD1A",
+          "misgeret": "ZFA3120000J275359",
+          "tokef_dt": "2027-01-19",
+          "tzeva_cd": 50,
+          "sug_degem": "P",
+          "tozeret_cd": 798,
+          "tozeret_nm": "פיאט פולין",
+          "zmig_ahori": "205/40ZR17",
+          "zmig_kidmi": "205/40ZR17",
+          "degem_manoa": "312A1000",
+          "ramat_gimur": "SAN MARINO",
+          "shnat_yitzur": 2015,
+          "sug_delek_nm": "בנזין",
+          "tzeva_rechev": "אדום",
+          "horaat_rishum": 140334,
+          "kinuy_mishari": "FIAT 500 ABARTH",
+          "kvutzat_zihum": 15,
+          "mispar_rechev": 1122233,
+          "mivchan_acharon_dt": "2025-12-25",
+          "moed_aliya_lakvish": "2015-1",
+          "ramat_eivzur_betihuty": null
+        },
+        "make": "פיאט פולין",
+        "trim": "312AXD1A",
+        "year": 2015,
+        "color": "אדום",
+        "model": "FIAT 500 ABARTH",
+        "plate": "1122233",
+        "source": "data.gov.il",
+        "lookedUpAt": "2026-09-16T22:26:31.953Z",
+        "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
+      },
+      "dealerIntent": null,
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 2
+    },
+    {
+      "id": "cmu4o76zn007qjkcsumpl1jlq",
+      "status": "NEEDS_INFO",
+      "plateNormalized": "2233344",
+      "govState": "NOT_FOUND",
+      "govIdentityJson": null,
+      "dealerIntent": null,
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 2
+    },
+    {
+      "id": "cmu4o7708007vjkcsthyo2ay7",
+      "status": "READY",
+      "plateNormalized": "3344455",
+      "govState": "FOUND",
+      "govIdentityJson": {
+        "raw": {
+          "_id": 3026093,
+          "baalut": "פרטי",
+          "degem_cd": 34,
+          "degem_nm": "FN9RS",
+          "misgeret": "1GYFN9RS9HZ160769",
+          "tokef_dt": "2027-01-11",
+          "tzeva_cd": 80,
+          "sug_degem": "P",
+          "tozeret_cd": 840,
+          "tozeret_nm": "קאדילאק ארהב\"",
+          "zmig_ahori": "235/65R18",
+          "zmig_kidmi": "235/65R18",
+          "degem_manoa": "LGX",
+          "ramat_gimur": "LUXURY",
+          "shnat_yitzur": 2017,
+          "sug_delek_nm": "בנזין",
+          "tzeva_rechev": "שנהב לבן",
+          "horaat_rishum": 160485,
+          "kinuy_mishari": "XT5",
+          "kvutzat_zihum": 15,
+          "mispar_rechev": 3344455,
+          "mivchan_acharon_dt": "2026-01-07",
+          "moed_aliya_lakvish": "2017-1",
+          "ramat_eivzur_betihuty": 2
+        },
+        "make": "FN",
+        "trim": "FN9RS",
+        "year": 2017,
+        "color": "שנהב לבן",
+        "model": "XT5",
+        "plate": "3344455",
+        "source": "data.gov.il",
+        "lookedUpAt": "2026-09-16T22:26:32.345Z",
+        "resourceId": "053cea08-09bc-40ec-8f7a-156f0677aff3"
+      },
+      "dealerIntent": null,
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 2
+    },
+    {
+      "id": "cmu4o770x0080jkcsf1sh706s",
+      "status": "NEEDS_INFO",
+      "plateNormalized": "4455566",
+      "govState": "NOT_FOUND",
+      "govIdentityJson": null,
+      "dealerIntent": null,
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 2
+    },
+    {
+      "id": "cmu4o771m0085jkcsbzerfpd5",
+      "status": "NEEDS_INFO",
+      "plateNormalized": "5566677",
+      "govState": "NOT_FOUND",
+      "govIdentityJson": null,
+      "dealerIntent": null,
+      "committedVehicleId": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "mediaCount": 1
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "cmu4o7g6b008tjkcsr89ocng8",
+      "make": "Alfa Romeo",
+      "model": "159",
+      "year": 2009,
+      "dealerRelationship": "OWNED",
+      "visibility": "PRIVATE",
+      "status": "ACTIVE",
+      "mediaReady": false,
+      "media": [
+        {
+          "id": "cmu4o7g99008xjkcsxe03v24f"
+        },
+        {
+          "id": "cmu4o7gbj008zjkcsnm7sc617"
+        },
+        {
+          "id": "cmu4o7gdb0091jkcs2dkzcjvz"
+        },
+        {
+          "id": "cmu4o7gfa0093jkcs8pnhhgeh"
+        }
+      ],
+      "catalogPublications": []
+    }
+  ],
+  "unresolvedMedia": []
+}

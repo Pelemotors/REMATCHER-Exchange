@@ -1,0 +1,200 @@
+{
+  "suffix": "PX673190",
+  "vehicleId": "cmu4o91jg00rvjkcsczdqarsd",
+  "demandId": "cmu4o90u300rnjkcstd7lhtx9",
+  "matches": [
+    {
+      "id": "cmu4nw8ea003ajkncjssnwxb3",
+      "demandId": "cmu4nu7pm000ljk14njlgfw7a",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Fiat",
+        "model": "500X",
+        "trim": null,
+        "year": 2018,
+        "mileage": 110000,
+        "color": null,
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": null,
+      "revealId": null
+    },
+    {
+      "id": "cmu4nvbp20017jkehoj7o7lka",
+      "demandId": "cmu4nu7pm000ljk14njlgfw7a",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Fiat",
+        "model": "500X",
+        "trim": null,
+        "year": 2018,
+        "mileage": 110000,
+        "color": null,
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": null,
+      "revealId": null
+    },
+    {
+      "id": "cmu4nvbrl0024jkehva3qrxj9",
+      "demandId": "cmu4nvbko000ojkehiqfvsbnj",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Fiat",
+        "model": "500X",
+        "trim": null,
+        "year": 2018,
+        "mileage": 110000,
+        "color": null,
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": {
+        "status": "INTERESTED"
+      },
+      "revealId": "cmu4nvbu60034jkehf34tqyhv"
+    },
+    {
+      "id": "cmu4nw8ke003vjknctj6xjh7a",
+      "demandId": "cmu4nvbko000ojkehiqfvsbnj",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Fiat",
+        "model": "500X",
+        "trim": null,
+        "year": 2018,
+        "mileage": 110000,
+        "color": null,
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": null,
+      "revealId": null
+    },
+    {
+      "id": "cmu4nw7z3001vjkncyztyvcyc",
+      "demandId": "cmu4nw7bw0001jknc1puphex4",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Seat",
+        "model": "Ateca",
+        "trim": null,
+        "year": 2021,
+        "mileage": 62000,
+        "color": "black",
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": null,
+      "revealId": null
+    },
+    {
+      "id": "cmu4nw7zx0029jknce6ndxjuh",
+      "demandId": "cmu4nw7bw0001jknc1puphex4",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Seat",
+        "model": "Ateca",
+        "trim": null,
+        "year": 2021,
+        "mileage": 62000,
+        "color": "black",
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": null,
+      "revealId": null
+    },
+    {
+      "id": "cmu4nw8tu0055jkncnoxzot8m",
+      "demandId": "cmu4nw80x002njkncf072961t",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Fiat",
+        "model": "500X",
+        "trim": null,
+        "year": 2018,
+        "mileage": 110000,
+        "color": null,
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": null,
+      "revealId": null
+    },
+    {
+      "id": "cmu4nw8uo005jjkncfusej768",
+      "demandId": "cmu4nw80x002njkncf072961t",
+      "status": "VALIDATED",
+      "vehicle": {
+        "make": "Fiat",
+        "model": "500X",
+        "trim": null,
+        "year": 2018,
+        "mileage": 110000,
+        "color": null,
+        "region": null,
+        "ownershipHand": null,
+        "ownershipType": null,
+        "fuelType": null,
+        "engineDisplacementCc": null,
+        "features": [],
+        "verifiedDealer": true,
+        "imageUrl": null
+      },
+      "interest": {
+        "status": "INTERESTED"
+      },
+      "revealId": "cmu4nw8xl006fjknckpnh1bqm"
+    }
+  ],
+  "publishJson": {
+    "ok": false,
+    "error": "media_not_ready",
+    "message": "נדרשות תמונות חוץ+פנים לפני פרסום לרשת."
+  }
+}

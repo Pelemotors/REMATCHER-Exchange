@@ -1,0 +1,62 @@
+[
+  {
+    "n": 1,
+    "upload_start": 0,
+    "ack": 339,
+    "conversation_visible": 339,
+    "media_bubble": 341,
+    "first_candidate_or_unresolved": 2151,
+    "background_wait": 4655,
+    "requests": 50,
+    "failed": 4,
+    "http5xx": 0
+  },
+  {
+    "n": 5,
+    "upload_start": 0,
+    "ack": 143,
+    "conversation_visible": 143,
+    "media_bubble": 151,
+    "first_candidate_or_unresolved": 1955,
+    "background_wait": 4460,
+    "requests": 60,
+    "failed": 4,
+    "http5xx": 0
+  },
+  {
+    "n": 10,
+    "upload_start": 0,
+    "ack": 101,
+    "conversation_visible": 101,
+    "media_bubble": 102,
+    "first_candidate_or_unresolved": 1909,
+    "background_wait": 4412,
+    "requests": 65,
+    "failed": 4,
+    "http5xx": 0
+  },
+  {
+    "n": 16,
+    "upload_start": 0,
+    "ack": 132,
+    "conversation_visible": 132,
+    "media_bubble": 135,
+    "first_candidate_or_unresolved": 1935,
+    "background_wait": 7939,
+    "requests": 73,
+    "failed": 4,
+    "http5xx": 0
+  },
+  {
+    "n": 30,
+    "upload_start": 0,
+    "ack": 148,
+    "conversation_visible": 148,
+    "media_bubble": 156,
+    "first_candidate_or_unresolved": 1955,
+    "background_wait": 7959,
+    "requests": 87,
+    "failed": 4,
+    "http5xx": 0
+  }
+]
