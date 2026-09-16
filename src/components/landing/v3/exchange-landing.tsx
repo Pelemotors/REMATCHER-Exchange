@@ -19,6 +19,20 @@ function ProductPhonePreview() {
         <p className={styles.phoneTitle}>
           יש 3 הזדמנויות שכדאי לבדוק היום
         </p>
+        <div className={styles.phoneMetrics}>
+          <div className={styles.phoneMetric}>
+            <p className={styles.phoneMetricNum}>3</p>
+            <p className={styles.phoneMetricLabel}>הזדמנויות</p>
+          </div>
+          <div className={styles.phoneMetric}>
+            <p className={styles.phoneMetricNum}>7</p>
+            <p className={styles.phoneMetricLabel}>חיפושים</p>
+          </div>
+          <div className={styles.phoneMetric}>
+            <p className={styles.phoneMetricNum}>12</p>
+            <p className={styles.phoneMetricLabel}>ברשת</p>
+          </div>
+        </div>
         <div className={styles.phoneCapture}>
           <span aria-hidden>📷</span>
           <div>
@@ -117,7 +131,8 @@ export function ExchangeLanding() {
               <br />
               {LANDING_COPY.hero.h1Line2Before}
               <span className={styles.heroGold}>{LANDING_COPY.hero.h1Gold}</span>
-              {LANDING_COPY.hero.h1Line2After}
+              <br />
+              {LANDING_COPY.hero.h1Line2After.trimStart()}
             </h1>
             <p className={styles.heroSupport}>{LANDING_COPY.hero.support}</p>
             <div className={styles.heroCtas}>
@@ -140,6 +155,7 @@ export function ExchangeLanding() {
             </ul>
           </div>
           <div className={styles.heroVisual}>
+            <div className={styles.heroGlow} aria-hidden />
             <ProductPhonePreview />
             <div className={styles.floatTag}>
               MORE CARS

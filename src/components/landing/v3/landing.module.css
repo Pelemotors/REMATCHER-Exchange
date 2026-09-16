@@ -96,7 +96,7 @@
 }
 
 .btnGhost {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   min-height: 44px;
@@ -181,19 +181,21 @@
   background:
     linear-gradient(
       105deg,
-      rgba(7, 12, 20, 0.97) 0%,
-      rgba(7, 12, 20, 0.88) 42%,
-      rgba(7, 12, 20, 0.55) 68%,
-      rgba(7, 12, 20, 0.72) 100%
+      rgba(7, 12, 20, 0.94) 0%,
+      rgba(7, 12, 20, 0.78) 38%,
+      rgba(7, 12, 20, 0.35) 62%,
+      rgba(7, 12, 20, 0.55) 100%
     ),
-    radial-gradient(ellipse 60% 50% at 75% 45%, rgba(46, 104, 247, 0.12), transparent 70%),
-    var(--hero-photo, #0b1114) center / cover no-repeat;
+    radial-gradient(ellipse 55% 55% at 78% 48%, rgba(46, 104, 247, 0.18), transparent 72%),
+    radial-gradient(ellipse 40% 35% at 70% 60%, rgba(212, 175, 59, 0.08), transparent 70%),
+    var(--hero-photo, #0b1114) right center / cover no-repeat;
 }
 
 .heroGrid {
   display: grid;
   gap: 2.5rem;
   align-items: center;
+  min-height: clamp(28rem, 62vh, 38rem);
 }
 
 .heroCopy {
@@ -301,21 +303,35 @@
   position: relative;
   display: flex;
   justify-content: center;
-  min-height: 22rem;
+  align-items: center;
+  min-height: 26rem;
+}
+
+.heroGlow {
+  position: absolute;
+  inset: 8% 12% 5% 12%;
+  z-index: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(46, 104, 247, 0.28), transparent 62%),
+    radial-gradient(circle at 55% 70%, rgba(212, 175, 59, 0.12), transparent 55%);
+  filter: blur(18px);
+  pointer-events: none;
 }
 
 .phoneShell {
   position: relative;
   z-index: 2;
-  width: min(100%, 280px);
-  border-radius: 2rem;
-  border: 2px solid rgba(255, 255, 255, 0.12);
+  width: min(100%, 300px);
+  border-radius: 2.15rem;
+  border: 2px solid rgba(255, 255, 255, 0.14);
   background: #0b1114;
   box-shadow:
-    0 30px 60px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(212, 175, 59, 0.08);
+    0 36px 70px rgba(0, 0, 0, 0.6),
+    0 0 40px rgba(46, 104, 247, 0.18),
+    0 0 0 1px rgba(212, 175, 59, 0.12);
   overflow: hidden;
-  aspect-ratio: 9 / 19;
+  aspect-ratio: 9 / 18.5;
 }
 
 .phoneNotch {
@@ -378,6 +394,36 @@
   margin: 0.15rem 0 0;
   font-size: 0.6rem;
   color: rgba(235, 237, 239, 0.55);
+}
+
+.phoneMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.phoneMetric {
+  padding: 0.4rem 0.25rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(26, 35, 48, 0.9);
+  text-align: center;
+}
+
+.phoneMetricNum {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #d4af3b;
+  line-height: 1;
+}
+
+.phoneMetricLabel {
+  margin: 0.2rem 0 0;
+  font-size: 0.48rem;
+  font-weight: 600;
+  color: rgba(235, 237, 239, 0.55);
+  line-height: 1.2;
 }
 
 .phoneJobs {
@@ -1083,6 +1129,9 @@
   .nav {
     display: flex;
   }
+  .btnGhost {
+    display: inline-flex;
+  }
   .menuBtn {
     display: none;
   }
@@ -1136,7 +1185,10 @@
     gap: 3rem;
   }
   .phoneShell {
-    width: 300px;
+    width: 320px;
+  }
+  .heroVisual {
+    min-height: 34rem;
   }
 }
 
