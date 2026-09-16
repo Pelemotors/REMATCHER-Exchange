@@ -182,7 +182,9 @@ export function ExchangeLanding() {
               </p>
             </article>
             <article className={styles.card}>
-              <div className={`${styles.iconCircle} ${styles.iconGold}`}>🚗</div>
+              <div className={`${styles.iconCircle} ${styles.iconGold}`} aria-hidden>
+                ◈
+              </div>
               <h3 className={styles.cardH}>יש לי רכב</h3>
               <p className={styles.cardP}>
                 <strong>העלה אותו פעם אחת.</strong> REMATCHER מחפשת ביקושים
@@ -465,7 +467,7 @@ export function ExchangeLanding() {
           <h2 className={styles.sectionH2}>
             גם כשאתה לא מחפש — REMATCHER ממשיכה לעבוד.
           </h2>
-          <div className={styles.cards3} style={{ marginTop: "2rem" }}>
+          <div className={styles.cards4}>
             <article className={styles.card}>
               <h3 className={styles.cardH}>התאמה חדשה</h3>
               <p className={styles.cardP}>
