@@ -1,4 +1,5 @@
 import styles from "./catalog-public.module.css";
+import { pickCatalogWhatsAppNumber } from "@/services/catalog/whatsapp-interest";
 
 export function formatIls(price: number | null | undefined) {
   if (price == null || !Number.isFinite(price)) return null;
@@ -12,6 +13,18 @@ export function formatIls(price: number | null | undefined) {
 export function formatKm(mileage: number | null | undefined) {
   if (mileage == null) return null;
   return `${new Intl.NumberFormat("he-IL").format(mileage)} ק״מ`;
+}
+
+export function catalogContactNumber(catalog: {
+  whatsapp?: string | null;
+  phone?: string | null;
+  dealer?: { phone?: string | null } | null;
+}): string | null {
+  return pickCatalogWhatsAppNumber(
+    catalog.whatsapp,
+    catalog.phone,
+    catalog.dealer?.phone
+  );
 }
 
 export function CatalogPoweredBy() {

@@ -9,6 +9,7 @@
  */
 import "server-only";
 import {
+  chatCompletionLength,
   getOpenAIClient,
   isOpenAIConfigured,
   logAiOperation,
@@ -16,6 +17,7 @@ import {
 import { AI_MODELS } from "@/config/product";
 import { isValidIsraeliPlate } from "@/services/identity/gov-vehicle";
 import { normalizePlate } from "@/services/intake/status";
+import { prepareImageForVision } from "@/services/intake/vision-image";
 
 export type PlateOcrHint = {
   value: string;
@@ -89,21 +91,23 @@ export async function extractPlateFromImageBytes(
   if (!bytes?.length) return null;
   if (!isOpenAIConfigured()) return null;
 
-  const mime = opts?.mimeType || guessMime(bytes);
+  const prepared = await prepareImageForVision(bytes, opts?.mimeType);
+  if (!prepared) return null;
+  const mime = prepared.mimeType;
   if (!mime.startsWith("image/")) return null;
-
-  // Skip huge payloads — resize responsibility is caller's; hard cap ~4MB
-  if (bytes.length > 4_000_000) return null;
 
   const start = Date.now();
   try {
     const openai = getOpenAIClient();
-    const b64 = bytes.toString("base64");
-    const model = AI_MODELS.agentLoop || "gpt-4o-mini";
+    const b64 = prepared.bytes.toString("base64");
+    const model =
+      process.env.OPENAI_INTAKE_VISION_MODEL ||
+      AI_MODELS.inventoryUnderstanding ||
+      "gpt-4o-mini";
     const completion = await openai.chat.completions.create({
       model,
       temperature: 0,
-      max_tokens: 200,
+      ...chatCompletionLength(model, 200),
       messages: [
         {
           role: "system",
@@ -123,7 +127,7 @@ export async function extractPlateFromImageBytes(
               type: "image_url",
               image_url: {
                 url: `data:${mime};base64,${b64}`,
-                detail: "low",
+                detail: "high",
               },
             },
           ],
@@ -196,27 +200,4 @@ export async function extractPlateFromImageBytes(
     });
     return null;
   }
-}
-
-function guessMime(bytes: Buffer): string {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8) {
-    return "image/jpeg";
-  }
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  ) {
-    return "image/png";
-  }
-  if (
-    bytes.length >= 12 &&
-    bytes.toString("ascii", 0, 4) === "RIFF" &&
-    bytes.toString("ascii", 8, 12) === "WEBP"
-  ) {
-    return "image/webp";
-  }
-  return "image/jpeg";
 }

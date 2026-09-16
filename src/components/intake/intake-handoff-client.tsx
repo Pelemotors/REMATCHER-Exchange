@@ -42,11 +42,6 @@ async function getShareStaging(): Promise<ShareStagingPlugin | null> {
  */
 export function IntakeHandoffClient() {
   const params = useSearchParams();
-  const clientBatchId =
-    params.get("clientBatchId") ||
-    (typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : String(Date.now()));
   const sourceParam = params.get("source") || "WEB_UPLOAD";
   const source =
     sourceParam === "IOS_SHARE" || sourceParam === "ANDROID_SHARE"
@@ -56,6 +51,15 @@ export function IntakeHandoffClient() {
   const staged = params.get("staged") === "1";
   const isNativeShare =
     staged || source === "ANDROID_SHARE" || source === "IOS_SHARE";
+
+  const [clientBatchId] = useState(() => {
+    const fromUrl = params.get("clientBatchId");
+    if (fromUrl) return fromUrl;
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return String(Date.now());
+  });
 
   const [batchId, setBatchId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("ממתין");
@@ -68,6 +72,7 @@ export function IntakeHandoffClient() {
   const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
+    if (done) return;
     let cancelled = false;
     void (async () => {
       const plugin = await getShareStaging();
@@ -161,7 +166,7 @@ export function IntakeHandoffClient() {
     return () => {
       cancelled = true;
     };
-  }, [clientBatchId, source, shareText, isNativeShare, retryToken]);
+  }, [clientBatchId, source, shareText, isNativeShare, retryToken, done]);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length || !batchId || uploading) return;
@@ -278,7 +283,7 @@ export function IntakeHandoffClient() {
             {uploading ? "מעלה מהשיתוף…" : "ממתין"}
           </p>
         )}
-        {error && (
+        {error && !done && (
           <div className="space-y-2">
             <p className="text-sm text-error" role="alert">
               {error}

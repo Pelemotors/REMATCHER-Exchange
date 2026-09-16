@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { BrandV2Scope } from "@/components/ui/brand-v2";
 import {
   CatalogPoweredBy,
+  catalogContactNumber,
   catalogStyles as styles,
   formatIls,
   formatKm,
 } from "@/components/catalog/catalog-public-shared";
+import { catalogVehicleWhatsAppHref } from "@/services/catalog/whatsapp-interest";
 import { getPublicCatalogVehicle } from "@/services/catalog/catalog-service";
 
 type Props = {
@@ -37,11 +39,17 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
 
   const { catalog, vehicle } = data;
   const price = formatIls(vehicle.retailPrice);
-  const wa = catalog.whatsapp?.replace(/\D/g, "");
+  const contact = catalogContactNumber(catalog);
   const phoneHref = catalog.phone
     ? `tel:${catalog.phone.replace(/\s/g, "")}`
     : null;
   const hero = vehicle.imageUrl || vehicle.media[0]?.url || null;
+  const interestHref = catalogVehicleWhatsAppHref(contact, {
+    title: vehicle.title,
+    year: vehicle.year,
+    retailPrice: vehicle.retailPrice,
+    slug: catalog.slug,
+  });
 
   return (
     <BrandV2Scope>
@@ -112,22 +120,20 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
               {vehicle.conditionNotes && (
                 <p className={styles.notes}>{vehicle.conditionNotes}</p>
               )}
-              <div className={styles.contactRow}>
-                {phoneHref && (
-                  <a className={styles.contactBtnPrimary} href={phoneHref}>
-                    התקשר לסוכנות
-                  </a>
-                )}
-                {wa && (
+              <div className={styles.contactCol}>
+                {interestHref && (
                   <a
-                    className={styles.contactBtn}
-                    href={`https://wa.me/${wa}?text=${encodeURIComponent(
-                      `שלום, מתעניין ב-${vehicle.title}`
-                    )}`}
+                    className={styles.contactBtnPrimary}
+                    href={interestHref}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    WhatsApp
+                    מתעניין ברכב זה
+                  </a>
+                )}
+                {phoneHref && (
+                  <a className={styles.contactBtn} href={phoneHref}>
+                    התקשר לסוכנות
                   </a>
                 )}
               </div>

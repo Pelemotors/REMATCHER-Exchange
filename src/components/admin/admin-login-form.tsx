@@ -52,7 +52,24 @@ export function AdminLoginForm() {
       } | null;
 
       if (!res.ok || data?.error || data?.ok === false) {
-        setError("האימייל או הסיסמה אינם נכונים, או שאין הרשאת מערכת");
+        let message = "האימייל או הסיסמה אינם נכונים, או שאין הרשאת מערכת";
+        try {
+          const hintRes = await fetch("/api/admin/login-hint", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email.trim().toLowerCase() }),
+          });
+          const hint = (await hintRes.json().catch(() => null)) as {
+            code?: string;
+          } | null;
+          if (hint?.code === "dealer_not_admin") {
+            message =
+              "האימייל הזה שייך לחשבון סוחר. היכנסו דרך מסך הסוחרים, לא מכאן.";
+          }
+        } catch {
+          /* keep generic */
+        }
+        setError(message);
         setLoading(false);
         return;
       }
@@ -78,6 +95,12 @@ export function AdminLoginForm() {
           </h1>
           <p className="mt-2 text-sm text-white/50">
             כניסה למנהלי מערכת בלבד · סשן נפרד מסוחרי Exchange
+          </p>
+          <p className="mt-2 text-xs text-white/40">
+            חשבון סוחר לא נכנס כאן.{" "}
+            <a href="/login" className="text-amber-500/90 underline">
+              כניסת סוחרים
+            </a>
           </p>
         </div>
 

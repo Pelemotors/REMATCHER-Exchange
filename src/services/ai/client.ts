@@ -19,6 +19,20 @@ export function isOpenAIConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
 }
 
+/**
+ * gpt-5 / o-series reject `max_tokens` (400: use max_completion_tokens).
+ * gpt-4o* still uses max_tokens.
+ */
+export function chatCompletionLength(
+  model: string,
+  n: number
+): { max_tokens: number } | { max_completion_tokens: number } {
+  if (/^(gpt-5|o[1-9]|o3|o4)/i.test(model)) {
+    return { max_completion_tokens: n };
+  }
+  return { max_tokens: n };
+}
+
 export async function logAiOperation(params: {
   operation: string;
   model?: string;

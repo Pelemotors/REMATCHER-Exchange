@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { isAdminRole } from "@/lib/brand-copy";
 import { getPostAuthRedirect } from "@/lib/auth-routing";
 
@@ -106,5 +108,16 @@ describe("admin session separation", () => {
     expect(isAdminRole("OWNER")).toBe(false);
     expect(isAdminRole("MEMBER")).toBe(false);
     expect(isAdminRole("ADMIN")).toBe(true);
+  });
+
+  it("admin login form rejects dealer emails with a dedicated message", () => {
+    const form = readFileSync(
+      resolve(process.cwd(), "src/components/admin/admin-login-form.tsx"),
+      "utf8"
+    );
+    expect(form).toContain("/api/admin/login-hint");
+    expect(form).toContain("dealer_not_admin");
+    expect(form).toContain("חשבון סוחר לא נכנס כאן");
+    expect(form).toContain('href="/login"');
   });
 });

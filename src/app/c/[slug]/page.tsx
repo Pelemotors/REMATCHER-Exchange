@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { BrandV2Scope } from "@/components/ui/brand-v2";
 import {
   CatalogPoweredBy,
+  catalogContactNumber,
   catalogStyles as styles,
   formatIls,
   formatKm,
 } from "@/components/catalog/catalog-public-shared";
+import { catalogVehicleWhatsAppHref } from "@/services/catalog/whatsapp-interest";
 import { listPublicCatalogVehicles } from "@/services/catalog/catalog-service";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -34,7 +36,7 @@ export default async function PublicCatalogPage({ params }: Props) {
 
   const { catalog, vehicles } = data;
   const initial = catalog.displayName.trim().charAt(0).toUpperCase() || "R";
-  const wa = catalog.whatsapp?.replace(/\D/g, "");
+  const contact = catalogContactNumber(catalog);
   const phoneHref = catalog.phone
     ? `tel:${catalog.phone.replace(/\s/g, "")}`
     : null;
@@ -69,14 +71,14 @@ export default async function PublicCatalogPage({ params }: Props) {
             </div>
             <div className={styles.contactRow}>
               {phoneHref && (
-                <a className={styles.contactBtnPrimary} href={phoneHref}>
+                <a className={styles.contactBtn} href={phoneHref}>
                   התקשר
                 </a>
               )}
-              {wa && (
+              {contact && (
                 <a
-                  className={styles.contactBtn}
-                  href={`https://wa.me/${wa}`}
+                  className={styles.contactBtnPrimary}
+                  href={`https://wa.me/${contact}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -97,28 +99,45 @@ export default async function PublicCatalogPage({ params }: Props) {
                   .filter(Boolean)
                   .join(" · ");
                 const price = formatIls(v.retailPrice);
+                const interestHref = catalogVehicleWhatsAppHref(contact, {
+                  title: v.title,
+                  year: v.year,
+                  retailPrice: v.retailPrice,
+                  slug: catalog.slug,
+                });
                 return (
-                  <Link
-                    key={v.id}
-                    href={`/c/${catalog.slug}/vehicles/${v.id}`}
-                    className={styles.card}
-                  >
-                    {v.thumbUrl || v.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={v.thumbUrl || v.imageUrl || ""}
-                        alt=""
-                        className={styles.photo}
-                      />
-                    ) : (
-                      <div className={styles.photoEmpty}>ללא תמונה</div>
-                    )}
-                    <div className={styles.meta}>
-                      <h2 className={styles.vehicleTitle}>{v.title}</h2>
-                      {spec && <p className={styles.vehicleSpec}>{spec}</p>}
-                      {price && <p className={styles.price}>{price}</p>}
-                    </div>
-                  </Link>
+                  <article key={v.id} className={styles.card}>
+                    <Link
+                      href={`/c/${catalog.slug}/vehicles/${v.id}`}
+                      className={styles.cardMain}
+                    >
+                      {v.thumbUrl || v.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={v.thumbUrl || v.imageUrl || ""}
+                          alt=""
+                          className={styles.photo}
+                        />
+                      ) : (
+                        <div className={styles.photoEmpty}>ללא תמונה</div>
+                      )}
+                      <div className={styles.meta}>
+                        <h2 className={styles.vehicleTitle}>{v.title}</h2>
+                        {spec && <p className={styles.vehicleSpec}>{spec}</p>}
+                        {price && <p className={styles.price}>{price}</p>}
+                      </div>
+                    </Link>
+                    {interestHref ? (
+                      <a
+                        className={styles.interestBtn}
+                        href={interestHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        מתעניין ברכב זה
+                      </a>
+                    ) : null}
+                  </article>
                 );
               })}
             </div>

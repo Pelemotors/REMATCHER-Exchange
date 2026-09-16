@@ -4,11 +4,13 @@
  */
 import "server-only";
 import {
+  chatCompletionLength,
   getOpenAIClient,
   isOpenAIConfigured,
   logAiOperation,
 } from "@/services/ai/client";
 import { AI_MODELS } from "@/config/product";
+import { prepareImageForVision } from "@/services/intake/vision-image";
 
 export type MediaUnderstandingHint = {
   source: "VISION";
@@ -36,7 +38,10 @@ export async function understandIntakeMediaSample(
 
   const sample = images.slice(0, max);
   const start = Date.now();
-  const model = AI_MODELS.agentLoop || "gpt-4o-mini";
+  const model =
+    process.env.OPENAI_INTAKE_VISION_MODEL ||
+    AI_MODELS.inventoryUnderstanding ||
+    "gpt-4o-mini";
 
   try {
     const openai = getOpenAIClient();
@@ -67,12 +72,12 @@ export async function understandIntakeMediaSample(
     ];
 
     for (const img of sample) {
-      const mime = img.mimeType || "image/jpeg";
-      if (img.bytes.length > 3_500_000) continue;
+      const prepared = await prepareImageForVision(img.bytes, img.mimeType);
+      if (!prepared) continue;
       content.push({
         type: "image_url",
         image_url: {
-          url: `data:${mime};base64,${img.bytes.toString("base64")}`,
+          url: `data:${prepared.mimeType};base64,${prepared.bytes.toString("base64")}`,
           detail: "low",
         },
       });
@@ -83,7 +88,7 @@ export async function understandIntakeMediaSample(
     const completion = await openai.chat.completions.create({
       model,
       temperature: 0,
-      max_tokens: 350,
+      ...chatCompletionLength(model, 350),
       messages: [
         {
           role: "system",

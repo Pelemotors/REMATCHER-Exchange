@@ -275,13 +275,13 @@ export function CatalogSettingsClient() {
           onChange={(e) => setForm({ ...form, phone: e.target.value })}
         />
 
-        <label className="label">WhatsApp</label>
+        <label className="label">WhatsApp (לקוחות לוחצים «מתעניין ברכב זה»)</label>
         <input
           className="input"
           dir="ltr"
           value={form.whatsapp}
           onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-          placeholder="9725..."
+          placeholder="050-000-0000"
         />
 
         <label className="label">כתובת</label>

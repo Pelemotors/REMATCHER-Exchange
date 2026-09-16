@@ -66,7 +66,9 @@ export function IntakeReviewClient() {
       if (!res.ok && data.error !== "needs_confirmation") {
         setError(
           data.error === "gov_not_found"
-            ? "לא מצאנו את הרכב במרשם — בדקו את המספר"
+            ? data.govState === "UNAVAILABLE"
+              ? "ממשק המרשם לא זמין כרגע — נסו שוב בעוד רגע"
+              : "לא מצאנו את הרכב במרשם — בדקו את המספר ושמרו שוב"
             : data.error === "invalid_plate"
               ? "מספר רישוי לא תקין"
               : "הפעולה נכשלה"
@@ -116,7 +118,9 @@ export function IntakeReviewClient() {
             <span className="font-semibold text-v2-warm-white">
               {c.status === "NEEDS_CONFIRMATION"
                 ? "רכב קיים במלאי"
-                : "חסר מספר רישוי / זיהוי"}
+                : c.plateNormalized || plates[c.id]
+                  ? "נדרש אישור זיהוי מול המרשם"
+                  : "חסר מספר רישוי / זיהוי"}
             </span>
             <span className="text-v2-text-muted">{c.media.length} תמונות</span>
           </div>

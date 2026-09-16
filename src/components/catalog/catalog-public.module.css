@@ -127,7 +127,6 @@
 .card {
   display: flex;
   flex-direction: column;
-  text-decoration: none;
   color: inherit;
   border-radius: 16px;
   overflow: hidden;
@@ -140,6 +139,14 @@
 .card:hover {
   transform: translateY(-2px);
   border-color: rgba(212, 175, 59, 0.35);
+}
+
+.cardMain {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
 }
 
 .photo {
@@ -187,6 +194,37 @@
   font-weight: 700;
   color: var(--rm2-gold);
   font-variant-numeric: tabular-nums;
+}
+
+.interestBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: 0 12px 12px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--rm2-gold);
+  color: #0b1114;
+  border: 1px solid transparent;
+}
+
+.interestBtn:hover {
+  background: #c4a034;
+}
+
+.contactCol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contactCol .contactBtnPrimary,
+.contactCol .contactBtn {
+  width: 100%;
 }
 
 .empty {

@@ -390,6 +390,7 @@ export async function getPublicCatalogBySlug(slug: string) {
       logoUrl: true,
       publishedAt: true,
       status: true,
+      dealer: { select: { phone: true } },
     },
   });
   return catalog;

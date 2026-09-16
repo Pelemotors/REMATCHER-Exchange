@@ -8,6 +8,8 @@ import {
 import {
   isValidIsraeliPlate,
   GOV_ACTIVE_PRIVATE_RESOURCE_ID,
+  GOV_PERSONAL_IMPORT_RESOURCE_ID,
+  identityFromGovRecord,
 } from "@/services/identity/gov-vehicle";
 import { normalizePlate } from "@/services/intake/status";
 import { CLASSIFY_CONFIDENCE_THRESHOLD } from "@/services/intake/media-classify";
@@ -50,6 +52,25 @@ describe("gov plate helpers", () => {
 
   it("documents official resource id", () => {
     expect(GOV_ACTIVE_PRIVATE_RESOURCE_ID).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(GOV_PERSONAL_IMPORT_RESOURCE_ID).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it("maps personal-import records (no kinuy_mishari) to identity", () => {
+    const id = identityFromGovRecord(
+      {
+        mispar_rechev: 90563201,
+        tozeret_nm: 'ב מ וו ארהב"',
+        degem_nm: "BMW           KTOC",
+        shnat_yitzur: 2017,
+        sug_yevu: "יבוא אישי-משומש",
+      },
+      GOV_PERSONAL_IMPORT_RESOURCE_ID,
+      "90563201"
+    );
+    expect(id.make).toBe("BMW");
+    expect(id.year).toBe(2017);
+    expect(id.model).toMatch(/KTOC/);
+    expect(id.resourceId).toBe(GOV_PERSONAL_IMPORT_RESOURCE_ID);
   });
 });
 
@@ -185,6 +206,18 @@ describe("intake domain surface", () => {
     expect(handoff).toContain("isNativeShare");
     expect(handoff).toContain("callbackUrl");
     expect(handoff).toContain("נסה שוב");
+    expect(handoff).toContain("useState(() =>");
+    expect(handoff).toContain("error && !done");
+
+    const ocr = readFileSync(join(root, "src/services/intake/plate-ocr.ts"), "utf8");
+    expect(ocr).toContain("chatCompletionLength");
+    expect(ocr).not.toMatch(/max_tokens:\s*200/);
+    const vision = readFileSync(
+      join(root, "src/services/intake/media-vision.ts"),
+      "utf8"
+    );
+    expect(vision).toContain("chatCompletionLength");
+    expect(vision).not.toMatch(/max_tokens:\s*350/);
   });
 });
 

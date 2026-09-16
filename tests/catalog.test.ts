@@ -153,3 +153,40 @@ describe("catalog publish eligibility", () => {
     // No CatalogPublication is created by this check.
   });
 });
+
+describe("catalog WhatsApp interest", () => {
+  it("normalizes Israeli mobiles to wa.me and prefills the vehicle", async () => {
+    const {
+      israeliPhoneToWhatsApp,
+      catalogVehicleWhatsAppHref,
+      catalogVehicleInterestText,
+    } = await import("@/services/catalog/whatsapp-interest");
+    expect(israeliPhoneToWhatsApp("0500000000")).toBe("972500000000");
+    expect(israeliPhoneToWhatsApp("972501234567")).toBe("972501234567");
+    expect(israeliPhoneToWhatsApp("050-123-4567")).toBe("972501234567");
+    const href = catalogVehicleWhatsAppHref("0501234567", {
+      title: "BMW X5",
+      year: 2017,
+    });
+    expect(href).toContain("https://wa.me/972501234567?text=");
+    expect(decodeURIComponent(href!.split("text=")[1])).toContain("BMW X5");
+    expect(catalogVehicleInterestText({ title: "RAV4", year: 2020 })).toContain(
+      "RAV4"
+    );
+  });
+
+  it("public catalog surfaces per-vehicle interest CTA", () => {
+    const home = readFileSync(
+      resolve(process.cwd(), "src/app/c/[slug]/page.tsx"),
+      "utf8"
+    );
+    const detail = readFileSync(
+      resolve(process.cwd(), "src/app/c/[slug]/vehicles/[vehicleId]/page.tsx"),
+      "utf8"
+    );
+    expect(home).toContain("מתעניין ברכב זה");
+    expect(home).toContain("catalogVehicleWhatsAppHref");
+    expect(detail).toContain("מתעניין ברכב זה");
+    expect(detail).toContain("catalogVehicleWhatsAppHref");
+  });
+});
