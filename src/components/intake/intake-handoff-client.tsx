@@ -879,7 +879,6 @@ export function IntakeHandoffClient() {
               const text = composer.trim();
               if (!text || !batchId) return;
               setComposer("");
-              if (phase === "capture") return;
               if (batch?.demandDraft && !demandConfirmed) {
                 void (async () => {
                   await fetch("/api/intake/batch", {
@@ -928,7 +927,7 @@ export function IntakeHandoffClient() {
             <button type="button" className={styles.composerMic} aria-label="הקלטה">
               <Mic size={18} strokeWidth={1.8} />
             </button>
-            <button className={styles.send} type="submit" disabled={!composer.trim() || phase === "capture"}>
+            <button className={styles.send} type="submit" disabled={!composer.trim()}>
               שלח
             </button>
           </form>

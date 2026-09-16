@@ -10,6 +10,8 @@ import { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { runMatchingForDemand } from "../src/services/domain/matching-flow";
 import { rematchAfterInventoryMutation } from "../src/services/matching/inventory-rematch";
+import { createAndActivateSearchIntent } from "../src/services/matching/search-intent-service";
+import { legacyToSearchIntent } from "../src/services/matching/legacy-search-intent-adapter";
 import {
   recordBuyerInterest,
   recordSellerInterest,
@@ -117,6 +119,8 @@ async function proveJourney5(input: {
       dealerRelationship: "OWNED",
       visibility: "ANONYMOUS_NETWORK",
       mediaReady: true,
+      freshnessState: "FRESH",
+      lastAvailabilityConfirmedAt: new Date(),
       rawInput: `e2e-pixel-j5-${input.suffix}`,
     },
   });
@@ -128,17 +132,26 @@ async function proveJourney5(input: {
     where: { demandId: demand.id, vehicleId: vehicle.id },
   });
 
+  const updatedConfirmed = {
+    make: "Seat",
+    model: "Ateca",
+    yearMin: 2021,
+    budgetMax: 140000,
+  };
   await prisma.demand.update({
     where: { id: demand.id },
     data: {
       rawText: `E2E pixel ${input.suffix} Seat Ateca 2021 ומעלה עד 140`,
-      confirmedJson: {
-        make: "Seat",
-        model: "Ateca",
-        yearMin: 2021,
-        budgetMax: 140000,
-      },
+      confirmedJson: updatedConfirmed,
     },
+  });
+  const adapted = legacyToSearchIntent(updatedConfirmed, []);
+  await createAndActivateSearchIntent({
+    demandId: demand.id,
+    structuredIntent: adapted.structuredIntent,
+    naturalLanguageSummary: adapted.naturalLanguageSummary,
+    source: "e2e_constraint_change",
+    confirm: true,
   });
   const afterRun = await runMatchingForDemand(demand.id);
   const after = await prisma.candidateMatch.findFirst({
@@ -200,6 +213,8 @@ async function proveJourney6(input: {
       dealerRelationship: "OWNED",
       visibility: "ANONYMOUS_NETWORK",
       mediaReady: true,
+      freshnessState: "FRESH",
+      lastAvailabilityConfirmedAt: new Date(),
       rawInput: `e2e-pixel-j6-${input.suffix}`,
     },
   });
