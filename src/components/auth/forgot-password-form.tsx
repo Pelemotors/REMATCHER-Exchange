@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ButtonV2, Surface } from "@/components/ui/brand-v2";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -36,7 +36,7 @@ export function ForgotPasswordForm() {
     <form onSubmit={handleSubmit}>
       <Surface depth="raised" className="w-full max-w-md space-y-6 p-6">
         <div className="flex flex-col items-center text-center">
-          <ExchangeMark state="idle" size={56} decorative />
+          <BrandMark size={56} variant="gold" preferPng decorative />
           <h1 className="mt-4 text-h3 font-semibold text-v2-warm">איפוס סיסמה</h1>
         </div>
 

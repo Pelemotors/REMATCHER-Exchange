@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { ButtonV2 } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
 import styles from "./public-layout.module.css";
@@ -16,9 +16,10 @@ function PublicHeaderStatic() {
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.lockup}>
-          <ExchangeMark
-            state="idle"
-            variant="hero"
+          <BrandMark
+            size={40}
+            variant="gold"
+            preferPng
             className={styles.markIcon}
             decorative
           />

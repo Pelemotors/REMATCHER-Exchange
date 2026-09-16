@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { BRAND } from "@/config/brand";
 import { ExchangeAssistant } from "@/components/assistant/exchange-assistant";
 
@@ -22,7 +22,7 @@ function SidebarBrand({ onHome }: { onHome: boolean }) {
   if (onHome) {
     return (
       <div className="flex items-center gap-3">
-        <ExchangeMark state="idle" size={36} />
+        <BrandMark size={36} variant="gold" preferPng />
         <div className="leading-tight">
           <p className="text-label font-bold uppercase tracking-[0.12em] text-white/60">
             {BRAND.parent}

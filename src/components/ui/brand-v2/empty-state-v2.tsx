@@ -1,4 +1,4 @@
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { Surface } from "./surface";
 
 export function EmptyStateV2({
@@ -12,7 +12,7 @@ export function EmptyStateV2({
 }) {
   return (
     <Surface depth="secondary" className="flex flex-col items-center px-6 py-14 text-center">
-      <ExchangeMark state="idle" size={56} className="mb-6" />
+      <BrandMark size={56} variant="gold" preferPng className="mb-6" />
       <p className="text-section font-semibold text-v2-warm">{title}</p>
       {description && (
         <p className="mt-2 max-w-sm text-body text-v2-text-secondary">

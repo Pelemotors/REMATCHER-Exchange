@@ -80,6 +80,13 @@ describe("Vehicle Hebrew relationship/visibility", () => {
     expect(demandStatusLabelHe("PAUSED")).toBe("מושהה");
   });
 
+  it("public layout and empty states use BrandMark R not Exchange X", () => {
+    expect(read("src/components/public/public-layout.tsx")).toContain("BrandMark");
+    expect(read("src/components/public/public-layout.tsx")).not.toContain("ExchangeMark");
+    expect(read("src/components/ui/brand-v2/empty-state-v2.tsx")).toContain("BrandMark");
+    expect(read("src/components/auth/login-form.tsx")).toContain("BrandMark");
+  });
+
   it("inventory UI surfaces RelationshipBadge + VisibilityBadge", () => {
     const src = read("src/components/inventory/inventory-page-client.tsx");
     expect(src).toContain("RelationshipBadge");

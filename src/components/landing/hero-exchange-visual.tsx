@@ -1,6 +1,6 @@
 import styles from "./hero-exchange-visual.module.css";
 import { cn } from "@/lib/utils";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 /** Nearly invisible ambient nodes — open space, not a diagram */
 const AMBIENT = [
@@ -77,7 +77,7 @@ export function HeroExchangeVisual({ className }: { className?: string }) {
       </svg>
 
       <div className={styles.markWrap}>
-        <ExchangeMark loop variant="hero" className={styles.mark} />
+        <BrandMark size={120} variant="gold" preferPng className={styles.mark} />
       </div>
 
       <span className={styles.matchLabel}>MATCH</span>
