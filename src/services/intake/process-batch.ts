@@ -4,19 +4,33 @@ import { toPrismaJson } from "@/lib/prisma-json";
 import { lookupVehicleByPlate } from "@/services/identity/gov-vehicle";
 import { extractCommercialFromText } from "@/services/intake/text-extract";
 import { classifyIntakeMediaCategory } from "@/services/intake/media-classify";
-import { commitReadyCandidates } from "@/services/intake/commit";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import {
   normalizePlate,
   refreshBatchStatus,
 } from "@/services/intake/status";
-import { planCandidateSlots } from "@/services/intake/grouping";
+import {
+  assignMediaToIdentityGroups,
+  INTAKE_GOV_CONCURRENCY,
+  INTAKE_OCR_CONCURRENCY,
+  mapWithConcurrency,
+} from "@/services/intake/discovery";
 import type { ExtractedField } from "@/services/intake/text-extract";
+import type { Prisma } from "@prisma/client";
+
+type DiscoveryTrace = {
+  ocrAttempted: boolean;
+  ocrPlate: string | null;
+  ocrConfidence: number | null;
+  groupingCandidateKey: string | null;
+  groupingResult: string | null;
+  skipReason: string | null;
+};
 
 /**
  * Process a durable IntakeBatch into VehicleCandidate(s).
- * Staged: classify → text → OCR (if needed) → GOV → Vision (if still incomplete).
- * Default grouping: one share → one candidate unless distinct plates.
+ * Per-media OCR (no first-hit stop). Distinct plates → distinct candidates.
+ * Does NOT commit inventory — dealer intent is required.
  */
 export async function processIntakeBatch(dealerId: string, batchId: string) {
   const batch = await prisma.intakeBatch.findFirst({
@@ -25,12 +39,13 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
   });
   if (!batch) return { ok: false as const, error: "not_found" as const };
 
-  if (
+  const allTerminal =
     ["COMMITTED", "FAILED"].includes(batch.status) &&
+    batch.candidates.length > 0 &&
     batch.candidates.every(
       (c) => c.status === "COMMITTED" || c.status === "REJECTED"
-    )
-  ) {
+    );
+  if (allTerminal) {
     return { ok: true as const, skipped: true as const };
   }
 
@@ -51,7 +66,7 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
   }).catch(() => undefined);
 
   try {
-    for (const media of batch.media) {
+    await mapWithConcurrency(batch.media, 4, async (media) => {
       if (media.categoryHint == null && media.categoryConfidence == null) {
         const hint = await classifyIntakeMediaCategory(media.storageKey);
         if (hint) {
@@ -64,218 +79,304 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
           });
         }
       }
-    }
+    });
 
     const combinedText = batch.texts.map((t) => t.text).join("\n");
     const commercial = extractCommercialFromText(combinedText);
-    let plates: ExtractedField<string>[] =
+    const textPlates: ExtractedField<string>[] =
       commercial.plates.length > 0
         ? commercial.plates
         : commercial.plate
           ? [commercial.plate]
           : [];
 
-    // OCR only when text has no plates
-    if (plates.length === 0 && batch.media.length > 0) {
-      const { extractPlateFromImageBytes } = await import(
-        "@/services/intake/plate-ocr"
-      );
-      const { resolveMediaAbsolutePath } = await import("@/lib/media/storage");
-      const { readFile } = await import("node:fs/promises");
-      // Cheap: try up to 3 images (document/exterior first if classified)
-      const ordered = [...batch.media].sort((a, b) => {
-        const rank = (c: string | null | undefined) =>
-          c === "DOCUMENT" ? 0 : c === "EXTERIOR" ? 1 : 2;
-        return rank(a.categoryHint) - rank(b.categoryHint);
-      });
-      for (const media of ordered.slice(0, 3)) {
-        try {
-          const abs = resolveMediaAbsolutePath(media.storageKey);
-          const bytes = await readFile(abs);
-          const ocr = await extractPlateFromImageBytes(bytes, {
-            mimeType: media.mimeType ?? undefined,
-            mediaId: media.id,
-          });
-          if (ocr?.value) {
-            plates = [
-              {
-                value: ocr.value,
-                confidence: ocr.confidence,
-                source: "OCR",
-              },
-            ];
-            await emitExchangeEvent({
-              eventType: "intake.plate.ocr",
-              dealerId,
-              eventData: {
-                batchId: batch.id,
-                mediaId: media.id,
-                confidence: ocr.confidence,
-              },
-              operational: true,
-            }).catch(() => undefined);
-            break;
-          }
-        } catch {
-          /* non-fatal */
-        }
+    const mediaRows = await prisma.intakeMedia.findMany({
+      where: { batchId: batch.id },
+      orderBy: { originalOrder: "asc" },
+    });
+
+    const { extractPlateFromImageBytes } = await import(
+      "@/services/intake/plate-ocr"
+    );
+    const { resolveMediaAbsolutePath } = await import("@/lib/media/storage");
+    const { readFile } = await import("node:fs/promises");
+
+    const ocrByMedia = new Map<
+      string,
+      { value: string; confidence: number }
+    >();
+
+    await mapWithConcurrency(mediaRows, INTAKE_OCR_CONCURRENCY, async (media) => {
+      const existing = (media.discoveryJson as DiscoveryTrace | null) ?? null;
+      if (existing?.ocrAttempted && existing.ocrPlate) {
+        ocrByMedia.set(media.id, {
+          value: existing.ocrPlate,
+          confidence: existing.ocrConfidence ?? 0.6,
+        });
+        return;
       }
-    }
-
-    let visionHint: Awaited<
-      ReturnType<
-        typeof import("@/services/intake/media-vision").understandIntakeMediaSample
-      >
-    > = null;
-
-    // Vision only when identity still weak (no plate + no commercial make/model/year)
-    const commercialFields = commercial.fields as Record<string, unknown>;
-    const needsVision =
-      plates.length === 0 &&
-      batch.media.length > 0 &&
-      !commercialFields.make &&
-      !commercialFields.model;
-
-    if (needsVision) {
-      const { understandIntakeMediaSample } = await import(
-        "@/services/intake/media-vision"
-      );
-      const { resolveMediaAbsolutePath } = await import("@/lib/media/storage");
-      const { readFile } = await import("node:fs/promises");
-      const images: Array<{ bytes: Buffer; mimeType?: string; mediaId?: string }> =
-        [];
-      for (const media of batch.media.slice(0, 2)) {
-        try {
-          const abs = resolveMediaAbsolutePath(media.storageKey);
-          images.push({
-            bytes: await readFile(abs),
-            mimeType: media.mimeType ?? undefined,
-            mediaId: media.id,
-          });
-        } catch {
-          /* skip */
-        }
-      }
-      visionHint = await understandIntakeMediaSample(images, {
-        accompanyingText: combinedText,
-        maxImages: 2,
-      });
-      if (visionHint?.plateDigitsHint && plates.length === 0) {
-        const digits = visionHint.plateDigitsHint.replace(/\D/g, "");
-        if (digits.length >= 7 && digits.length <= 8) {
-          plates = [
-            {
-              value: digits,
-              confidence: Math.min(0.55, visionHint.confidence),
-              source: "VISION",
+      let plate: { value: string; confidence: number } | null = null;
+      let skipReason: string | null = null;
+      try {
+        const abs = resolveMediaAbsolutePath(media.storageKey);
+        const bytes = await readFile(abs);
+        const ocr = await extractPlateFromImageBytes(bytes, {
+          mimeType: media.mimeType ?? undefined,
+          mediaId: media.id,
+        });
+        if (ocr?.value) {
+          plate = {
+            value: normalizePlate(ocr.value),
+            confidence: ocr.confidence,
+          };
+          ocrByMedia.set(media.id, plate);
+          await emitExchangeEvent({
+            eventType: "intake.plate.ocr",
+            dealerId,
+            eventData: {
+              batchId: batch.id,
+              mediaId: media.id,
+              confidence: ocr.confidence,
+              plate: plate.value,
             },
-          ];
+            operational: true,
+          }).catch(() => undefined);
+        } else {
+          skipReason = "ocr_no_plate";
         }
+      } catch {
+        skipReason = "ocr_error";
       }
-      if (visionHint) {
-        if (visionHint.makeHint && !commercialFields.make) {
-          commercialFields.make = visionHint.makeHint;
-          commercial.provenance.make = {
-            value: visionHint.makeHint,
-            source: "VISION",
-            confidence: visionHint.confidence,
-          };
-        }
-        if (visionHint.modelHint && !commercialFields.model) {
-          commercialFields.model = visionHint.modelHint;
-          commercial.provenance.model = {
-            value: visionHint.modelHint,
-            source: "VISION",
-            confidence: visionHint.confidence,
-          };
-        }
-        if (visionHint.yearHint && !commercialFields.year) {
-          commercialFields.year = visionHint.yearHint;
-          commercial.provenance.year = {
-            value: visionHint.yearHint,
-            source: "VISION",
-            confidence: visionHint.confidence,
-          };
-        }
+      const trace: DiscoveryTrace = {
+        ocrAttempted: true,
+        ocrPlate: plate?.value ?? null,
+        ocrConfidence: plate?.confidence ?? null,
+        groupingCandidateKey: null,
+        groupingResult: null,
+        skipReason,
+      };
+      await prisma.intakeMedia.update({
+        where: { id: media.id },
+        data: { discoveryJson: toPrismaJson(trace) },
+      });
+    });
+
+    // Text plates apply as extra anchors if OCR missed them (not a vehicle by themselves).
+    const discoveryInputs = mediaRows.map((m, i) => {
+      const ocr = ocrByMedia.get(m.id);
+      let plate = ocr?.value ?? null;
+      if (!plate && textPlates.length === 1 && mediaRows.length === 1) {
+        plate = normalizePlate(textPlates[0]!.value);
+      }
+      return {
+        id: m.id,
+        originalOrder: m.originalOrder ?? i,
+        plateNormalized: plate,
+        plateConfidence: ocr?.confidence ?? null,
+      };
+    });
+
+    if (textPlates.length >= 2 && ocrByMedia.size === 0) {
+      // Multiple plates in accompanying text only — one candidate per plate, media unresolved until assigned.
+      for (const p of textPlates) {
+        discoveryInputs.push({
+          id: `text-anchor-${p.value}`,
+          originalOrder: -1,
+          plateNormalized: normalizePlate(p.value),
+          plateConfidence: p.confidence ?? 0.7,
+        });
       }
     }
 
-    if (batch.candidates.length === 0) {
-      const slots = planCandidateSlots({
-        plates,
-        mediaCount: batch.media.length,
-        visionLikelySameVehicle: visionHint?.likelySameVehicle ?? null,
+    const groups = assignMediaToIdentityGroups(
+      discoveryInputs.filter((d) => !d.id.startsWith("text-anchor-"))
+    );
+
+    const commercialFields = commercial.fields as Record<string, unknown>;
+
+    for (const group of groups) {
+      const locked = await prisma.vehicleCandidate.findFirst({
+        where: {
+          batchId: batch.id,
+          dealerId,
+          plateNormalized: group.plate,
+          status: { in: ["COMMITTED", "REJECTED"] },
+        },
+      });
+      if (locked) continue;
+
+      const existing = await prisma.vehicleCandidate.findFirst({
+        where: {
+          batchId: batch.id,
+          dealerId,
+          ...(group.plate
+            ? { plateNormalized: group.plate }
+            : { plateNormalized: null, status: { notIn: ["COMMITTED", "REJECTED"] } }),
+        },
       });
 
-      for (const slot of slots) {
-        const plateValue = slot.plate?.value ?? null;
-        const plateConfidence = slot.plate?.confidence ?? null;
-        const plateSource = slot.plate?.source ?? null;
+      const plateField = group.plate
+        ? {
+            value: group.plate,
+            confidence:
+              discoveryInputs.find((d) => d.plateNormalized === group.plate)
+                ?.plateConfidence ?? 0.7,
+            source: ocrByMedia.size ? "OCR" : "TEXT",
+          }
+        : null;
 
-        await prisma.vehicleCandidate.create({
+      const provenance = {
+        ...commercial.provenance,
+        ...(plateField
+          ? {
+              detectedPlate: {
+                value: plateField.value,
+                source: plateField.source,
+                confidence: plateField.confidence,
+              },
+            }
+          : {}),
+        grouping: {
+          reason: group.groupingReason,
+          mediaCount: group.mediaIds.length,
+          batchMediaCount: mediaRows.length,
+        },
+      };
+
+      let candidateId = existing?.id;
+      if (!candidateId) {
+        const created = await prisma.vehicleCandidate.create({
           data: {
             batchId: batch.id,
             dealerId,
-            status: "IDENTIFYING",
-            detectedPlate: plateValue,
-            plateNormalized: plateValue ? normalizePlate(plateValue) : null,
-            plateConfidence: plateValue ? plateConfidence ?? 0.6 : null,
+            status: group.plate ? "IDENTIFYING" : "NEEDS_INFO",
+            detectedPlate: group.plate,
+            plateNormalized: group.plate,
+            plateConfidence: plateField?.confidence ?? null,
             commercialJson: toPrismaJson(commercialFields),
-            fieldProvenance: toPrismaJson({
-              ...commercial.provenance,
-              ...(plateValue && plateSource
-                ? {
-                    detectedPlate: {
-                      value: plateValue,
-                      source: plateSource,
-                      confidence: plateConfidence,
-                    },
-                  }
-                : {}),
-              grouping: { reason: slot.reason, mediaCount: batch.media.length },
-              ...(visionHint
-                ? {
-                    vision: {
-                      source: "VISION",
-                      confidence: visionHint.confidence,
-                      likelySameVehicle: visionHint.likelySameVehicle,
-                    },
-                  }
-                : {}),
-            }),
+            fieldProvenance: toPrismaJson(provenance),
+            confidenceBand: group.plate ? "MEDIUM" : "LOW",
+            missingFields: group.plate
+              ? toPrismaJson([])
+              : toPrismaJson(["detectedPlate"]),
+            reviewStatus: group.plate ? "NONE" : "PENDING",
             media: {
-              create: batch.media.map((m, i) => ({
-                mediaId: m.id,
-                sortOrder: m.originalOrder ?? i,
+              create: group.mediaIds.map((mediaId, i) => ({
+                mediaId,
+                sortOrder: i,
               })),
             },
           },
         });
+        candidateId = created.id;
+      } else {
+        await prisma.vehicleCandidate.update({
+          where: { id: candidateId },
+          data: {
+            detectedPlate: group.plate ?? existing?.detectedPlate,
+            plateNormalized: group.plate ?? existing?.plateNormalized,
+            plateConfidence: plateField?.confidence ?? existing?.plateConfidence,
+            fieldProvenance: toPrismaJson(provenance),
+            status:
+              existing?.status === "READY" || existing?.dealerIntent
+                ? existing.status
+                : group.plate
+                  ? "IDENTIFYING"
+                  : "NEEDS_INFO",
+          },
+        });
+        await prisma.vehicleCandidateMedia.deleteMany({
+          where: { candidateId },
+        });
+        if (group.mediaIds.length) {
+          await prisma.vehicleCandidateMedia.createMany({
+            data: group.mediaIds.map((mediaId, i) => ({
+              candidateId: candidateId!,
+              mediaId,
+              sortOrder: i,
+            })),
+          });
+        }
       }
+
+      const assignmentByMedia = new Map(
+        group.assignments.map((a) => [a.mediaId, a])
+      );
+      for (const mediaId of group.mediaIds) {
+        const a = assignmentByMedia.get(mediaId);
+        const media = mediaRows.find((row) => row.id === mediaId);
+        const prev = (media?.discoveryJson as DiscoveryTrace | null) ?? {
+          ocrAttempted: false,
+          ocrPlate: null,
+          ocrConfidence: null,
+          groupingCandidateKey: null,
+          groupingResult: null,
+          skipReason: null,
+        };
+        await prisma.intakeMedia.update({
+          where: { id: mediaId },
+          data: {
+            discoveryJson: toPrismaJson({
+              ...prev,
+              groupingCandidateKey: candidateId,
+              groupingResult: a?.reason ?? group.groupingReason,
+              skipReason: prev.skipReason,
+            }),
+          },
+        });
+      }
+    }
+
+    const assignedIds = new Set(groups.flatMap((g) => g.mediaIds));
+    for (const media of mediaRows) {
+      if (assignedIds.has(media.id)) continue;
+      const prev = (media.discoveryJson as DiscoveryTrace | null) ?? {
+        ocrAttempted: false,
+        ocrPlate: null,
+        ocrConfidence: null,
+        groupingCandidateKey: null,
+        groupingResult: null,
+        skipReason: null,
+      };
+      await prisma.intakeMedia.update({
+        where: { id: media.id },
+        data: {
+          discoveryJson: toPrismaJson({
+            ...prev,
+            groupingCandidateKey: null,
+            groupingResult: "unresolved",
+            skipReason: prev.skipReason ?? "unresolved_identity",
+          }),
+        },
+      });
     }
 
     const candidates = await prisma.vehicleCandidate.findMany({
       where: {
         batchId: batch.id,
         dealerId,
-        status: {
-          in: ["DETECTED", "IDENTIFYING", "NEEDS_INFO", "READY"],
-        },
+        status: { in: ["DETECTED", "IDENTIFYING", "NEEDS_INFO", "READY"] },
       },
     });
 
-    for (const candidate of candidates) {
-      if (candidate.status === "READY") continue;
-      await enrichCandidateIdentity(candidate.id, dealerId);
-    }
+    await mapWithConcurrency(candidates, INTAKE_GOV_CONCURRENCY, async (candidate) => {
+      try {
+        await enrichCandidateIdentity(candidate.id, dealerId);
+      } catch {
+        /* candidate independence — continue others */
+      }
+    });
 
-    await commitReadyCandidates(dealerId, batch.id);
     await refreshBatchStatus(batch.id);
 
     await emitExchangeEvent({
       eventType: "intake.batch.process_completed",
       dealerId,
-      eventData: { batchId: batch.id },
+      eventData: {
+        batchId: batch.id,
+        candidateCount: candidates.length,
+        autoCommit: false,
+      },
       idempotencyKey: `intake-process-done:${batch.id}:${Date.now()}`,
       operational: true,
     }).catch(() => undefined);
@@ -321,7 +422,6 @@ async function enrichCandidateIdentity(candidateId: string, dealerId: string) {
     const provenance =
       (candidate.fieldProvenance as Record<string, unknown> | null) ?? {};
 
-    // OCR/VISION plate that GOV rejects → do not treat as READY identity
     const plateProv = provenance.detectedPlate as
       | { source?: string; confidence?: number }
       | undefined;

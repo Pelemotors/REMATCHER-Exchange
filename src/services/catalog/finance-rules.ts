@@ -1,6 +1,7 @@
 /**
  * Deterministic catalog finance simulation.
  * Not credit approval. No balloon. Retail price only.
+ * 8.4% only with explicit NEW / ZERO_KM classification — never guessed from mileage or year.
  */
 export const FINANCE_RATE_USED = 0.099;
 export const FINANCE_RATE_NEW_ZERO_KM = 0.084;
@@ -19,14 +20,20 @@ export function getMaxFinanceTerm(
   return 120;
 }
 
+const EXPLICIT_NEW = new Set(["NEW", "ZERO_KM", "NEW_ZERO_KM", "0KM"]);
+
 /**
- * Only mileage === 0 is a reliable NEW/0km signal in this domain.
- * Year is never used to infer newness.
+ * NEW/ZERO_KM requires an explicit, reliable classification.
+ * mileage === 0 or year alone is not enough.
  */
 export function classifyFinanceCondition(input: {
   mileage?: number | null;
+  year?: number | null;
+  conditionClass?: string | null;
 }): FinanceConditionClass {
-  return input.mileage === 0 ? "NEW_ZERO_KM" : "USED";
+  const raw = (input.conditionClass ?? "").trim().toUpperCase().replace(/\s+/g, "_");
+  if (EXPLICIT_NEW.has(raw)) return "NEW_ZERO_KM";
+  return "USED";
 }
 
 export function getAnnualFinanceRate(cls: FinanceConditionClass): number {
@@ -63,12 +70,15 @@ export function simulateCatalogFinance(input: {
   retailPrice?: number | null;
   year?: number | null;
   mileage?: number | null;
+  conditionClass?: string | null;
 }): CatalogFinanceQuote | null {
   if (!input.enabled) return null;
   if (input.retailPrice == null || input.retailPrice <= 0) return null;
   const termMonths = getMaxFinanceTerm(input.year);
   if (!termMonths) return null;
-  const conditionClass = classifyFinanceCondition({ mileage: input.mileage });
+  const conditionClass = classifyFinanceCondition({
+    conditionClass: input.conditionClass,
+  });
   const annualRate = getAnnualFinanceRate(conditionClass);
   const monthlyIls = roundIls(
     monthlyPaymentSpitzer(input.retailPrice, annualRate, termMonths)
@@ -84,7 +94,10 @@ export function simulateCatalogFinance(input: {
 }
 
 export const CATALOG_LEGAL_GENERAL =
-  "ט.ל.ח. המידע, המחירים, התמונות ופרטי הרכב באתר נועדו להתרשמות כללית בלבד ועשויים להשתנות. יש לוודא מול הסוחר את פרטי הרכב, זמינותו ומחירו העדכני לפני ביצוע עסקה.";
+  "ט.ל.ח. המחירים, זמינות הרכבים ופרטיהם עשויים להתעדכן. יש לוודא את פרטי הרכב והמחיר מול הסוחר לפני ביצוע העסקה.";
 
 export const CATALOG_LEGAL_FINANCE =
-  "הצגת החזר חודשי, ככל שמופיעה, היא סימולציה משוערת בלבד ואינה מהווה הצעה, התחייבות או אישור למתן אשראי. קבלת מימון, סכומו ותנאיו כפופים לבדיקת זכאות, לאישור ולתנאי הגוף המממן. התנאים המחייבים הם אלה שייקבעו במסמכי העסקה והמימון.";
+  "החזרי המימון המוצגים הם להמחשה בלבד ובכפוף לאישור ותנאי המימון.";
+
+export const CATALOG_FINANCE_ASTERISK =
+  "*החזר חודשי משוער להמחשה בלבד, בכפוף לאישור ותנאי המימון.";

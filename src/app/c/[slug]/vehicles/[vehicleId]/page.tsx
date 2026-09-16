@@ -8,6 +8,7 @@ import {
   catalogStyles as styles,
   formatIls,
   formatKm,
+  CATALOG_FINANCE_ASTERISK,
 } from "@/components/catalog/catalog-public-shared";
 import { catalogVehicleWhatsAppHref } from "@/services/catalog/whatsapp-interest";
 import { getPublicCatalogVehicle } from "@/services/catalog/catalog-service";
@@ -46,8 +47,10 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
   const hero = vehicle.imageUrl || vehicle.media[0]?.url || null;
   const interestHref = catalogVehicleWhatsAppHref(contact, {
     title: vehicle.title,
+    make: vehicle.make,
+    model: vehicle.model,
     year: vehicle.year,
-    retailPrice: vehicle.retailPrice,
+    publicRef: vehicle.id.slice(-6),
     slug: catalog.slug,
   });
 
@@ -88,17 +91,12 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
               {vehicle.finance && (
                 <div className={styles.financeDetail}>
                   <p>
-                    החזר חודשי משוער:{" "}
                     <a href="#catalog-legal" className={styles.financeLink}>
-                      {formatIls(vehicle.finance.monthlyIls)} לחודש*
+                      החל מ-{formatIls(vehicle.finance.monthlyIls)} לחודש*
                     </a>
                   </p>
                   <p>עד {vehicle.finance.termMonths} תשלומים</p>
-                  <p>
-                    <a href="#catalog-legal" className={styles.financeLink}>
-                      אפשרות למימון עד 100%*
-                    </a>
-                  </p>
+                  <p className={styles.financeAsterisk}>{CATALOG_FINANCE_ASTERISK}</p>
                 </div>
               )}
               <ul className={styles.detailList}>
@@ -144,7 +142,7 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    מתעניין ברכב זה
+                    צור קשר ב-WhatsApp
                   </a>
                 )}
                 {phoneHref && (

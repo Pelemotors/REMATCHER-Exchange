@@ -47,7 +47,8 @@ describe("Product VNext architecture guards", () => {
 
   it("intake commit defaults OFFERED_TO_ME + PRIVATE", () => {
     const commit = read("src/services/intake/commit.ts");
-    expect(commit).toContain('dealerRelationship: "OFFERED_TO_ME"');
+    expect(commit).toContain('?? "OFFERED_TO_ME"');
+    expect(commit).toContain('opts?.dealerRelationship');
     expect(commit).toContain('visibility: "PRIVATE"');
   });
 

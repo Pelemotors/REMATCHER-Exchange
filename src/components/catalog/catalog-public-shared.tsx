@@ -1,6 +1,7 @@
 import styles from "./catalog-public.module.css";
 import { pickCatalogWhatsAppNumber } from "@/services/catalog/whatsapp-interest";
 import {
+  CATALOG_FINANCE_ASTERISK,
   CATALOG_LEGAL_FINANCE,
   CATALOG_LEGAL_GENERAL,
 } from "@/services/catalog/finance-rules";
@@ -37,7 +38,7 @@ export function formatFinanceFrom(monthlyIls: number) {
 }
 
 export function CatalogLegalFooter({
-  dealerName,
+  dealerName: _dealerName,
   hasFinanceDisplay,
 }: {
   dealerName: string;
@@ -45,17 +46,15 @@ export function CatalogLegalFooter({
 }) {
   return (
     <footer className={styles.footer} id="catalog-legal">
-      <p className={styles.advertiser}>
-        הקטלוג מפורסם על ידי {dealerName}. REMATCHER מספקת תשתית קטלוג בלבד
-        ואינה מוכרת את הרכב ואינה נותנת אשראי.
-      </p>
-      <p className={styles.legalText}>
-        {CATALOG_LEGAL_GENERAL}
-        {hasFinanceDisplay ? ` ${CATALOG_LEGAL_FINANCE}` : ""}
-      </p>
+      <p className={styles.legalText}>{CATALOG_LEGAL_GENERAL}</p>
+      {hasFinanceDisplay ? (
+        <p className={styles.legalText}>{CATALOG_LEGAL_FINANCE}</p>
+      ) : null}
     </footer>
   );
 }
+
+export { CATALOG_FINANCE_ASTERISK };
 
 /** @deprecated Use CatalogLegalFooter — kept for any leftover import. */
 export function CatalogPoweredBy() {

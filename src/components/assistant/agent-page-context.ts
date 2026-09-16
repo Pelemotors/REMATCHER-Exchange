@@ -12,6 +12,7 @@ export type AgentSurface =
   | "activity"
   | "account"
   | "validations"
+  | "intake"
   | "other";
 
 export type AgentEntityType = "vehicle" | "demand" | "match" | "search";
@@ -34,6 +35,7 @@ export function surfaceFromPath(pathname: string | null | undefined): AgentSurfa
   if (pathname.startsWith("/account")) return "account";
   if (pathname.startsWith("/validations")) return "validations";
   if (pathname.startsWith("/home")) return "home";
+  if (pathname.startsWith("/intake")) return "intake";
   return "other";
 }
 

@@ -9,6 +9,7 @@ import {
   formatFinanceFrom,
   formatIls,
   formatKm,
+  CATALOG_FINANCE_ASTERISK,
 } from "@/components/catalog/catalog-public-shared";
 import { catalogVehicleWhatsAppHref } from "@/services/catalog/whatsapp-interest";
 import { listPublicCatalogVehicles } from "@/services/catalog/catalog-service";
@@ -102,8 +103,10 @@ export default async function PublicCatalogPage({ params }: Props) {
                 const price = formatIls(v.retailPrice);
                 const interestHref = catalogVehicleWhatsAppHref(contact, {
                   title: v.title,
+                  make: v.make,
+                  model: v.model,
                   year: v.year,
-                  retailPrice: v.retailPrice,
+                  publicRef: v.id.slice(-6),
                   slug: catalog.slug,
                 });
                 return (
@@ -136,6 +139,7 @@ export default async function PublicCatalogPage({ params }: Props) {
                             <p className={styles.financeTerm}>
                               עד {v.finance.termMonths} תשלומים
                             </p>
+                            <p className={styles.financeAsterisk}>{CATALOG_FINANCE_ASTERISK}</p>
                           </>
                         )}
                       </div>
@@ -147,7 +151,7 @@ export default async function PublicCatalogPage({ params }: Props) {
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        מתעניין ברכב זה
+                        צור קשר ב-WhatsApp
                       </a>
                     ) : null}
                   </article>

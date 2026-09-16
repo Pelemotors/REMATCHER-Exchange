@@ -45,7 +45,11 @@ export async function commitReadyCandidates(
 export async function commitOneCandidate(
   dealerId: string,
   candidateId: string,
-  opts?: { confirmExistingVehicleId?: string; skipDedupe?: boolean }
+  opts?: {
+    confirmExistingVehicleId?: string;
+    skipDedupe?: boolean;
+    dealerRelationship?: import("@prisma/client").DealerVehicleRelationship;
+  }
 ) {
   const c = await prisma.vehicleCandidate.findFirst({
     where: { id: candidateId, dealerId },
@@ -171,8 +175,8 @@ export async function commitOneCandidate(
     source: "domain",
     skipRematch: true,
     requireIdentity: false,
-    // Share/intake → workspace candidate, PRIVATE by default (never auto Network Supply)
-    dealerRelationship: "OFFERED_TO_ME",
+    // Intent required: default private/non-inventory until dealer chooses
+    dealerRelationship: opts?.dealerRelationship ?? "OFFERED_TO_ME",
     visibility: "PRIVATE",
     fields: {
       make: gov?.make ?? null,
@@ -219,6 +223,11 @@ export async function commitOneCandidate(
       status: "COMMITTED",
       committedVehicleId: created.vehicle.id,
       reviewStatus: "RESOLVED",
+      dealerIntent: opts?.dealerRelationship
+        ? opts.dealerRelationship === "INVENTORY"
+          ? "OWNED"
+          : opts.dealerRelationship
+        : undefined,
     },
   });
 
@@ -330,11 +339,7 @@ async function attachMediaToExisting(
   }>
 ) {
   for (const row of mediaRows) {
-    // Never invent EXTERIOR from OTHER/null — skip until dealer sets category
-    if (!row.categoryHint || row.categoryHint === "OTHER") {
-      continue;
-    }
-    const category: VehicleMediaCategory = row.categoryHint;
+    const category: VehicleMediaCategory = row.categoryHint ?? "OTHER";
     try {
       const abs = resolveMediaAbsolutePath(row.storageKey);
       const buf = await readFile(abs);

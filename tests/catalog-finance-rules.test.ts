@@ -39,11 +39,15 @@ describe("finance term boundaries", () => {
 });
 
 describe("interest class", () => {
-  it("defaults to used unless mileage is exactly 0", () => {
+  it("mileage 0 or year alone is USED; only explicit NEW/ZERO_KM is 8.4%", () => {
     expect(classifyFinanceCondition({})).toBe("USED");
     expect(classifyFinanceCondition({ mileage: 1 })).toBe("USED");
     expect(classifyFinanceCondition({ mileage: 12000 })).toBe("USED");
-    expect(classifyFinanceCondition({ mileage: 0 })).toBe("NEW_ZERO_KM");
+    expect(classifyFinanceCondition({ mileage: 0 })).toBe("USED");
+    expect(classifyFinanceCondition({ year: 2026, mileage: 0 })).toBe("USED");
+    expect(classifyFinanceCondition({ conditionClass: "NEW" })).toBe("NEW_ZERO_KM");
+    expect(classifyFinanceCondition({ conditionClass: "ZERO_KM" })).toBe("NEW_ZERO_KM");
+    expect(classifyFinanceCondition({ conditionClass: "NEW_ZERO_KM" })).toBe("NEW_ZERO_KM");
     expect(getAnnualFinanceRate("USED")).toBe(FINANCE_RATE_USED);
     expect(getAnnualFinanceRate("NEW_ZERO_KM")).toBe(FINANCE_RATE_NEW_ZERO_KM);
   });
@@ -92,12 +96,25 @@ describe("catalog simulation vectors", () => {
     });
   }
 
-  it("2026 confirmed 0km uses 8.4%", () => {
+  it("2026 mileage 0 without explicit class uses 9.9%", () => {
     const q = simulateCatalogFinance({
       enabled: true,
       retailPrice: 100_000,
       year: 2026,
       mileage: 0,
+    });
+    expect(q?.annualRate).toBe(0.099);
+    expect(q?.termMonths).toBe(120);
+    expect(q?.monthlyIls).toBe(roundIls(independentSpitzer(100_000, 0.099, 120)));
+  });
+
+  it("explicit NEW/ZERO_KM uses 8.4%", () => {
+    const q = simulateCatalogFinance({
+      enabled: true,
+      retailPrice: 100_000,
+      year: 2026,
+      mileage: 0,
+      conditionClass: "NEW_ZERO_KM",
     });
     expect(q?.annualRate).toBe(0.084);
     expect(q?.termMonths).toBe(120);

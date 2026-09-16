@@ -44,14 +44,19 @@ describe("public catalog never leaks dealer pricing", () => {
     }
   });
 
-  it("WhatsApp interest copy uses retail price only", () => {
+  it("WhatsApp interest copy uses vehicle context without dealerPrice", () => {
     const text = catalogVehicleInterestText({
-      title: "Clio",
+      title: "Renault Clio",
+      make: "Renault",
+      model: "Clio",
       year: 2022,
       retailPrice: 149900,
     });
-    expect(text).toContain("149,900");
-    expect(text).not.toMatch(/b2b|סוחר|134000/);
+    expect(text).toContain("Renault Clio");
+    expect(text).toContain("2022");
+    expect(text).toContain("היי, אני מתעניין");
+    expect(text).not.toMatch(/b2b|134000|dealerPrice/);
+    expect(text).not.toContain("149,900");
     const src = readSrc("src/services/catalog/whatsapp-interest.ts");
     expect(src).not.toMatch(/b2bPrice/);
   });
@@ -79,8 +84,8 @@ describe("public catalog never leaks dealer pricing", () => {
 
   it("legal copy is non-credit and present in the public footer", () => {
     expect(CATALOG_LEGAL_GENERAL).toContain("ט.ל.ח");
-    expect(CATALOG_LEGAL_FINANCE).toContain("סימולציה משוערת");
-    expect(CATALOG_LEGAL_FINANCE).not.toMatch(/מובטח|אישור מיידי|החזר קבוע/);
+    expect(CATALOG_LEGAL_FINANCE).toContain("להמחשה בלבד");
+    expect(CATALOG_LEGAL_FINANCE).not.toMatch(/מובטח|אישור מיידי|החזר קבוע|APR|גוף מממן/);
     const footer = readSrc("src/components/catalog/catalog-public-shared.tsx");
     expect(footer).toContain("CATALOG_LEGAL_GENERAL");
     expect(footer).toContain("hasFinanceDisplay");
@@ -89,9 +94,10 @@ describe("public catalog never leaks dealer pricing", () => {
     const list = readSrc("src/app/c/[slug]/page.tsx");
     expect(list).toContain("formatFinanceFrom");
     const detail = readSrc("src/app/c/[slug]/vehicles/[vehicleId]/page.tsx");
-    expect(detail).toContain("החזר חודשי משוער");
-    expect(detail).toContain("אפשרות למימון עד 100%");
+    expect(detail).toContain("CATALOG_FINANCE_ASTERISK");
+    expect(detail).toContain("עד {vehicle.finance.termMonths} תשלומים");
     expect(detail).not.toContain("מימון 100% מובטח");
+    expect(detail).not.toContain("אפשרות למימון עד 100%");
   });
 
   it("showMonthlyFinance defaults off in schema and migration", () => {

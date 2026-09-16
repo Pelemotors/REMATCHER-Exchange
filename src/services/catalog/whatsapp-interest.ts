@@ -5,9 +5,12 @@
 
 export type CatalogVehicleInterest = {
   title: string;
+  make?: string | null;
+  model?: string | null;
   year?: number | null;
   retailPrice?: number | null;
   slug?: string;
+  publicRef?: string | null;
 };
 
 export function israeliPhoneToWhatsApp(raw: string | null | undefined): string | null {
@@ -38,18 +41,14 @@ export function pickCatalogWhatsAppNumber(
 }
 
 export function catalogVehicleInterestText(vehicle: CatalogVehicleInterest): string {
-  const bits = [vehicle.title];
-  if (vehicle.year) bits.push(String(vehicle.year));
-  if (vehicle.retailPrice != null && Number.isFinite(vehicle.retailPrice)) {
-    bits.push(
-      new Intl.NumberFormat("he-IL", {
-        style: "currency",
-        currency: "ILS",
-        maximumFractionDigits: 0,
-      }).format(vehicle.retailPrice)
-    );
+  const name =
+    [vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.title;
+  const year = vehicle.year ? ` ${vehicle.year}` : "";
+  let text = `היי, אני מתעניין ב-${name}${year} שראיתי בקטלוג שלכם`;
+  if (vehicle.publicRef && vehicle.publicRef.length <= 24) {
+    text += ` (${vehicle.publicRef})`;
   }
-  return `שלום, מתעניין ברכב ${bits.join(" · ")} מהקטלוג`;
+  return text;
 }
 
 export function catalogVehicleWhatsAppHref(

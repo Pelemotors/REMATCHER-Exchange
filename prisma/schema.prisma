@@ -1476,6 +1476,8 @@ model IntakeMedia {
   /** Suggested EXTERIOR/INTERIOR/OTHER + confidence — not VehicleMedia until commit */
   categoryHint     VehicleMediaCategory?
   categoryConfidence Float?
+  /** Per-media discovery/OCR/grouping forensic trace — no LLM hidden reasoning */
+  discoveryJson    Json?
   createdAt        DateTime                    @default(now())
   updatedAt        DateTime                    @updatedAt
 
@@ -1519,6 +1521,8 @@ model VehicleCandidate {
   conflictsJson      Json?
   existingVehicleId  String?
   committedVehicleId String?                      @unique
+  /** Dealer intent after identity — never inferred from capture */
+  dealerIntent       String?
   failureCode        String?
   failureMessage     String?
   createdAt          DateTime                     @default(now())

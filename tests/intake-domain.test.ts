@@ -100,13 +100,12 @@ describe("intake domain surface", () => {
     expect(reviewRoute).toContain("listOpenIntakeReviews");
   });
 
-  it("commit never maps OTHER/null to EXTERIOR", () => {
+  it("commit attaches OTHER/unknown instead of skipping", () => {
     const commit = readFileSync(
       join(root, "src/services/intake/commit.ts"),
       "utf8"
     );
-    expect(commit).toContain('row.categoryHint === "OTHER"');
-    expect(commit).toContain("continue");
+    expect(commit).toContain('row.categoryHint ?? "OTHER"');
     expect(commit).not.toMatch(/OTHER[\s\S]{0,80}\?[\s\S]{0,40}"EXTERIOR"/);
   });
 
@@ -115,7 +114,8 @@ describe("intake domain surface", () => {
       join(root, "src/services/intake/process-batch.ts"),
       "utf8"
     );
-    expect(src).toContain("batch.candidates.length === 0");
+    expect(src).toContain("assignMediaToIdentityGroups");
+    expect(src).toContain("INTAKE_OCR_CONCURRENCY");
     expect(src).toContain("commercial.plates");
     expect(src).not.toMatch(/if \(batch\.candidates\.length > 0\) \{\s*return/);
   });
@@ -169,12 +169,14 @@ describe("intake domain surface", () => {
         "utf8"
       )
     ).toContain("סקירת קליטה");
-    expect(
-      readFileSync(
-        join(root, "src/components/intake/intake-handoff-client.tsx"),
-        "utf8"
-      )
-    ).toContain("add_text");
+    const handoffUi = readFileSync(
+      join(root, "src/components/intake/intake-handoff-client.tsx"),
+      "utf8"
+    );
+    expect(handoffUi).toContain("add_text");
+    expect(handoffUi).toContain("קליטת רכב");
+    expect(handoffUi).not.toContain("קליטת מלאי");
+    expect(handoffUi).not.toContain(">למלאי שלי<");
   });
 
   it("iOS Share Extension + ShareStaging adapter sources are present", () => {
@@ -207,7 +209,7 @@ describe("intake domain surface", () => {
     expect(handoff).toContain("callbackUrl");
     expect(handoff).toContain("נסה שוב");
     expect(handoff).toContain("useState(() =>");
-    expect(handoff).toContain("error && !done");
+    expect(handoff).toContain('role="alert"');
 
     const product = readFileSync(join(root, "src/config/product.ts"), "utf8");
     expect(product).toContain(

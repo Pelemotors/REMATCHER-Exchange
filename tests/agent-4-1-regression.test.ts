@@ -58,7 +58,7 @@ describe("Agent 4.1 — intake grouping", () => {
       mediaCount: 12,
     });
     expect(slots).toHaveLength(1);
-    expect(slots[0]!.reason).toBe("single_batch_default");
+    expect(slots[0]!.reason).toBe("unplated_batch");
     expect(slots[0]!.plate).toBeNull();
   });
 
@@ -71,7 +71,7 @@ describe("Agent 4.1 — intake grouping", () => {
       mediaCount: 8,
     });
     expect(slots).toHaveLength(2);
-    expect(slots.every((s) => s.reason === "distinct_plates")).toBe(true);
+    expect(slots.every((s) => s.reason === "distinct_plate")).toBe(true);
   });
 });
 

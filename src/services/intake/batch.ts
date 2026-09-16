@@ -246,22 +246,64 @@ export async function getIntakeBatchForDealer(input: {
         originalOrder: m.originalOrder,
         categoryHint: m.categoryHint,
         processingStatus: m.processingStatus,
+        discovery: m.discoveryJson,
       })),
       texts: batch.texts.map((t) => ({
         id: t.id,
         text: t.text,
         provenance: t.provenance,
       })),
-      candidates: batch.candidates.map((c) => ({
-        id: c.id,
-        status: c.status,
-        reviewStatus: c.reviewStatus,
-        detectedPlate: c.detectedPlate,
-        confidenceBand: c.confidenceBand,
-        missingFields: c.missingFields,
-        committedVehicleId: c.committedVehicleId,
-        existingVehicleId: c.existingVehicleId,
-      })),
+      candidates: [...batch.candidates]
+        .sort((a, b) => {
+          const ao = a.media[0]?.sortOrder ?? 0;
+          const bo = b.media[0]?.sortOrder ?? 0;
+          return ao - bo;
+        })
+        .map((c) => {
+          const gov = (c.govIdentityJson ?? null) as {
+            make?: string | null;
+            model?: string | null;
+            year?: number | null;
+          } | null;
+          const thumbMedia = c.media[0]
+            ? batch.media.find((m) => m.id === c.media[0]!.mediaId)
+            : null;
+          return {
+            id: c.id,
+            status: c.status,
+            reviewStatus: c.reviewStatus,
+            detectedPlate: c.detectedPlate,
+            plateNormalized: c.plateNormalized,
+            dealerIntent: c.dealerIntent,
+            confidenceBand: c.confidenceBand,
+            missingFields: c.missingFields,
+            committedVehicleId: c.committedVehicleId,
+            existingVehicleId: c.existingVehicleId,
+            govState: c.govState,
+            make: gov?.make ?? null,
+            model: gov?.model ?? null,
+            year: gov?.year ?? null,
+            thumbUrl: thumbMedia
+              ? publicThumbUrlForDisplayKey(thumbMedia.storageKey)
+              : null,
+            mediaIds: c.media.map((row) => row.mediaId),
+          };
+        }),
+      unresolvedMedia: batch.media
+        .filter((m) => {
+          const assigned = batch.candidates.some((c) =>
+            c.media.some((row) => row.mediaId === m.id)
+          );
+          const d = m.discoveryJson as { groupingResult?: string | null } | null;
+          return !assigned || d?.groupingResult === "unresolved";
+        })
+        .map((m) => ({
+          id: m.id,
+          thumbUrl: publicThumbUrlForDisplayKey(m.storageKey),
+          originalOrder: m.originalOrder,
+          categoryHint: m.categoryHint,
+          discovery: m.discoveryJson,
+        })),
     },
   };
 }

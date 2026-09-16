@@ -69,8 +69,19 @@ describe("Pilot closeout — confirmed bugs", () => {
   });
 
   it("Dealer Memory is fail-closed unless ENABLE_DEALER_MEMORY", () => {
-    expect(isDealerMemoryRuntimeEnabled()).toBe(false);
-    expect(getKillSwitchState().dealer_memory).toBe(true);
+    const prev = process.env.ENABLE_DEALER_MEMORY;
+    const prevKill = process.env.KILL_DEALER_MEMORY;
+    delete process.env.ENABLE_DEALER_MEMORY;
+    delete process.env.KILL_DEALER_MEMORY;
+    try {
+      expect(isDealerMemoryRuntimeEnabled()).toBe(false);
+      expect(getKillSwitchState().dealer_memory).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.ENABLE_DEALER_MEMORY;
+      else process.env.ENABLE_DEALER_MEMORY = prev;
+      if (prevKill === undefined) delete process.env.KILL_DEALER_MEMORY;
+      else process.env.KILL_DEALER_MEMORY = prevKill;
+    }
   });
 
   it("reactivation idempotency key has no Date.now", () => {
