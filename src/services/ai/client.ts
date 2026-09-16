@@ -2,6 +2,13 @@ import "server-only";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { AI_MODELS, AI_PROMPT_VERSIONS } from "@/config/product";
+import { sanitizeChatCompletionParams } from "@/services/ai/chat-completion-params";
+
+export {
+  chatCompletionLength,
+  modelUsesMaxCompletionTokens,
+  sanitizeChatCompletionParams,
+} from "@/services/ai/chat-completion-params";
 
 let client: OpenAI | null = null;
 
@@ -10,27 +17,25 @@ export function getOpenAIClient(): OpenAI {
     throw new Error("OPENAI_API_KEY is not configured");
   }
   if (!client) {
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const inner = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const originalCreate = inner.chat.completions.create.bind(
+      inner.chat.completions
+    );
+    inner.chat.completions.create = ((
+      body: Record<string, unknown>,
+      options?: unknown
+    ) =>
+      originalCreate(
+        sanitizeChatCompletionParams(body) as never,
+        options as never
+      )) as unknown as typeof inner.chat.completions.create;
+    client = inner;
   }
   return client;
 }
 
 export function isOpenAIConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
-}
-
-/**
- * gpt-5 / o-series reject `max_tokens` (400: use max_completion_tokens).
- * gpt-4o* still uses max_tokens.
- */
-export function chatCompletionLength(
-  model: string,
-  n: number
-): { max_tokens: number } | { max_completion_tokens: number } {
-  if (/^(gpt-5|o[1-9]|o3|o4)/i.test(model)) {
-    return { max_completion_tokens: n };
-  }
-  return { max_tokens: n };
 }
 
 export async function logAiOperation(params: {
