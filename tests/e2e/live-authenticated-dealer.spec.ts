@@ -97,6 +97,15 @@ test.describe("Authenticated Production dealer", () => {
     await page.goto(`${BASE}/intake/handoff`, { waitUntil: "networkidle" });
     await expect(page.getByText("שלח לי את הרכב")).toBeVisible({ timeout: 15000 });
     await expect(page.getByText("הדבק טקסט / מידע")).toBeVisible();
+    await page.getByText("הדבק טקסט / מידע").click();
+    const t0 = Date.now();
+    await page.locator("textarea[placeholder*='CX5']").fill("מחפש cx5 22+ עד 140 עדיף לבן");
+    await page.getByRole("button", { name: "שלח ל-REMATCHER" }).click();
+    await expect(page.getByText(/קיבלתי/)).toBeVisible({ timeout: 10000 });
+    const ackMs = Date.now() - t0;
+    await expect(page.getByText("ביקוש לקוח")).toBeVisible({ timeout: 60000 });
+    const readyMs = Date.now() - t0;
+    console.log(`demand_ack_ms=${ackMs} demand_ready_ms=${readyMs}`);
     await page.screenshot({
       path: path.join(OUT, "intake-authenticated-390.png"),
       fullPage: true,
