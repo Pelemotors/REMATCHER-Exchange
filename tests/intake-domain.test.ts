@@ -209,9 +209,16 @@ describe("intake domain surface", () => {
     expect(handoff).toContain("useState(() =>");
     expect(handoff).toContain("error && !done");
 
+    const product = readFileSync(join(root, "src/config/product.ts"), "utf8");
+    expect(product).toContain(
+      'plateOcr: process.env.OPENAI_PLATE_OCR_MODEL ?? "gpt-5.4-mini"'
+    );
     const ocr = readFileSync(join(root, "src/services/intake/plate-ocr.ts"), "utf8");
     expect(ocr).toContain("chatCompletionLength");
-    expect(ocr).toContain("AI_MODELS.agentLoop");
+    expect(ocr).toContain("AI_MODELS.plateOcr");
+    expect(ocr).toContain("cropIsraeliYellowPlate");
+    expect(ocr).toContain("resolveStructuredPlate");
+    expect(ocr).toContain("Read the Israeli vehicle registration plate");
     expect(ocr).not.toMatch(/max_tokens:\s*200/);
     const vision = readFileSync(
       join(root, "src/services/intake/media-vision.ts"),

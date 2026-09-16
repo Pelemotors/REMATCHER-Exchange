@@ -4,8 +4,10 @@
  *
  * Pipeline:
  * 1) Optional fixture/text override (tests)
- * 2) OpenAI vision when configured
- * 3) null if no evidence / low confidence
+ * 2) Deterministic yellow-plate crop when possible
+ * 3) Narrow vision: read the visible Israeli plate → structured JSON
+ * 4) Deterministic normalize + sanity in code
+ * 5) null if no evidence / low confidence / disagreeing fields
  */
 import "server-only";
 import {
@@ -15,9 +17,13 @@ import {
   logAiOperation,
 } from "@/services/ai/client";
 import { AI_MODELS } from "@/config/product";
-import { isValidIsraeliPlate } from "@/services/identity/gov-vehicle";
-import { normalizePlate } from "@/services/intake/status";
+import { cropIsraeliYellowPlate } from "@/services/intake/israeli-plate-crop";
 import { prepareImageForVision } from "@/services/intake/vision-image";
+import {
+  plateTokensFromVisibleText,
+  resolveStructuredPlate,
+  type AcceptedPlate,
+} from "@/services/intake/plate-ocr-result";
 
 export type PlateOcrHint = {
   value: string;
@@ -26,53 +32,93 @@ export type PlateOcrHint = {
   rawText?: string;
 };
 
-const PLATE_TOKEN_RE =
-  /\b(\d{2,3}[-\s]?\d{2,3}[-\s]?\d{2,3}|\d{7,8})\b/g;
-
-/** Deterministic parse of OCR/vision free text into plate candidates. */
 export function parsePlateCandidatesFromOcrText(
   text: string
 ): Array<{ value: string; confidence: number }> {
-  if (!text?.trim()) return [];
-  const seen = new Set<string>();
-  const out: Array<{ value: string; confidence: number }> = [];
-  for (const m of text.matchAll(PLATE_TOKEN_RE)) {
-    const digits = m[1]!.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 8) continue;
-    if (seen.has(digits)) continue;
-    if (!isValidIsraeliPlate(digits) && digits.length !== 7 && digits.length !== 8) {
-      continue;
-    }
-    seen.add(digits);
-    const conf =
-      isValidIsraeliPlate(digits) || digits.length === 7 || digits.length === 8
-        ? 0.72
-        : 0.45;
-    out.push({ value: digits, confidence: conf });
-  }
-  return out;
+  return plateTokensFromVisibleText(text).map((value) => ({
+    value,
+    confidence: 0.72,
+  }));
 }
 
-function pickBestPlate(
-  candidates: Array<{ value: string; confidence: number }>,
-  rawText?: string
-): PlateOcrHint | null {
-  if (candidates.length === 0) return null;
-  const sorted = [...candidates].sort((a, b) => b.confidence - a.confidence);
-  const best = sorted[0]!;
-  if (best.confidence < 0.5) return null;
-  const normalized = normalizePlate(best.value);
-  if (!normalized) return null;
-  // Soft validate — invalid format → null (never invent)
-  if (!isValidIsraeliPlate(normalized) && normalized.length !== 7 && normalized.length !== 8) {
+function toHint(accepted: AcceptedPlate): PlateOcrHint {
+  return {
+    value: accepted.value,
+    confidence: accepted.confidence,
+    source: "OCR",
+    rawText: accepted.rawText,
+  };
+}
+
+async function requestPlateJson(
+  model: string,
+  mime: string,
+  imageBytes: Buffer
+): Promise<{
+  content: string;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}> {
+  const openai = getOpenAIClient();
+  const b64 = imageBytes.toString("base64");
+  const completion = await openai.chat.completions.create({
+    model,
+    temperature: 0,
+    ...chatCompletionLength(model, 120),
+    messages: [
+      {
+        role: "system",
+        content:
+          "You read Israeli vehicle registration plates from photos. " +
+          "Return JSON only: {\"plateNumber\":string|null,\"visibleText\":string|null,\"confidence\":number}. " +
+          "plateNumber = digits as seen (punctuation allowed). visibleText = the plate text as painted. " +
+          "confidence 0–1. If the plate is not clearly readable, plateNumber=null and confidence<=0.4. " +
+          "Never guess or invent missing digits. Ignore prices, phone numbers, dashboards, and UI text. " +
+          "Only read a metal plate mounted on a vehicle, not numbers printed in an app or advertisement.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Read the Israeli vehicle registration plate visible in this image.",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mime};base64,${b64}`,
+              detail: "high",
+            },
+          },
+        ],
+      },
+    ],
+    response_format: { type: "json_object" },
+  });
+  return {
+    content: completion.choices[0]?.message?.content ?? "",
+    usage: completion.usage,
+  };
+}
+
+function acceptFromContent(content: string): PlateOcrHint | null {
+  let parsed: {
+    plateNumber?: string | null;
+    visibleText?: string | null;
+    confidence?: number | null;
+    plates?: Array<{ digits?: string; confidence?: number }>;
+  } = {};
+  try {
+    parsed = JSON.parse(content) as typeof parsed;
+  } catch {
     return null;
   }
-  return {
-    value: normalized,
-    confidence: best.confidence,
-    source: "OCR",
-    rawText,
-  };
+  const accepted = resolveStructuredPlate({
+    plateNumber: parsed.plateNumber ?? parsed.plates?.[0]?.digits ?? null,
+    visibleText: parsed.visibleText ?? null,
+    confidence:
+      parsed.confidence ?? parsed.plates?.[0]?.confidence ?? null,
+  });
+  return accepted ? toHint(accepted) : null;
 }
 
 /**
@@ -85,7 +131,12 @@ export async function extractPlateFromImageBytes(
 ): Promise<PlateOcrHint | null> {
   const override = process.env.INTAKE_OCR_TEXT_OVERRIDE?.trim();
   if (override) {
-    return pickBestPlate(parsePlateCandidatesFromOcrText(override), override);
+    const accepted = resolveStructuredPlate({
+      plateNumber: override,
+      visibleText: override,
+      confidence: 1,
+    });
+    return accepted ? toHint(accepted) : null;
   }
 
   if (!bytes?.length) return null;
@@ -97,94 +148,54 @@ export async function extractPlateFromImageBytes(
   if (!mime.startsWith("image/")) return null;
 
   const start = Date.now();
+  const model = AI_MODELS.plateOcr;
+  const crop = await cropIsraeliYellowPlate(prepared.bytes);
+  const attempts: Array<{ bytes: Buffer; mimeType: string }> = crop
+    ? [
+        { bytes: crop.bytes, mimeType: crop.mimeType },
+        { bytes: prepared.bytes, mimeType: mime },
+      ]
+    : [{ bytes: prepared.bytes, mimeType: mime }];
+
   try {
-    const openai = getOpenAIClient();
-    const b64 = prepared.bytes.toString("base64");
-    const model =
-      process.env.OPENAI_INTAKE_VISION_MODEL ||
-      AI_MODELS.agentLoop ||
-      "gpt-5.4-mini";
-    const completion = await openai.chat.completions.create({
-      model,
-      temperature: 0,
-      ...chatCompletionLength(model, 200),
-      messages: [
-        {
-          role: "system",
-          content:
-            "Extract Israeli vehicle license plate numbers visible in the image. " +
-            "Return JSON only: {\"plates\":[{\"digits\":\"1234567\",\"confidence\":0.0}],\"visibleText\":\"...\"}. " +
-            "digits = digits only (7–8). If none visible, plates=[]. Never invent plates.",
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Find license plates in this vehicle/document/screenshot image.",
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mime};base64,${b64}`,
-                detail: "high",
-              },
-            },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
-    });
+    let hint: PlateOcrHint | null = null;
+    let lastUsage: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+    let invalidJson = false;
 
-    const content = completion.choices[0]?.message?.content ?? "";
-    let parsed: {
-      plates?: Array<{ digits?: string; confidence?: number }>;
-      visibleText?: string;
-    } = {};
-    try {
-      parsed = JSON.parse(content) as typeof parsed;
-    } catch {
-      await logAiOperation({
-        operation: "intake.plate_ocr",
+    for (const attempt of attempts) {
+      const { content, usage } = await requestPlateJson(
         model,
-        success: false,
-        latencyMs: Date.now() - start,
-        errorMessage: "invalid_json",
-        entityType: "intake_media",
-        entityId: opts?.mediaId,
-      });
-      return null;
+        attempt.mimeType,
+        attempt.bytes
+      );
+      lastUsage = usage;
+      if (!content) continue;
+      const parsed = acceptFromContent(content);
+      if (parsed) {
+        hint = parsed;
+        break;
+      }
+      if (content && !parsed) {
+        try {
+          JSON.parse(content);
+        } catch {
+          invalidJson = true;
+        }
+      }
     }
 
-    const fromModel = (parsed.plates ?? [])
-      .map((p) => {
-        const digits = String(p.digits ?? "").replace(/\D/g, "");
-        const confidence =
-          typeof p.confidence === "number" && p.confidence >= 0 && p.confidence <= 1
-            ? p.confidence
-            : 0.55;
-        return { value: digits, confidence };
-      })
-      .filter((p) => p.value.length >= 7 && p.value.length <= 8);
-
-    const fromVisible = parsePlateCandidatesFromOcrText(parsed.visibleText ?? "");
-    const merged = [...fromModel];
-    for (const c of fromVisible) {
-      if (!merged.some((m) => m.value === c.value)) merged.push(c);
-    }
-
-    const hint = pickBestPlate(merged, parsed.visibleText);
     await logAiOperation({
       operation: "intake.plate_ocr",
       model,
       success: Boolean(hint),
       latencyMs: Date.now() - start,
-      usageJson: completion.usage
+      usageJson: lastUsage
         ? {
-            promptTokens: completion.usage.prompt_tokens,
-            completionTokens: completion.usage.completion_tokens,
+            promptTokens: lastUsage.prompt_tokens,
+            completionTokens: lastUsage.completion_tokens,
           }
         : undefined,
+      errorMessage: hint ? undefined : invalidJson ? "invalid_json" : undefined,
       entityType: "intake_media",
       entityId: opts?.mediaId,
     });
@@ -192,6 +203,7 @@ export async function extractPlateFromImageBytes(
   } catch (error) {
     await logAiOperation({
       operation: "intake.plate_ocr",
+      model,
       success: false,
       latencyMs: Date.now() - start,
       errorMessage: error instanceof Error ? error.message : "ocr_failed",

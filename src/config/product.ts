@@ -106,6 +106,8 @@ export const AI_MODELS = {
     process.env.OPENAI_TURN_INTERPRETER_MODEL ?? "gpt-4o-mini",
   turnPlanner: process.env.OPENAI_TURN_PLANNER_MODEL ?? "gpt-4o-mini",
   agentLoop: process.env.OPENAI_AGENT_LOOP_MODEL ?? "gpt-5.4-mini",
+  /** Narrow vision job: read a visible Israeli plate. Not the agent loop. */
+  plateOcr: process.env.OPENAI_PLATE_OCR_MODEL ?? "gpt-5.4-mini",
   matchExplainer: process.env.OPENAI_MATCH_EXPLAINER_MODEL ?? "gpt-4o-mini",
 } as const;
 
