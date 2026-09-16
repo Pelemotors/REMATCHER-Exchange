@@ -15,6 +15,9 @@ export function middleware(request: NextRequest) {
     if (!path.startsWith("/c/") && !path.startsWith("/api/")) {
       const url = request.nextUrl.clone();
       url.pathname = path === "/" ? `/c/${slug}` : `/c/${slug}${path}`;
+      // Caddy terminates TLS and sets X-Forwarded-Proto=https. Next would then
+      // rewrite to https://localhost:3200 and try to proxy TLS onto HTTP :3200.
+      url.protocol = "http:";
       return NextResponse.rewrite(url, {
         request: { headers: requestHeaders },
       });

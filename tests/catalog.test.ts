@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   CATALOG_SLUG_MAX_LEN,
   catalogSlugFromHost,
@@ -86,6 +88,14 @@ describe("catalog host rewrite helper", () => {
     expect(catalogSlugFromHost("api.rematcher.co.il")).toBeNull();
     expect(catalogSlugFromHost("rematcher.co.il")).toBeNull();
     expect(catalogSlugFromHost("localhost")).toBeNull();
+  });
+});
+
+describe("catalog host middleware", () => {
+  it("forces http rewrite so Caddy HTTPS proto does not proxy TLS onto :3200", () => {
+    const mw = readFileSync(resolve(process.cwd(), "src/middleware.ts"), "utf8");
+    expect(mw).toContain('url.protocol = "http:"');
+    expect(mw).toContain("catalogSlugFromHost");
   });
 });
 
