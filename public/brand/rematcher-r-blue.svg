@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" role="img" aria-labelledby="title">
+  <title id="title">REMATCHER Exchange — R Mark (blue)</title>
+  <g fill="#2E68F7">
+    <path d="M 28 30
+    L 108 30
+    C 148 30 172 52 172 86
+    C 172 118 150 140 114 140
+    L 86 140
+    L 72 122
+    L 108 122
+    C 132 122 146 108 146 86
+    C 146 64 132 50 108 50
+    L 54 50
+    L 40 64
+    Z"/>
+    <path d="M 28 78
+    L 96 78
+    L 78 100
+    L 28 100
+    Z"/>
+    <path d="M 78 122
+    L 112 122
+    L 168 178
+    L 132 178
+    Z"/>
+  </g>
+</svg>

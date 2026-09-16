@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { User } from "lucide-react";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandLockup } from "@/components/brand/brand-mark";
 import { NavItemV2 } from "@/components/ui/brand-v2/nav-item-v2";
 import { AgentWorkspaceProvider } from "@/components/assistant/agent-workspace-provider";
 import { useAgentShellFlags } from "@/components/layout/agent-shell-chrome";
@@ -62,16 +62,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     >
       <aside className={styles.sidebar}>
         <Link href="/home" className={styles.brandLockup}>
-          <ExchangeMark
-            state="idle"
-            variant="hero"
-            className={styles.brandMark}
-            decorative
-          />
-          <div className={styles.brandText}>
-            <p className={styles.brandParent}>{BRAND.parent}</p>
-            <p className={styles.brandProduct}>{BRAND.productShort}</p>
-          </div>
+          <BrandLockup markSize={32} />
         </Link>
 
         <nav className={styles.sidebarNav} aria-label="ניווט ראשי">
@@ -96,12 +87,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               active={pathname.startsWith(item.href)}
             />
           ))}
-          <NavItemV2
-            href="/account"
-            label="חשבון"
-            icon={User}
-            active={pathname.startsWith("/account")}
-          />
         </div>
       </aside>
 

@@ -27,8 +27,16 @@ async function HomeContent() {
   return (
     <HomeV2
       dealerName={session!.user!.dealerName ?? null}
+      userName={session!.user!.name ?? null}
       blockers={blockers}
       setupStatus={snapshot.setupStatus}
+      attention={{
+        opportunities: snapshot.opportunities,
+        matches: snapshot.matches,
+        validations: blockers
+          .filter((b) => b.href.startsWith("/validations"))
+          .reduce((n, b) => n + b.count, 0),
+      }}
     />
   );
 }

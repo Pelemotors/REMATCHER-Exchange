@@ -159,7 +159,7 @@ describe("dealer UX 2.1 product-flow guards", () => {
     expect(src).toContain("/matches");
   });
 
-  it("home is search-first and reuses demand composer", () => {
+  it("home is action-first with Capture entry and demand composer", () => {
     const home = readFileSync(
       join(root, "src/components/home/home-v2.tsx"),
       "utf8"
@@ -168,7 +168,8 @@ describe("dealer UX 2.1 product-flow guards", () => {
       join(root, "src/components/demand/create-demand-flow.tsx"),
       "utf8"
     );
-    expect(home).toContain("יש לך לקוח שמחפש רכב?");
+    expect(home).toContain("מה אפשר לעשות בשבילך עכשיו?");
+    expect(home).toContain("/intake");
     expect(home).toContain('variant="home"');
     expect(home).toContain("CreateDemandFlow");
     expect(flow).toContain('variant === "home"');

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ButtonV2, Surface } from "@/components/ui/brand-v2";
 import { BRAND } from "@/config/brand";
-import { ExchangeMark } from "@/components/brand/exchange-mark";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { getPostAuthRedirect } from "@/lib/auth-routing";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
@@ -60,7 +60,7 @@ export function LoginForm() {
     <form onSubmit={handleSubmit}>
       <Surface depth="raised" className="mx-auto w-full max-w-md space-y-6 p-6">
         <div className="flex flex-col items-center text-center">
-          <ExchangeMark state="idle" size={56} decorative />
+          <BrandMark size={56} variant="gold" preferPng />
           <p className="mt-3 text-body text-v2-text-secondary">{BRAND.tagline}</p>
         </div>
 

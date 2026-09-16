@@ -45,6 +45,11 @@ const config: Config = {
         },
         "v2-platinum": v2.platinum,
         "v2-warm": v2.warmWhite,
+        "v2-gold": {
+          DEFAULT: v2.gold,
+          soft: v2.goldSoft,
+          strong: v2.goldStrong,
+        },
         "v2-canvas": v2.canvas,
         "v2-surface": {
           DEFAULT: v2.surface,

@@ -161,14 +161,16 @@ describe("vehicle media schema + API surface", () => {
 });
 
 describe("navigation simplification", () => {
-  it("primary nav is home / searches / inventory", async () => {
+  it("primary nav covers home / inventory / searches / matches / more", async () => {
     const { MOBILE_BOTTOM_NAV_ITEMS, SECONDARY_NAV_ITEMS } = await import(
       "@/config/mobile-nav"
     );
     expect(MOBILE_BOTTOM_NAV_ITEMS.map((i) => i.href)).toEqual([
       "/home",
-      "/demand",
       "/inventory",
+      "/demand",
+      "/matches",
+      "/account",
     ]);
     expect(SECONDARY_NAV_ITEMS.some((i) => i.href === "/activity")).toBe(true);
     expect(

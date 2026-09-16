@@ -30,7 +30,7 @@ const config = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
-      backgroundColor: "#070C14",
+      backgroundColor: "#0B1114",
     },
   },
 };

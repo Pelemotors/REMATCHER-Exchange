@@ -73,11 +73,13 @@ describe("PWA navigate wiring", () => {
 });
 
 describe("mobile bottom nav", () => {
-  it("keeps 3 primary destinations", () => {
+  it("keeps product-job destinations including matches", () => {
     expect(MOBILE_BOTTOM_NAV_ITEMS.map((i) => i.href)).toEqual([
       "/home",
-      "/demand",
       "/inventory",
+      "/demand",
+      "/matches",
+      "/account",
     ]);
   });
 
@@ -122,8 +124,8 @@ describe("manifest PWA icons", () => {
     const manifest = JSON.parse(
       readFileSync(join(root, "public/manifest.json"), "utf8")
     );
-    expect(manifest.theme_color).toBe("#070C14");
-    expect(manifest.background_color).toBe("#070C14");
+    expect(manifest.theme_color).toBe("#0B1114");
+    expect(manifest.background_color).toBe("#0B1114");
     const srcs = manifest.icons.map((i: { src: string }) => i.src);
     expect(srcs).toContain("/icons/icon-192.png");
     expect(srcs).toContain("/icons/icon-512.png");

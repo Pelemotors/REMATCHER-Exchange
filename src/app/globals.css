@@ -8,49 +8,57 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
-  /* Brand UI v2 — global product palette */
-  --rm-midnight: #070C14;
-  --rm-ink: #F3F1EC;
-  --rm-signal: #2D78A8;
-  --rm-signal-hover: #174A73;
-  --rm-signal-soft: rgba(45, 120, 168, 0.12);
-  --rm-canvas: #0A1018;
-  --rm-surface: #162030;
-  --rm-surface-secondary: #1A2535;
-  --rm-border: rgba(201, 206, 211, 0.12);
-  --rm-border-strong: rgba(201, 206, 211, 0.22);
-  --rm-text-primary: #F3F1EC;
-  --rm-text-secondary: rgba(243, 241, 236, 0.72);
-  --rm-text-muted: rgba(243, 241, 236, 0.48);
-  --rm-success: #16865C;
-  --rm-success-soft: rgba(22, 134, 92, 0.15);
-  --rm-warning: #C47A12;
-  --rm-warning-soft: rgba(196, 122, 18, 0.15);
-  --rm-error: #C53B3B;
-  --rm-error-soft: rgba(197, 59, 59, 0.15);
-  --rm-info: #2D78A8;
-  --rm-info-soft: rgba(45, 120, 168, 0.12);
+  /* Brand UI v2.1 — Dark Premium Visual SoT */
+  --rm-midnight: #0B1114;
+  --rm-ink: #EBEDEF;
+  --rm-signal: #2E68F7;
+  --rm-signal-hover: #2454C9;
+  --rm-signal-soft: rgba(46, 104, 247, 0.14);
+  --rm-gold: #D4AF3B;
+  --rm-gold-soft: rgba(212, 175, 59, 0.16);
+  --rm-canvas: #0B1114;
+  --rm-surface: #1A2330;
+  --rm-surface-secondary: #1F2937;
+  --rm-border: rgba(235, 237, 239, 0.10);
+  --rm-border-strong: rgba(235, 237, 239, 0.20);
+  --rm-text-primary: #EBEDEF;
+  --rm-text-secondary: rgba(235, 237, 239, 0.72);
+  --rm-text-muted: rgba(235, 237, 239, 0.48);
+  --rm-success: #22A06B;
+  --rm-success-soft: rgba(34, 160, 107, 0.16);
+  --rm-warning: #E08A1E;
+  --rm-warning-soft: rgba(224, 138, 30, 0.16);
+  --rm-error: #E24B4B;
+  --rm-error-soft: rgba(226, 75, 75, 0.16);
+  --rm-info: #2E68F7;
+  --rm-info-soft: rgba(46, 104, 247, 0.14);
 
-  --rm2-midnight: #070C14;
-  --rm2-graphite: #111A26;
-  --rm2-deep-navy: #163A5F;
-  --rm2-exchange-blue: #174A73;
-  --rm2-signal-blue: #2D78A8;
-  --rm2-signal-blue-soft: rgba(45, 120, 168, 0.12);
-  --rm2-platinum: #C9CED3;
-  --rm2-warm-white: #F3F1EC;
-  --rm2-canvas: #0A1018;
-  --rm2-surface: #111A26;
-  --rm2-surface-raised: #162030;
-  --rm2-surface-secondary: #1A2535;
-  --rm2-border: rgba(201, 206, 211, 0.12);
-  --rm2-border-strong: rgba(201, 206, 211, 0.22);
-  --rm2-text-primary: #F3F1EC;
-  --rm2-text-secondary: rgba(243, 241, 236, 0.72);
-  --rm2-text-muted: rgba(243, 241, 236, 0.48);
-  --rm2-success: #16865C;
-  --rm2-warning: #C47A12;
-  --rm2-error: #C53B3B;
+  --rm2-midnight: #0B1114;
+  --rm2-graphite: #1F2937;
+  --rm2-deep-navy: #121A22;
+  --rm2-exchange-blue: #2E68F7;
+  --rm2-signal-blue: #2E68F7;
+  --rm2-signal-blue-soft: rgba(46, 104, 247, 0.14);
+  --rm2-gold: #D4AF3B;
+  --rm2-gold-soft: rgba(212, 175, 59, 0.16);
+  --rm2-platinum: #EBEDEF;
+  --rm2-warm-white: #EBEDEF;
+  --rm2-canvas: #0B1114;
+  --rm2-surface: #121A22;
+  --rm2-surface-raised: #1A2330;
+  --rm2-surface-secondary: #1F2937;
+  --rm2-border: rgba(235, 237, 239, 0.10);
+  --rm2-border-strong: rgba(235, 237, 239, 0.20);
+  --rm2-text-primary: #EBEDEF;
+  --rm2-text-secondary: rgba(235, 237, 239, 0.72);
+  --rm2-text-muted: rgba(235, 237, 239, 0.48);
+  --rm2-success: #22A06B;
+  --rm2-warning: #E08A1E;
+  --rm2-error: #E24B4B;
+  --rm2-bottom-nav-h: 64px;
+  --rm2-cta-h: 52px;
+  --rm2-radius-md: 12px;
+  --rm2-radius-lg: 16px;
 }
 
 html {
@@ -234,11 +242,15 @@ body:not(:has([data-app-shell="true"])) {
   }
 
   .v2-btn-primary {
-    @apply v2-btn bg-v2-exchange text-v2-warm hover:bg-v2-deep-navy;
+    @apply v2-btn bg-[color:var(--rm2-gold)] text-[#0B1114] hover:bg-[#c4a034] shadow-[0_0_18px_rgba(212,175,59,0.18)];
   }
 
   .v2-btn-signal {
     @apply v2-btn bg-v2-signal text-v2-warm hover:opacity-90;
+  }
+
+  .v2-btn-gold {
+    @apply v2-btn-primary;
   }
 
   .v2-btn-secondary {

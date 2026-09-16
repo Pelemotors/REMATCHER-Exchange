@@ -2,17 +2,25 @@ import {
   Home,
   Package,
   Search,
+  Sparkles,
+  MoreHorizontal,
   Bell,
 } from "lucide-react";
 
-/** Canonical mobile bottom + desktop sidebar primary destinations (3 core jobs). */
+/**
+ * Mobile bottom destinations — product jobs, not reference tab labels.
+ * Agent remains shell FAB / workspace (not a fifth competing tab).
+ */
 export const MOBILE_BOTTOM_NAV_ITEMS = [
   { href: "/home", label: "בית", icon: Home },
-  { href: "/demand", label: "החיפושים שלי", icon: Search },
-  { href: "/inventory", label: "המלאי שלי", icon: Package },
+  { href: "/inventory", label: "מלאי", icon: Package },
+  { href: "/demand", label: "חיפושים", icon: Search },
+  { href: "/matches", label: "התאמות", icon: Sparkles },
+  { href: "/account", label: "עוד", icon: MoreHorizontal },
 ] as const;
 
-/** Secondary destinations — reachable via account/menu, not primary nav. */
+/** Secondary destinations — reachable via account/menu. */
 export const SECONDARY_NAV_ITEMS = [
   { href: "/activity", label: "פעילות", icon: Bell },
+  { href: "/opportunities", label: "הזדמנויות", icon: Sparkles },
 ] as const;
