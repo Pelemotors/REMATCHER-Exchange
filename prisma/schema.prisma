@@ -157,6 +157,8 @@ model CatalogPublication {
   isActive      Boolean   @default(true)
   publishedAt   DateTime  @default(now())
   unpublishedAt DateTime?
+  /** Optional public monthly-payment simulation. Default off. */
+  showMonthlyFinance Boolean @default(false)
 
   catalog DealerCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
   vehicle Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)

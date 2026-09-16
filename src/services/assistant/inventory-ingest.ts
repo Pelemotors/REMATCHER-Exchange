@@ -287,8 +287,8 @@ function answerInventoryContextQuestion(
       if (f.model) known.push(`דגם: ${f.model}`);
       if (f.year) known.push(`שנה: ${f.year}`);
       if (f.mileage != null) known.push(`ק״מ: ${f.mileage.toLocaleString()}`);
-      if (f.b2bPrice != null) known.push(`מחיר: ${f.b2bPrice.toLocaleString()} ₪`);
-      if (f.retailPrice != null) known.push(`מחיר לקוח: ${f.retailPrice.toLocaleString()} ₪`);
+      if (f.b2bPrice != null) known.push(`מחיר לסוחר: ${f.b2bPrice.toLocaleString()} ₪`);
+      if (f.retailPrice != null) known.push(`מחיר ללקוח: ${f.retailPrice.toLocaleString()} ₪`);
       if (f.color) known.push(`צבע: ${f.color}`);
       if (f.trim) known.push(`גימור: ${f.trim}`);
       if (f.ownershipType) known.push(`מקור: ${f.ownershipType}`);

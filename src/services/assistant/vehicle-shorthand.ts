@@ -94,6 +94,29 @@ export function parseDealerPriceFromText(raw: string): number | null {
   return null;
 }
 
+export function parseRetailPriceFromText(raw: string): number | null {
+  if (/לסוחר|b\s*2\s*b/i.test(raw) && !/ללקוח|לקוח|קטלוג|retail/i.test(raw)) {
+    return null;
+  }
+  const labeled = raw.match(
+    /(?:ללקוח|מחיר\s*ללקוח|קמעונאי|בקטלוג|retail)\s*(?:אני מפרסם\s*)?[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:אלף)?/i
+  );
+  if (labeled) {
+    let n = parseFloat(labeled[1].replace(",", "."));
+    if (/אלף/i.test(labeled[0]) || n < 1000) n *= 1000;
+    return Math.round(n);
+  }
+  const catalog = raw.match(
+    /שים אותו ב[-\s]*([\d.,]+)/i
+  );
+  if (catalog && /קטלוג/i.test(raw)) {
+    let n = parseFloat(catalog[1].replace(",", ""));
+    if (n < 1000) n *= 1000;
+    return Math.round(n);
+  }
+  return null;
+}
+
 /**
  * Apply HIGH-confidence shorthand onto partial fields without inventing model
  * when only make is known (e.g. "טויוטה 22" must NOT become Corolla).

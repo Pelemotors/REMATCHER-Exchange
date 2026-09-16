@@ -9,6 +9,8 @@ import {
   openGaps,
   parseAmendment,
   parseGapAnswer,
+  parseDealerAndRetailPrices,
+  needsPriceRoleClarification,
   readyForConfirmation,
   emptyDraftFields,
   type PendingInventoryDraft,
@@ -126,7 +128,7 @@ describe("structured summary and amendments", () => {
     const s = buildStructuredSummary(baseDraft());
     expect(s).toContain("טויוטה קורולה");
     expect(s).toContain("2022");
-    expect(s).toContain("מחיר לקוח");
+    expect(s).toContain("מחיר ללקוח");
   });
 
   it("amendment returns to draft fields", () => {
@@ -136,6 +138,29 @@ describe("structured summary and amendments", () => {
     const updated = applyFields(d, patch!);
     expect(updated.status).toBe("DRAFT");
     expect(updated.fields.mileage).toBe(58000);
+  });
+});
+
+describe("dealer vs retail price parsing", () => {
+  it("parses סוחר X, לקוח Y independently", () => {
+    expect(parseDealerAndRetailPrices("סוחר 120, לקוח 135")).toEqual({
+      b2bPrice: 120000,
+      retailPrice: 135000,
+    });
+    expect(parseDealerAndRetailPrices("מחיר לסוחר 120")).toBeNull();
+    expect(parseAmendment("מחיר לסוחר 120")).toEqual({ b2bPrice: 120000 });
+    expect(parseAmendment("ללקוח אני מפרסם 134,900")).toEqual({
+      retailPrice: 134900,
+    });
+    expect(parseAmendment("שים אותו ב-149,900 בקטלוג")).toEqual({
+      retailPrice: 149900,
+    });
+  });
+
+  it("does not invent a role for unlabeled מחיר", () => {
+    expect(needsPriceRoleClarification("מחיר 134000")).toBe(true);
+    expect(needsPriceRoleClarification("מחיר לסוחר 134000")).toBe(false);
+    expect(parseAmendment("מחיר 134000")).toBeNull();
   });
 });
 

@@ -19,7 +19,11 @@ type CatalogDto = {
   address: string | null;
   description: string | null;
   logoUrl: string | null;
-  publications: Array<{ vehicleId: string; publishedAt: string }>;
+  publications: Array<{
+    vehicleId: string;
+    publishedAt: string;
+    showMonthlyFinance?: boolean;
+  }>;
   _count?: { publications: number };
 };
 
@@ -31,6 +35,7 @@ type InventoryVehicle = {
   status: string;
   dealerRelationship?: string;
   visibility?: string;
+  retailPrice?: number | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -220,6 +225,50 @@ export function CatalogSettingsClient() {
     });
   }
 
+  async function uploadLogo(file: File) {
+    setSaving(true);
+    setMsg(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/catalog/logo", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (!res.ok) {
+      setMsg("לא הצלחתי להעלות לוגו");
+      return;
+    }
+    setMsg("הלוגו נשמר בקטלוג");
+    if (data.logoUrl && catalog) {
+      setCatalog({ ...catalog, logoUrl: data.logoUrl });
+    }
+    await load();
+  }
+
+  async function toggleFinance(vehicleId: string, on: boolean, hasRetail: boolean) {
+    if (on && !hasRetail) {
+      setMsg("יש להזין מחיר ללקוח כדי להציג החזר חודשי.");
+      return;
+    }
+    setBusyVehicle(vehicleId);
+    const res = await fetch("/api/catalog/finance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vehicleId, showMonthlyFinance: on }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusyVehicle(null);
+    if (!res.ok) {
+      setMsg(
+        data.message ??
+          (data.error === "retail_price_required"
+            ? "יש להזין מחיר ללקוח כדי להציג החזר חודשי."
+            : "לא ניתן לעדכן תצוגת מימון")
+      );
+      return;
+    }
+    await load();
+  }
+
   if (loading) {
     return (
       <p className="p-2 text-sm text-v2-text-muted" role="status">
@@ -266,6 +315,33 @@ export function CatalogSettingsClient() {
           value={form.displayName}
           onChange={(e) => setForm({ ...form, displayName: e.target.value })}
         />
+
+        {catalog && (
+          <>
+            <label className="label">לוגו הסוכנות בקטלוג</label>
+            <p className="text-xs text-v2-text-muted">
+              הלוגו שלך מוצג בקטלוג הציבורי במקום לוגו REMATCHER.
+            </p>
+            {catalog.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={catalog.logoUrl}
+                alt="לוגו קטלוג"
+                className="h-16 w-16 rounded-xl object-cover border border-v2-border"
+              />
+            )}
+            <input
+              className="input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void uploadLogo(file);
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
 
         <label className="label">טלפון</label>
         <input
@@ -360,7 +436,8 @@ export function CatalogSettingsClient() {
         </div>
         <p className="text-sm text-v2-text-muted">
           Offer / Trade-in / External לא ניתנים לפרסום. בעלות במלאי לא מפרסמת
-          אוטומטית — יש לבחור במפורש.
+          אוטומטית — יש לבחור במפורש. החזר חודשי משוער הוא תצוגה אופציונלית
+          בלבד לפי מחיר ללקוח — ברירת המחדל כבויה.
         </p>
 
         {!catalog && (
@@ -374,6 +451,8 @@ export function CatalogSettingsClient() {
             const title =
               [v.make, v.model, v.year].filter(Boolean).join(" ") || v.id;
             const isPub = publishedIds.has(v.id);
+            const pub = catalog?.publications.find((p) => p.vehicleId === v.id);
+            const financeOn = Boolean(pub?.showMonthlyFinance);
             const blocked = ["OFFERED_TO_ME", "TRADE_IN_CANDIDATE", "EXTERNAL"].includes(
               v.dealerRelationship ?? "OWNED"
             );
@@ -398,17 +477,41 @@ export function CatalogSettingsClient() {
                   </p>
                 </div>
                 {!blocked && catalog && (
-                  <ButtonV2
-                    variant={isPub ? "ghost" : "secondary"}
-                    disabled={busyVehicle === v.id}
-                    onClick={() => togglePublish(v.id, !isPub)}
-                  >
-                    {busyVehicle === v.id
-                      ? "…"
-                      : isPub
-                        ? "הסר מהקטלוג"
-                        : "פרסם"}
-                  </ButtonV2>
+                  <div className="flex flex-col items-end gap-2">
+                    <ButtonV2
+                      variant={isPub ? "ghost" : "secondary"}
+                      disabled={busyVehicle === v.id}
+                      onClick={() => togglePublish(v.id, !isPub)}
+                    >
+                      {busyVehicle === v.id
+                        ? "…"
+                        : isPub
+                          ? "הסר מהקטלוג"
+                          : "פרסם"}
+                    </ButtonV2>
+                    {isPub && (
+                      <label className="flex max-w-[16rem] items-start gap-2 text-xs text-v2-text-secondary">
+                        <input
+                          type="checkbox"
+                          checked={financeOn}
+                          disabled={busyVehicle === v.id}
+                          onChange={(e) =>
+                            void toggleFinance(
+                              v.id,
+                              e.target.checked,
+                              v.retailPrice != null
+                            )
+                          }
+                        />
+                        <span>
+                          הצג החזר חודשי משוער
+                          {v.retailPrice == null
+                            ? " — יש להזין מחיר ללקוח כדי להציג החזר חודשי."
+                            : ""}
+                        </span>
+                      </label>
+                    )}
+                  </div>
                 )}
               </li>
             );

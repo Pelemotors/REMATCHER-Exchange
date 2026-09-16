@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrandV2Scope } from "@/components/ui/brand-v2";
 import {
-  CatalogPoweredBy,
+  CatalogLegalFooter,
   catalogContactNumber,
   catalogStyles as styles,
+  formatFinanceFrom,
   formatIls,
   formatKm,
 } from "@/components/catalog/catalog-public-shared";
@@ -34,7 +35,7 @@ export default async function PublicCatalogPage({ params }: Props) {
   const data = await listPublicCatalogVehicles(slug);
   if (!data) notFound();
 
-  const { catalog, vehicles } = data;
+  const { catalog, vehicles, hasFinanceDisplay } = data;
   const initial = catalog.displayName.trim().charAt(0).toUpperCase() || "R";
   const contact = catalogContactNumber(catalog);
   const phoneHref = catalog.phone
@@ -125,6 +126,18 @@ export default async function PublicCatalogPage({ params }: Props) {
                         <h2 className={styles.vehicleTitle}>{v.title}</h2>
                         {spec && <p className={styles.vehicleSpec}>{spec}</p>}
                         {price && <p className={styles.price}>{price}</p>}
+                        {v.finance && (
+                          <>
+                            <p className={styles.financeFrom}>
+                              <a href="#catalog-legal" className={styles.financeLink}>
+                                {formatFinanceFrom(v.finance.monthlyIls)}
+                              </a>
+                            </p>
+                            <p className={styles.financeTerm}>
+                              עד {v.finance.termMonths} תשלומים
+                            </p>
+                          </>
+                        )}
                       </div>
                     </Link>
                     {interestHref ? (
@@ -143,7 +156,10 @@ export default async function PublicCatalogPage({ params }: Props) {
             </div>
           )}
 
-          <CatalogPoweredBy />
+          <CatalogLegalFooter
+            dealerName={catalog.displayName}
+            hasFinanceDisplay={hasFinanceDisplay}
+          />
         </div>
       </div>
     </BrandV2Scope>

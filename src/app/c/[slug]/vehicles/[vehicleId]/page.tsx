@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrandV2Scope } from "@/components/ui/brand-v2";
 import {
-  CatalogPoweredBy,
+  CatalogLegalFooter,
   catalogContactNumber,
   catalogStyles as styles,
   formatIls,
@@ -37,7 +37,7 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
   const data = await getPublicCatalogVehicle({ slug, vehicleId });
   if (!data) notFound();
 
-  const { catalog, vehicle } = data;
+  const { catalog, vehicle, hasFinanceDisplay } = data;
   const price = formatIls(vehicle.retailPrice);
   const contact = catalogContactNumber(catalog);
   const phoneHref = catalog.phone
@@ -85,6 +85,22 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
             <aside className={styles.detailPanel}>
               <h1 className={styles.detailTitle}>{vehicle.title}</h1>
               {price && <p className={styles.detailPrice}>{price}</p>}
+              {vehicle.finance && (
+                <div className={styles.financeDetail}>
+                  <p>
+                    החזר חודשי משוער:{" "}
+                    <a href="#catalog-legal" className={styles.financeLink}>
+                      {formatIls(vehicle.finance.monthlyIls)} לחודש*
+                    </a>
+                  </p>
+                  <p>עד {vehicle.finance.termMonths} תשלומים</p>
+                  <p>
+                    <a href="#catalog-legal" className={styles.financeLink}>
+                      אפשרות למימון עד 100%*
+                    </a>
+                  </p>
+                </div>
+              )}
               <ul className={styles.detailList}>
                 {vehicle.year != null && (
                   <li>
@@ -140,7 +156,10 @@ export default async function PublicCatalogVehiclePage({ params }: Props) {
             </aside>
           </div>
 
-          <CatalogPoweredBy />
+          <CatalogLegalFooter
+            dealerName={catalog.displayName}
+            hasFinanceDisplay={hasFinanceDisplay}
+          />
         </div>
       </div>
     </BrandV2Scope>

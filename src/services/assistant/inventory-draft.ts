@@ -163,7 +163,7 @@ export function gapQuestion(gap: InventoryGapId, fields?: InventoryDraftFields):
     case "mileage": return "חסר לי קילומטראז׳. כמה יש על הרכב?";
     case "fuel_type": return "איזה סוג הנעה/דלק יש לרכב — בנזין, דיזל, היברידי, פלאג־אין או חשמלי?";
     case "engine_displacement": return "מה נפח המנוע בסמ״ק? למשל 1600. אפשר גם לכתוב 1.6 ליטר.";
-    case "dealer_price": return "באיזה מחיר תרצה להציע את הרכב לסוחר אחר? אפשר גם להמשיך בלי כרגע, אבל לא תיווצר התאמה סופית עד שיוגדר מחיר.";
+    case "dealer_price": return "באיזה מחיר לסוחר תרצה להציע את הרכב? אפשר גם להמשיך בלי כרגע, אבל לא תיווצר התאמה סופית עד שיוגדר מחיר לסוחר.";
     case "ownership": return "מה המקור של הרכב — פרטי, ליסינג, השכרה או חברה? ואם יש — איזו יד?";
     case "trim": return "יש רמת גימור שאתה יודע עליה, או להשאיר בלי?";
     case "color": return "יש צבע שכדאי לרשום, או נשאיר בלי?";
@@ -200,6 +200,36 @@ function parsePriceNumber(message: string): number | null {
   const n = parseInt(digits, 10);
   if (n >= 1000 && n < 10_000_000) return n;
   if (n > 0 && n < 1000) return n * 1000;
+  return null;
+}
+
+export function needsPriceRoleClarification(message: string): boolean {
+  const m = message.trim();
+  if (!/מחיר/i.test(m)) return false;
+  if (/לסוחר|סוחר|b2b|ללקוח|לקוח|קמעונאי|קטלוג|retail/i.test(m)) return false;
+  return parsePriceNumber(m) != null;
+}
+
+export function parseDealerAndRetailPrices(
+  message: string
+): Partial<InventoryDraftFields> | null {
+  const pair = message.match(
+    /(?:מחיר\s*)?(?:לסוחר|סוחר|b2b)\s*[:־-]?\s*([\d.,]+)\s*(?:אלף)?[\s,;]+(?:ללקוח|לקוח|קמעונאי|בקטלוג|retail)\s*(?:אני מפרסם\s*)?[:־-]?\s*([\d.,]+)/i
+  );
+  if (pair) {
+    const dealer = parsePriceNumber(pair[1]);
+    const retail = parsePriceNumber(pair[2]);
+    if (dealer != null && retail != null) {
+      return { b2bPrice: dealer, retailPrice: retail };
+    }
+  }
+  if (
+    /בקטלוג|ללקוח אני מפרסם|שים אותו ב/i.test(message) &&
+    !/לסוחר|סוחר|b2b/i.test(message)
+  ) {
+    const n = parsePriceNumber(message);
+    if (n != null) return { retailPrice: n };
+  }
   return null;
 }
 
@@ -262,7 +292,7 @@ export function parseAmendment(message: string): Partial<InventoryDraftFields> |
   if (features.length) return { features };
   if (
     !/בעצם|תקן|שנה|עדכן|actually|change/i.test(m) &&
-    !/ק.?מ|קילומטר|מחיר|לסוחר|b2b|יד|צבע|גימור|בנזין|דיזל|היבריד|פלאג|חשמלי|מנוע|נפח/i.test(m)
+    !/ק.?מ|קילומטר|מחיר|לסוחר|לקוח|קטלוג|b2b|יד|צבע|גימור|בנזין|דיזל|היבריד|פלאג|חשמלי|מנוע|נפח/i.test(m)
   ) {
     if (!/^\s*\d/.test(m) && !/\d+\s*אלף/i.test(m)) return null;
   }
@@ -287,9 +317,15 @@ export function parseAmendment(message: string): Partial<InventoryDraftFields> |
     const t = m.match(/(executive|luxury|comfort|premium)/i);
     if (t) return { trim: t[1] };
   }
+  const bothPrices = parseDealerAndRetailPrices(m);
+  if (bothPrices) return bothPrices;
   if (/לסוחר|b2b|בי\s*טו/i.test(m)) {
     const n = parsePriceNumber(m);
     if (n != null) return { b2bPrice: n };
+  }
+  if (/ללקוח|בקטלוג|קמעונאי|retail/i.test(m) && !/לסוחר|b2b/i.test(m)) {
+    const n = parsePriceNumber(m);
+    if (n != null) return { retailPrice: n };
   }
   if (/מחיר.*לקוח|קמעונאי|retail/i.test(m)) {
     const n = parsePriceNumber(m);
@@ -332,7 +368,7 @@ export function buildStructuredSummary(draft: PendingInventoryDraft): string {
     );
   }
   if (f.b2bPrice != null) lines.push(`מחיר לסוחר ${fmtNum(f.b2bPrice)} ₪`);
-  else if (f.retailPrice != null) lines.push(`מחיר לקוח ${fmtNum(f.retailPrice)} ₪`);
+  if (f.retailPrice != null) lines.push(`מחיר ללקוח ${fmtNum(f.retailPrice)} ₪`);
   if (f.color) lines.push(`צבע ${f.color}`);
   return lines.join("\n");
 }
@@ -348,7 +384,8 @@ export function buildCompactSummary(draft: PendingInventoryDraft): string {
   if ((f.features ?? []).length) {
     bits.push(canonicalizeVehicleFeatures(f.features ?? []).map(vehicleFeatureLabelHe).join(", "));
   }
-  if (f.b2bPrice != null) bits.push(`מחיר ${fmtNum(f.b2bPrice)}`);
+  if (f.b2bPrice != null) bits.push(`סוחר ${fmtNum(f.b2bPrice)}`);
+  if (f.retailPrice != null) bits.push(`לקוח ${fmtNum(f.retailPrice)}`);
   return bits.join(" · ");
 }
 
@@ -414,8 +451,8 @@ export function identityPartialMessage(fields: InventoryDraftFields): string {
       canonicalizeVehicleFeatures(fields.features ?? []).map(vehicleFeatureLabelHe).join(", ")
     );
   }
-  if (fields.b2bPrice != null) known.push(`מחיר ${fmtNum(fields.b2bPrice)} ₪`);
-  else if (fields.retailPrice != null) known.push(`מחיר ${fmtNum(fields.retailPrice)} ₪`);
+  if (fields.b2bPrice != null) known.push(`מחיר לסוחר ${fmtNum(fields.b2bPrice)} ₪`);
+  if (fields.retailPrice != null) known.push(`מחיר ללקוח ${fmtNum(fields.retailPrice)} ₪`);
   if (fields.color) known.push(`צבע ${fields.color}`);
   const prefix = known.length > 0 ? `הבנתי ${known.join(", ")}. ` : "הבנתי חלק מהפרטים. ";
   const gap = missingIdentityGap(fields);

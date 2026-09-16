@@ -102,9 +102,9 @@ function humanVehicleState(v: InventoryVehicle): {
 }
 
 function vehicleMetaLine(v: InventoryVehicle): string {
-  const price = askingPrice(v);
   const parts: string[] = [];
-  if (price != null) parts.push(formatCurrency(price));
+  if (v.b2bPrice != null) parts.push(`סוחר ${formatCurrency(v.b2bPrice)}`);
+  if (v.retailPrice != null) parts.push(`לקוח ${formatCurrency(v.retailPrice)}`);
   if (v.mileage != null) parts.push(`${formatNumber(v.mileage)} ק״מ`);
   return parts.join(" · ");
 }
@@ -290,7 +290,6 @@ export function InventoryPageClient({
 
   function beginEdit(v: InventoryVehicle) {
     setPrivateIntel({ loading: false, text: null });
-    const price = askingPrice(v);
     setEditVehicle(v);
     setEditForm({
       make: v.make ?? "",
@@ -299,7 +298,8 @@ export function InventoryPageClient({
       year: v.year != null ? String(v.year) : "",
       mileage: v.mileage != null ? String(v.mileage) : "",
       color: v.color ?? "",
-      b2bPrice: price != null ? String(price) : "",
+      b2bPrice: v.b2bPrice != null ? String(v.b2bPrice) : "",
+      retailPrice: v.retailPrice != null ? String(v.retailPrice) : "",
     });
   }
 
@@ -321,6 +321,9 @@ export function InventoryPageClient({
             color: editForm.color || null,
             b2bPrice: editForm.b2bPrice
               ? parseInt(editForm.b2bPrice.replace(/,/g, ""), 10)
+              : null,
+            retailPrice: editForm.retailPrice
+              ? parseInt(editForm.retailPrice.replace(/,/g, ""), 10)
               : null,
           },
         }),
@@ -466,7 +469,8 @@ export function InventoryPageClient({
                 ["year", "שנה"],
                 ["mileage", "ק״מ"],
                 ["color", "צבע"],
-                ["b2bPrice", "מחיר מבוקש"],
+                ["b2bPrice", "מחיר לסוחר"],
+                ["retailPrice", "מחיר ללקוח"],
               ] as const
             ).map(([key, label]) => (
               <div key={key}>

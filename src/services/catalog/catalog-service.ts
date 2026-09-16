@@ -16,7 +16,11 @@ import {
 import {
   publicThumbUrlForDisplayKey,
   publicUrlForStorageKey,
+  writeMediaFile,
 } from "@/lib/media/storage";
+import { processVehicleImage } from "@/lib/media/process";
+import { randomBytes } from "node:crypto";
+import { simulateCatalogFinance } from "@/services/catalog/finance-rules";
 
 export {
   CATALOG_ELIGIBLE_RELATIONSHIPS,
@@ -35,6 +39,7 @@ export async function getCatalogForDealer(dealerId: string) {
           vehicleId: true,
           publishedAt: true,
           isActive: true,
+          showMonthlyFinance: true,
         },
         orderBy: { publishedAt: "desc" },
       },
@@ -289,6 +294,58 @@ export async function unpublishVehicleFromCatalog(params: {
   return { ok: true as const, publication };
 }
 
+export async function setCatalogPublicationFinance(params: {
+  dealerId: string;
+  vehicleId: string;
+  showMonthlyFinance: boolean;
+}) {
+  const catalog = await prisma.dealerCatalog.findUnique({
+    where: { dealerId: params.dealerId },
+  });
+  if (!catalog) {
+    return { ok: false as const, error: "catalog_required" as const };
+  }
+  const pub = await prisma.catalogPublication.findFirst({
+    where: {
+      catalogId: catalog.id,
+      vehicleId: params.vehicleId,
+      isActive: true,
+    },
+    include: {
+      vehicle: { select: { retailPrice: true } },
+    },
+  });
+  if (!pub) {
+    return { ok: false as const, error: "not_published" as const };
+  }
+  if (params.showMonthlyFinance && pub.vehicle.retailPrice == null) {
+    return {
+      ok: false as const,
+      error: "retail_price_required" as const,
+      message: "יש להזין מחיר ללקוח כדי להציג החזר חודשי.",
+    };
+  }
+  const publication = await prisma.catalogPublication.update({
+    where: { id: pub.id },
+    data: { showMonthlyFinance: params.showMonthlyFinance },
+  });
+  return { ok: true as const, publication };
+}
+
+export async function saveCatalogLogo(params: {
+  dealerId: string;
+  bytes: Buffer;
+}) {
+  const processed = await processVehicleImage(params.bytes);
+  const token = randomBytes(12).toString("hex");
+  const storageKey = `catalogs/${params.dealerId}/logo-${token}.webp`;
+  await writeMediaFile(storageKey, processed.display);
+  const logoUrl = publicUrlForStorageKey(storageKey);
+  const result = await createOrUpdateCatalog(params.dealerId, { logoUrl });
+  if (!result.ok) return result;
+  return { ok: true as const, logoUrl };
+}
+
 export async function bulkPublishVehiclesToCatalog(params: {
   dealerId: string;
   vehicleIds: string[];
@@ -344,9 +401,16 @@ const publicVehicleSelect = {
 } satisfies Prisma.VehicleSelect;
 
 function mapPublicVehicle(
-  v: Prisma.VehicleGetPayload<{ select: typeof publicVehicleSelect }>
+  v: Prisma.VehicleGetPayload<{ select: typeof publicVehicleSelect }>,
+  publication?: { showMonthlyFinance: boolean }
 ) {
   const primary = v.media[0];
+  const finance = simulateCatalogFinance({
+    enabled: Boolean(publication?.showMonthlyFinance),
+    retailPrice: v.retailPrice,
+    year: v.year,
+    mileage: v.mileage,
+  });
   return {
     id: v.id,
     make: v.make,
@@ -370,6 +434,9 @@ function mapPublicVehicle(
       category: m.category,
       isPrimary: m.isPrimary,
     })),
+    finance: finance
+      ? { monthlyIls: finance.monthlyIls, termMonths: finance.termMonths }
+      : null,
   };
 }
 
@@ -415,9 +482,11 @@ export async function listPublicCatalogVehicles(slug: string) {
     },
   });
 
+  const vehicles = rows.map((r) => mapPublicVehicle(r.vehicle, r));
   return {
     catalog,
-    vehicles: rows.map((r) => mapPublicVehicle(r.vehicle)),
+    vehicles,
+    hasFinanceDisplay: vehicles.some((v) => v.finance != null),
   };
 }
 
@@ -444,9 +513,11 @@ export async function getPublicCatalogVehicle(params: {
   });
   if (!pub) return null;
 
+  const vehicle = mapPublicVehicle(pub.vehicle, pub);
   return {
     catalog,
-    vehicle: mapPublicVehicle(pub.vehicle),
+    vehicle,
+    hasFinanceDisplay: vehicle.finance != null,
   };
 }
 

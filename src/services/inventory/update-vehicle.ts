@@ -84,14 +84,6 @@ export async function updateVehicleForDealer(input: {
 
   const f = { ...input.fields };
 
-  // Product semantics: one asking price. Whichever legacy alias the caller uses,
-  // persist the same value into both columns until the DB schema is safely cleaned.
-  if ("b2bPrice" in f || "retailPrice" in f) {
-    const askingPrice = "b2bPrice" in f ? f.b2bPrice : f.retailPrice;
-    f.b2bPrice = askingPrice ?? null;
-    f.retailPrice = askingPrice ?? null;
-  }
-
   const identityRelevant =
     "make" in f || "model" in f || "fuelType" in f || "engineDisplacementCc" in f ||
     "ownershipHand" in f || "ownershipType" in f || "rawInput" in f;

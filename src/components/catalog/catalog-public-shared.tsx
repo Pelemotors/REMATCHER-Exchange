@@ -1,5 +1,9 @@
 import styles from "./catalog-public.module.css";
 import { pickCatalogWhatsAppNumber } from "@/services/catalog/whatsapp-interest";
+import {
+  CATALOG_LEGAL_FINANCE,
+  CATALOG_LEGAL_GENERAL,
+} from "@/services/catalog/finance-rules";
 
 export function formatIls(price: number | null | undefined) {
   if (price == null || !Number.isFinite(price)) return null;
@@ -27,16 +31,36 @@ export function catalogContactNumber(catalog: {
   );
 }
 
-export function CatalogPoweredBy() {
+export function formatFinanceFrom(monthlyIls: number) {
+  const amount = formatIls(monthlyIls);
+  return amount ? `החל מ-${amount} לחודש*` : null;
+}
+
+export function CatalogLegalFooter({
+  dealerName,
+  hasFinanceDisplay,
+}: {
+  dealerName: string;
+  hasFinanceDisplay: boolean;
+}) {
   return (
-    <footer className={styles.footer}>
-      <p className={styles.powered}>
-        Powered by{" "}
-        <a href="https://exchange.rematcher.co.il" className={styles.poweredLink}>
-          REMATCHER Exchange
-        </a>
+    <footer className={styles.footer} id="catalog-legal">
+      <p className={styles.advertiser}>
+        הקטלוג מפורסם על ידי {dealerName}. REMATCHER מספקת תשתית קטלוג בלבד
+        ואינה מוכרת את הרכב ואינה נותנת אשראי.
+      </p>
+      <p className={styles.legalText}>
+        {CATALOG_LEGAL_GENERAL}
+        {hasFinanceDisplay ? ` ${CATALOG_LEGAL_FINANCE}` : ""}
       </p>
     </footer>
+  );
+}
+
+/** @deprecated Use CatalogLegalFooter — kept for any leftover import. */
+export function CatalogPoweredBy() {
+  return (
+    <CatalogLegalFooter dealerName="הסוחר המפרסם" hasFinanceDisplay={false} />
   );
 }
 

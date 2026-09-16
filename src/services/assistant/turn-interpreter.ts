@@ -15,9 +15,13 @@ import {
   applyShorthandToFields,
   parseDealerPriceFromText,
   parseMileageFromText,
+  parseRetailPriceFromText,
   parseYearFromText,
 } from "@/services/assistant/vehicle-shorthand";
-import { parseOwnershipAnswer } from "@/services/assistant/inventory-draft";
+import {
+  parseDealerAndRetailPrices,
+  parseOwnershipAnswer,
+} from "@/services/assistant/inventory-draft";
 
 function extractFactsDeterministic(message: string): TurnInventoryFacts {
   const applied = applyShorthandToFields(message, {
@@ -28,23 +32,19 @@ function extractFactsDeterministic(message: string): TurnInventoryFacts {
     b2bPrice: null,
   });
   const ownership = parseOwnershipAnswer(message);
+  const bothPrices = parseDealerAndRetailPrices(message);
   const facts: TurnInventoryFacts = {
     make: applied.make,
     model: applied.model,
     year: applied.year ?? parseYearFromText(message),
     mileage: applied.mileage ?? parseMileageFromText(message),
-    b2bPrice: applied.b2bPrice ?? parseDealerPriceFromText(message),
+    b2bPrice:
+      bothPrices?.b2bPrice ??
+      applied.b2bPrice ??
+      parseDealerPriceFromText(message),
+    retailPrice:
+      bothPrices?.retailPrice ?? parseRetailPriceFromText(message),
   };
-
-  if (!facts.b2bPrice) {
-    const price = message.match(/\b(\d{5,7})\b/);
-    if (price && /מחיר/i.test(message) && !/לסוחר|b2b/i.test(message)) {
-      // Prefer dealer price when in inventory context wording "מחיר"
-      facts.b2bPrice = parseInt(price[1], 10);
-    } else if (price && !/ק.?מ|קילומטר/i.test(message)) {
-      facts.retailPrice = parseInt(price[1], 10);
-    }
-  }
 
   if (ownership && ownership !== "skip") {
     if (ownership.ownershipHand != null) {

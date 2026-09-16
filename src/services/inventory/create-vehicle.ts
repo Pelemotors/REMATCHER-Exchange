@@ -117,12 +117,6 @@ export async function createVehicleForDealer(input: {
     };
   }
 
-  // Product semantics: there is one asking price. Keep both legacy columns synced
-  // until a later safe schema cleanup so old rows/API callers remain compatible.
-  const askingPrice = fields.b2bPrice ?? fields.retailPrice;
-  fields.b2bPrice = askingPrice;
-  fields.retailPrice = askingPrice;
-
   const identity = await resolveVehicleThroughExchangeBrain({
     make: fields.make,
     model: fields.model,
@@ -292,7 +286,6 @@ export async function createVehicleForDealer(input: {
 
 export function fieldsFromNormalized(normalized: NormalizedVehicle): VehicleCreateFields {
   const mapped = normalizedToVehicleFields(normalized);
-  const askingPrice = mapped.b2bPrice ?? mapped.retailPrice;
   return {
     make: mapped.make,
     model: mapped.model,
@@ -302,8 +295,8 @@ export function fieldsFromNormalized(normalized: NormalizedVehicle): VehicleCrea
     color: mapped.color,
     ownershipHand: mapped.ownershipHand,
     ownershipType: mapped.ownershipType,
-    retailPrice: askingPrice,
-    b2bPrice: askingPrice,
+    retailPrice: mapped.retailPrice,
+    b2bPrice: mapped.b2bPrice,
     region: mapped.region,
     fuelType: mapped.fuelType,
     engineDisplacementCc: mapped.engineDisplacementCc,
