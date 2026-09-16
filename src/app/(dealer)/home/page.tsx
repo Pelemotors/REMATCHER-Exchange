@@ -7,8 +7,11 @@ import { getWorkCenterSnapshot } from "@/services/dealer/work-center";
 
 async function HomeContent() {
   const session = await auth();
-  const dealerId = session!.user!.dealerId!;
-  const userId = session!.user!.id;
+  if (!session?.user?.id || !session.user.dealerId) {
+    redirect("/login");
+  }
+  const dealerId = session.user.dealerId;
+  const userId = session.user.id;
 
   const snapshot = await getWorkCenterSnapshot(dealerId, userId);
 
@@ -26,8 +29,8 @@ async function HomeContent() {
 
   return (
     <HomeV2
-      dealerName={session!.user!.dealerName ?? null}
-      userName={session!.user!.name ?? null}
+      dealerName={session.user.dealerName ?? null}
+      userName={session.user.name ?? null}
       blockers={blockers}
       setupStatus={snapshot.setupStatus}
       attention={{
