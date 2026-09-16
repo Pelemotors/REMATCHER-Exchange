@@ -538,6 +538,7 @@ export function IntakeHandoffClient() {
                     </span>
                     <input
                       ref={galleryRef}
+                      data-testid="intake-gallery-input"
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       multiple

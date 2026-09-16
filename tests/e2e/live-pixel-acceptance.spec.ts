@@ -32,7 +32,7 @@ function loadCreds(which: "buyer" | "seller" = "buyer"): { email: string; passwo
 }
 
 async function uploadGallery(page: Page, files: string[]) {
-  const gallery = page.locator('input[type="file"][multiple]');
+  const gallery = page.getByTestId("intake-gallery-input").last();
   await expect(gallery).toBeEnabled({ timeout: 25000 });
   await gallery.setInputFiles(files);
 }
@@ -367,7 +367,10 @@ test.describe("Pixel-faithful Production live", () => {
     async function hop(from: string, to: string, click: () => Promise<void>, ready?: () => Promise<void>) {
       const t0 = Date.now();
       await click();
-      await page.waitForURL(new RegExp(to.replaceAll("/", "\\/")), { timeout: 15000 });
+      await page.waitForURL(new RegExp(to.replaceAll("/", "\\/")), {
+        timeout: 15000,
+        waitUntil: "domcontentloaded",
+      });
       const shell = Date.now() - t0;
       if (ready) await ready();
       const usable = Date.now() - t0;
@@ -375,32 +378,34 @@ test.describe("Pixel-faithful Production live", () => {
     }
 
     await page.goto(`${BASE}/home`, { waitUntil: "domcontentloaded" });
-    await hop("home", "/inventory", () => page.getByLabel("ניווט תחתון").getByText("המלאי").click());
-    await hop("inventory", "/home", () => page.getByLabel("ניווט תחתון").getByText("בית").click());
-    await hop("home", "/inventory", () => page.getByLabel("ניווט תחתון").getByText("המלאי").click());
-    await hop("inventory", "/demand", () => page.getByLabel("ניווט תחתון").getByText("חיפוש").click());
-    await hop("demand", "/inventory", () => page.getByLabel("ניווט תחתון").getByText("המלאי").click());
+    const nav = page.getByLabel("ניווט תחתון");
+    await hop("home", "/inventory", () => nav.locator('a[href="/inventory"]').click());
+    await hop("inventory", "/home", () => nav.locator('a[href="/home"]').click());
+    await hop("home", "/inventory", () => nav.locator('a[href="/inventory"]').click());
+    await hop("inventory", "/demand", () => nav.locator('a[href="/demand"]').click());
+    await hop("demand", "/inventory", () => nav.locator('a[href="/inventory"]').click());
     await hop("inventory", "/intake/handoff", () =>
-      page.getByLabel("ניווט תחתון").getByText("קליטת רכב").click()
+      nav.locator('a[href="/intake/handoff"]').click()
     );
-    await hop("intake", "/account", () => page.getByLabel("ניווט תחתון").getByText("עוד").click());
-    await hop("account", "/matches", () => page.getByRole("link", { name: "התאמות" }).click());
+    await hop("intake", "/account", () => nav.locator('a[href="/account"]').click());
+    await hop("account", "/matches", () => page.locator('a[href="/matches"]').first().click());
 
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     const cycleTimes: number[] = [];
     for (let i = 0; i < 50; i++) {
       const t0 = Date.now();
-      await page.getByLabel("ניווט תחתון").getByText("בית").click();
-      await page.waitForURL(/\/home/, { timeout: 12000 });
-      await page.getByLabel("ניווט תחתון").getByText("המלאי").click();
-      await page.waitForURL(/\/inventory/, { timeout: 12000 });
-      await page.getByLabel("ניווט תחתון").getByText("חיפוש").click();
-      await page.waitForURL(/\/demand/, { timeout: 12000 });
-      await page.getByLabel("ניווט תחתון").getByText("קליטת רכב").click();
-      await page.waitForURL(/\/intake/, { timeout: 12000 });
-      await page.getByLabel("ניווט תחתון").getByText("בית").click();
-      await page.waitForURL(/\/home/, { timeout: 12000 });
+      const n = page.getByLabel("ניווט תחתון");
+      await n.locator('a[href="/home"]').click();
+      await page.waitForURL(/\/home/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await n.locator('a[href="/inventory"]').click();
+      await page.waitForURL(/\/inventory/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await n.locator('a[href="/demand"]').click();
+      await page.waitForURL(/\/demand/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await n.locator('a[href="/intake/handoff"]').click();
+      await page.waitForURL(/\/intake/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await n.locator('a[href="/home"]').click();
+      await page.waitForURL(/\/home/, { timeout: 12000, waitUntil: "domcontentloaded" });
       cycleTimes.push(Date.now() - t0);
     }
     const report = {
