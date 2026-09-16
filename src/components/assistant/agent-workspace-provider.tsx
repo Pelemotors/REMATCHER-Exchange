@@ -27,6 +27,9 @@ export type AgentCard = {
   body?: string;
   href?: string;
   demandId?: string;
+  vehicleId?: string;
+  customerId?: string;
+  meta?: Record<string, unknown>;
 };
 
 export type AgentMessage = {

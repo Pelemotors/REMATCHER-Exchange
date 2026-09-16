@@ -14,6 +14,7 @@ import {
   useAgentWorkspace,
   type AgentMessage,
 } from "@/components/assistant/agent-workspace-provider";
+import { AgentStructuredCard } from "@/components/assistant/agent-structured-card";
 import { cn } from "@/lib/utils";
 import styles from "./agent-workspace.module.css";
 
@@ -66,19 +67,11 @@ function ConversationList({
           {msg.cards && msg.cards.length > 0 && (
             <div className="mt-2 space-y-2">
               {msg.cards.map((card, j) => (
-                <div key={j} className={styles.card}>
-                  <p className={styles.cardTitle}>{card.title}</p>
-                  {card.body && <p className={styles.cardBody}>{card.body}</p>}
-                  {card.href && (
-                    <Link
-                      href={card.href}
-                      className={styles.cardLink}
-                      onClick={onNavigate}
-                    >
-                      פתח
-                    </Link>
-                  )}
-                </div>
+                <AgentStructuredCard
+                  key={j}
+                  card={card}
+                  onNavigate={onNavigate}
+                />
               ))}
             </div>
           )}
