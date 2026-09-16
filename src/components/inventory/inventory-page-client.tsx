@@ -7,6 +7,8 @@ import {
   ButtonV2,
   SkeletonBlockV2,
   Surface,
+  RelationshipBadge,
+  VisibilityBadge,
 } from "@/components/ui/brand-v2";
 import { InventoryAgentWorkspace } from "@/components/inventory/inventory-agent-workspace";
 import { VehicleMediaPanel } from "@/components/inventory/vehicle-media-panel";
@@ -28,6 +30,8 @@ export interface InventoryVehicle {
   status: string;
   freshnessState: string;
   mediaReady?: boolean;
+  dealerRelationship?: string;
+  visibility?: string;
   thumbUrl?: string | null;
   updatedAt: string;
   openInterestCount: number;
@@ -509,6 +513,14 @@ export function InventoryPageClient({
                 )}
                 <div className={styles.rowMain}>
                   <p className={styles.rowTitle}>{vehicleName(v)}</p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {v.dealerRelationship ? (
+                      <RelationshipBadge relationship={v.dealerRelationship} />
+                    ) : null}
+                    {v.visibility ? (
+                      <VisibilityBadge visibility={v.visibility} />
+                    ) : null}
+                  </div>
                   {meta && <p className={styles.rowMeta}>{meta}</p>}
                   {state && <p className={stateClass}>{state.label}</p>}
                 </div>

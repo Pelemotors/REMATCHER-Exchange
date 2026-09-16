@@ -95,6 +95,19 @@ export default function AccountPage() {
       </Surface>
 
       <Surface depth="raised" className="mb-4 space-y-3 p-4">
+        <h3 className="font-semibold text-v2-text-primary">עבודה</h3>
+        <ButtonV2 variant="secondary" href="/customers" className="w-full">
+          לקוחות
+        </ButtonV2>
+        <ButtonV2 variant="ghost" href="/opportunities" className="w-full">
+          הזדמנויות
+        </ButtonV2>
+        <ButtonV2 variant="ghost" href="/activity" className="w-full">
+          פעילות
+        </ButtonV2>
+      </Surface>
+
+      <Surface depth="raised" className="mb-4 space-y-3 p-4">
         <h3 className="font-semibold text-v2-text-primary">פרטי העסק</h3>
         <label className="label">עיר</label>
         <input

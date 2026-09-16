@@ -5,6 +5,7 @@ import {
   Sparkles,
   MoreHorizontal,
   Bell,
+  Users,
 } from "lucide-react";
 
 /**
@@ -21,6 +22,7 @@ export const MOBILE_BOTTOM_NAV_ITEMS = [
 
 /** Secondary destinations — reachable via account/menu. */
 export const SECONDARY_NAV_ITEMS = [
+  { href: "/customers", label: "לקוחות", icon: Users },
   { href: "/activity", label: "פעילות", icon: Bell },
   { href: "/opportunities", label: "הזדמנויות", icon: Sparkles },
 ] as const;

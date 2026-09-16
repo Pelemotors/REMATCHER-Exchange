@@ -5,6 +5,7 @@ import {
   ButtonV2,
   Surface,
 } from "@/components/ui/brand-v2";
+import { UnderstandingResult } from "@/components/capture/understanding-result";
 import type { ParsedDemand } from "@/lib/schemas/ai";
 import { extractKnownNumber, extractKnownString } from "@/lib/schemas/ai";
 import type { DuplicateCheckResult } from "@/services/demand/duplicate-detection";
@@ -58,6 +59,17 @@ export function CreateDemandFlow({
   const [immediateMatchCount, setImmediateMatchCount] = useState(0);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const [customerHints, setCustomerHints] = useState<{
+    name: string | null;
+    phone: string | null;
+    hybridHard?: boolean;
+    hybridSoft?: boolean;
+    semanticAlternative?: boolean;
+  } | null>(null);
+  const [publishOutcome, setPublishOutcome] = useState<"network" | "private">(
+    "network"
+  );
+  const [savingPrivate, setSavingPrivate] = useState(false);
 
   function clearToInput() {
     setStep("input");
@@ -72,6 +84,9 @@ export function CreateDemandFlow({
     setParseError(null);
     setConfirmError(null);
     setPasteHint(null);
+    setCustomerHints(null);
+    setPublishOutcome("network");
+    setSavingPrivate(false);
   }
 
   async function handlePasteFromWhatsApp() {
@@ -119,6 +134,7 @@ export function CreateDemandFlow({
     setDemandId(data.demandId);
     setParsed(data.parsed);
     setConfirmed(buildConfirmedFromParsed(data.parsed));
+    setCustomerHints(data.customerHints ?? null);
     setHomeEditing(false);
     setEditing(null);
 
@@ -139,14 +155,22 @@ export function CreateDemandFlow({
     setLoading(false);
   }
 
-  async function handleConfirm() {
-    setLoading(true);
+  async function handleConfirm(publishMode: "network" | "private" = "network") {
+    if (publishMode === "private") setSavingPrivate(true);
+    else setLoading(true);
     setConfirmError(null);
     try {
       const res = await fetch("/api/demands/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ demandId, confirmed }),
+        body: JSON.stringify({
+          demandId,
+          confirmed,
+          publishMode,
+          customer: customerHints
+            ? { name: customerHints.name, phone: customerHints.phone }
+            : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -157,6 +181,7 @@ export function CreateDemandFlow({
         );
         return;
       }
+      setPublishOutcome(publishMode);
       setImmediateMatchCount(
         typeof data.immediateMatchCount === "number"
           ? data.immediateMatchCount
@@ -168,6 +193,7 @@ export function CreateDemandFlow({
       setConfirmError("לא הצלחנו להפעיל את החיפוש. נסה שוב.");
     } finally {
       setLoading(false);
+      setSavingPrivate(false);
     }
   }
 
@@ -178,20 +204,36 @@ export function CreateDemandFlow({
   if (step === "done") {
     const title = [confirmed.make, confirmed.model].filter(Boolean).join(" ");
     const showImmediateMatches = !isHome && immediateMatchCount > 0;
+    const isPrivate = publishOutcome === "private";
 
     if (isHome) {
       return (
         <div className={cn(styles.panelLight, styles.successPanel)}>
-          <p className={styles.successTitle}>החיפוש יצא לרשת</p>
+          <p className={styles.successTitle}>
+            {isPrivate ? "נשמר פרטי" : "החיפוש יצא לרשת"}
+          </p>
           {title ? <p className={styles.successVehicle}>{title}</p> : null}
           <p className={styles.successBody}>
-            REMATCHER מחפשת עכשיו מול המלאי ברשת.
-            <br />
-            נעדכן אותך כשנמצא משהו מתאים.
+            {isPrivate ? (
+              <>
+                החיפוש נשמר אצלך בלבד.
+                <br />
+                אפשר להפעיל ברשת מאוחר יותר ממסך החיפושים.
+              </>
+            ) : (
+              <>
+                REMATCHER מחפשת עכשיו מול המלאי ברשת.
+                <br />
+                נעדכן אותך כשנמצא משהו מתאים.
+              </>
+            )}
           </p>
           <div className={styles.actionsStack}>
             <ButtonV2 variant="signal" href="/demand" className={cn("w-full", styles.primaryCta)}>
               לחיפושים שלי
+            </ButtonV2>
+            <ButtonV2 variant="secondary" href="/customers" className="w-full">
+              ללקוחות
             </ButtonV2>
             <ButtonV2 variant="secondary" className="w-full" onClick={clearToInput}>
               חיפוש נוסף
@@ -388,284 +430,117 @@ export function CreateDemandFlow({
 
   if (!parsed) return null;
 
-  if (isHome) {
-    return (
-      <div className={styles.confirmWrap}>
-        <div className={styles.panelLight}>
-          <p className={styles.confirmTitle}>הבנתי, זה מה שחיפשת:</p>
-          <div className={styles.rawQuote}>
-            <p className={styles.rawQuoteText}>&ldquo;{rawText}&rdquo;</p>
-          </div>
-          <div className={styles.confirmSummary}>
-            <p className={styles.confirmVehicle}>
-              {[confirmed.make, confirmed.model].filter(Boolean).join(" ") ||
-                "—"}
-            </p>
-            {confirmed.trimPreference != null &&
-              String(confirmed.trimPreference) && (
-                <p className={styles.confirmLine}>
-                  גימור: {String(confirmed.trimPreference)}
-                </p>
-              )}
-            {confirmed.yearMin != null && (
-              <p className={styles.confirmLine}>
-                {String(confirmed.yearMin)} ומעלה
-              </p>
-            )}
-            {confirmed.budgetMax != null && (
-              <p className={styles.confirmLine}>
-                עד {formatCurrency(Number(confirmed.budgetMax))}
-              </p>
-            )}
-            {colors.length > 0 && (
-              <p className={styles.confirmLine}>ללא {colors.join(", ")}</p>
-            )}
-          </div>
+  const hybridPref = customerHints?.hybridHard
+    ? "היברידי בלבד"
+    : customerHints?.hybridSoft
+      ? "עדיפות להיברידי"
+      : null;
 
-          {homeEditing && (
-            <div className={styles.editGrid}>
-              <input
-                className="input"
-                value={String(confirmed.make ?? "")}
-                onChange={(e) =>
-                  setConfirmed({ ...confirmed, make: e.target.value })
-                }
-                placeholder="יצרן"
-                aria-label="יצרן"
-              />
-              <input
-                className="input"
-                value={String(confirmed.model ?? "")}
-                onChange={(e) =>
-                  setConfirmed({ ...confirmed, model: e.target.value })
-                }
-                placeholder="דגם"
-                aria-label="דגם"
-              />
-              <input
-                className="input"
-                type="number"
-                value={String(confirmed.yearMin ?? "")}
-                onChange={(e) =>
-                  setConfirmed({
-                    ...confirmed,
-                    yearMin: parseInt(e.target.value, 10) || null,
-                  })
-                }
-                placeholder="שנתון מינימום"
-                aria-label="שנתון מינימום"
-              />
-              <input
-                className="input"
-                type="number"
-                value={String(confirmed.budgetMax ?? "")}
-                onChange={(e) =>
-                  setConfirmed({
-                    ...confirmed,
-                    budgetMax: parseInt(e.target.value, 10) || null,
-                  })
-                }
-                placeholder="תקציב מקסימום"
-                aria-label="תקציב מקסימום"
-              />
-              <input
-                className="input"
-                value={String(confirmed.trimPreference ?? "")}
-                onChange={(e) =>
-                  setConfirmed({
-                    ...confirmed,
-                    trimPreference: e.target.value || null,
-                  })
-                }
-                placeholder="גימור / רמת אבזור"
-                aria-label="גימור"
-              />
-              <input
-                className="input"
-                value={colors.join(", ")}
-                onChange={(e) =>
-                  setConfirmed({
-                    ...confirmed,
-                    colorExclusions: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-                placeholder="צבעים להחריג (מופרדים בפסיק)"
-                aria-label="צבעים להחריג"
-              />
-            </div>
-          )}
-          {confirmError && <p className={styles.error}>{confirmError}</p>}
-        </div>
-
-        <div className={styles.actionsStack}>
-          <ButtonV2
-            variant="signal"
-            className={cn("w-full", styles.primaryCta)}
-            onClick={handleConfirm}
-            disabled={loading}
-          >
-            {loading ? "שולח לרשת..." : "חפש ברשת"}
-          </ButtonV2>
-          <ButtonV2
-            variant="secondary"
-            className="w-full"
-            onClick={() => setHomeEditing((v) => !v)}
-          >
-            {homeEditing ? "סיום עריכה" : "ערוך חיפוש"}
-          </ButtonV2>
-          <button
-            type="button"
-            className={styles.textBack}
-            onClick={() => setStep("input")}
-          >
-            חזור
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const editFields = (
+    <>
+      <input
+        className="input"
+        value={String(confirmed.make ?? "")}
+        onChange={(e) => setConfirmed({ ...confirmed, make: e.target.value })}
+        placeholder="יצרן"
+        aria-label="יצרן"
+      />
+      <input
+        className="input"
+        value={String(confirmed.model ?? "")}
+        onChange={(e) => setConfirmed({ ...confirmed, model: e.target.value })}
+        placeholder="דגם"
+        aria-label="דגם"
+      />
+      <input
+        className="input"
+        type="number"
+        value={String(confirmed.yearMin ?? "")}
+        onChange={(e) =>
+          setConfirmed({
+            ...confirmed,
+            yearMin: parseInt(e.target.value, 10) || null,
+          })
+        }
+        placeholder="שנתון מינימום"
+        aria-label="שנתון מינימום"
+      />
+      <input
+        className="input"
+        type="number"
+        value={String(confirmed.budgetMax ?? "")}
+        onChange={(e) =>
+          setConfirmed({
+            ...confirmed,
+            budgetMax: parseInt(e.target.value, 10) || null,
+          })
+        }
+        placeholder="תקציב מקסימום"
+        aria-label="תקציב מקסימום"
+      />
+      <input
+        className="input"
+        value={String(confirmed.trimPreference ?? "")}
+        onChange={(e) =>
+          setConfirmed({
+            ...confirmed,
+            trimPreference: e.target.value || null,
+          })
+        }
+        placeholder="גימור / רמת אבזור"
+        aria-label="גימור"
+      />
+      <input
+        className="input"
+        value={colors.join(", ")}
+        onChange={(e) =>
+          setConfirmed({
+            ...confirmed,
+            colorExclusions: e.target.value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          })
+        }
+        placeholder="צבעים להחריג (מופרדים בפסיק)"
+        aria-label="צבעים להחריג"
+      />
+    </>
+  );
 
   return (
-    <div className="space-y-4">
-      <Surface depth="raised" className="space-y-4 border border-v2-signal/30 p-4">
-        <Surface depth="secondary" className="px-4 py-3">
-          <p className="text-xs font-medium text-v2-text-muted">מה שכתבת</p>
-          <p className="mt-1 text-sm text-v2-text-primary">&ldquo;{rawText}&rdquo;</p>
-        </Surface>
-
-        <div>
-          <p className="text-sm font-medium text-v2-text-primary">כך הבנתי:</p>
-          <div className="mt-3 space-y-2">
-            <p className="text-h3 font-bold text-v2-warm">
-              {[confirmed.make, confirmed.model].filter(Boolean).join(" ") ||
-                "—"}
-            </p>
-            {confirmed.yearMin != null && (
-              <p className="text-sm text-v2-text-primary">
-                {String(confirmed.yearMin)} ומעלה
-              </p>
-            )}
-            {confirmed.budgetMax != null && (
-              <p className="text-sm text-v2-text-primary">
-                עד {formatCurrency(Number(confirmed.budgetMax))}
-              </p>
-            )}
-            {colors.length > 0 && (
-              <p className="text-sm text-v2-text-primary">
-                ללא {colors.join(", ")}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              ["yearMin", "ערוך שנתון"],
-              ["budgetMax", "ערוך תקציב"],
-              ["color", "ערוך צבע"],
-              ["make", "ערוך יצרן"],
-              ["model", "ערוך דגם"],
-            ] as const
-          ).map(([field, label]) => (
-            <button
-              key={field}
-              type="button"
-              onClick={() => setEditing(editing === field ? null : field)}
-              className="rounded-lg bg-v2-surface-secondary px-3 py-1.5 text-sm text-v2-text-primary"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {editing === "make" && (
-          <input
-            className="input"
-            value={String(confirmed.make ?? "")}
-            onChange={(e) =>
-              setConfirmed({ ...confirmed, make: e.target.value })
-            }
-            placeholder="יצרן"
-          />
-        )}
-        {editing === "model" && (
-          <input
-            className="input"
-            value={String(confirmed.model ?? "")}
-            onChange={(e) =>
-              setConfirmed({ ...confirmed, model: e.target.value })
-            }
-            placeholder="דגם"
-          />
-        )}
-        {editing === "yearMin" && (
-          <input
-            className="input"
-            type="number"
-            value={String(confirmed.yearMin ?? "")}
-            onChange={(e) =>
-              setConfirmed({
-                ...confirmed,
-                yearMin: parseInt(e.target.value, 10) || null,
-              })
-            }
-            placeholder="שנתון מינימום"
-          />
-        )}
-        {editing === "budgetMax" && (
-          <input
-            className="input"
-            type="number"
-            value={String(confirmed.budgetMax ?? "")}
-            onChange={(e) =>
-              setConfirmed({
-                ...confirmed,
-                budgetMax: parseInt(e.target.value, 10) || null,
-              })
-            }
-            placeholder="תקציב מקסימום"
-          />
-        )}
-        {editing === "color" && (
-          <input
-            className="input"
-            value={colors.join(", ")}
-            onChange={(e) =>
-              setConfirmed({
-                ...confirmed,
-                colorExclusions: e.target.value
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            placeholder="צבעים להחריג (מופרדים בפסיק)"
-          />
-        )}
-
-        <p className="text-sm text-v2-text-secondary">
-          החיפוש יופעל רק לאחר אישורך.
-        </p>
-        {confirmError && <p className="text-sm text-error">{confirmError}</p>}
-      </Surface>
-
-      <div className="flex gap-3">
-        <ButtonV2
-          variant="signal"
-          className="flex-1"
-          onClick={handleConfirm}
-          disabled={loading}
-        >
-          {loading ? "מפעיל..." : "אשר והפעל חיפוש"}
-        </ButtonV2>
-        <ButtonV2 variant="secondary" onClick={() => setStep("input")}>
-          חזור
-        </ButtonV2>
-      </div>
-    </div>
+    <UnderstandingResult
+      customer={{
+        name: customerHints?.name ?? null,
+        phone: customerHints?.phone ?? null,
+      }}
+      demand={{
+        make: confirmed.make != null ? String(confirmed.make) : null,
+        model: confirmed.model != null ? String(confirmed.model) : null,
+        yearMin:
+          confirmed.yearMin != null ? Number(confirmed.yearMin) : null,
+        budgetMax:
+          confirmed.budgetMax != null ? Number(confirmed.budgetMax) : null,
+        trimPreference:
+          confirmed.trimPreference != null
+            ? String(confirmed.trimPreference)
+            : null,
+        colorExclusions: colors,
+        hybridPref,
+        similarOk: Boolean(customerHints?.semanticAlternative),
+      }}
+      editing={isHome ? homeEditing : editing != null}
+      onToggleEdit={() => {
+        if (isHome) setHomeEditing((v) => !v);
+        else setEditing(editing ? null : "make");
+      }}
+      editSlot={editFields}
+      primaryLoading={loading}
+      secondaryLoading={savingPrivate}
+      onPrimary={() => void handleConfirm("network")}
+      onSecondary={() => void handleConfirm("private")}
+      onBack={() => setStep("input")}
+      error={confirmError}
+    />
   );
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseDemand } from "@/services/ai";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { recordActivationMilestone } from "@/services/activation/milestones";
+import { extractCustomerHintsFromText } from "@/services/capture/customer-extract";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
   }
 
   const parsed = await parseDemand(rawText, session.user.id);
+  const customerHints = extractCustomerHintsFromText(rawText);
 
   const demand = await prisma.demand.create({
     data: {
@@ -25,6 +27,8 @@ export async function POST(req: Request) {
       parsedJson: toPrismaJson(parsed),
       status: "PENDING_CONFIRMATION",
       parsedAt: new Date(),
+      // Draft stays private until Understanding Result confirmation
+      networkVisibility: "PRIVATE",
     },
   });
 
@@ -36,7 +40,17 @@ export async function POST(req: Request) {
     entityId: demand.id,
   }).catch(() => undefined);
 
-  return NextResponse.json({ demandId: demand.id, parsed });
+  return NextResponse.json({
+    demandId: demand.id,
+    parsed,
+    customerHints: {
+      name: customerHints.name,
+      phone: customerHints.phone,
+      hybridHard: customerHints.hybridHard,
+      hybridSoft: customerHints.hybridSoft,
+      semanticAlternative: customerHints.semanticAlternative,
+    },
+  });
 }
 
 export async function GET() {

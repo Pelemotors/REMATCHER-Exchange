@@ -119,6 +119,8 @@ export async function getInventoryList({
         status: true,
         freshnessState: true,
         mediaReady: true,
+        dealerRelationship: true,
+        visibility: true,
         updatedAt: true,
         createdAt: true,
         media: {

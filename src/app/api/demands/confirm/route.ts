@@ -9,18 +9,32 @@ import type { ParsedDemand } from "@/lib/schemas/ai";
 import type { Prisma } from "@prisma/client";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { recordActivationMilestone } from "@/services/activation/milestones";
+import { upsertCustomerForDealer } from "@/services/customers";
+import { extractCustomerHintsFromText } from "@/services/capture/customer-extract";
 
 function toJson(value: object): Prisma.InputJsonValue {
   return toPrismaJson(value);
 }
 
+/**
+ * Confirm Understanding Result.
+ * publishMode:
+ *  - "network" → ACTIVE + ANONYMOUS_NETWORK + matching
+ *  - "private" → ACTIVE + PRIVATE (no network matching)
+ */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.dealerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { demandId, confirmed } = await req.json();
+  const body = await req.json();
+  const { demandId, confirmed } = body;
+  const publishMode =
+    body.publishMode === "private" ? ("private" as const) : ("network" as const);
+  const customerOverride = body.customer as
+    | { name?: string | null; phone?: string | null }
+    | undefined;
 
   const demand = await prisma.demand.findFirst({
     where: { id: demandId, dealerId: session.user.dealerId },
@@ -30,6 +44,22 @@ export async function POST(req: Request) {
   }
 
   const confirmedJson = confirmed as Record<string, unknown>;
+  const hints = extractCustomerHintsFromText(demand.rawText);
+  const customerName =
+    customerOverride?.name?.trim() || hints.name || null;
+  const customerPhone =
+    customerOverride?.phone?.trim() || hints.phone || null;
+
+  let customerId = demand.customerId;
+  if (customerName || customerPhone) {
+    const upserted = await upsertCustomerForDealer({
+      dealerId: session.user.dealerId,
+      name: customerName,
+      phone: customerPhone,
+      source: { via: "understanding_result", demandId },
+    });
+    customerId = upserted.customer.id;
+  }
 
   await prisma.demandConstraint.deleteMany({ where: { demandId } });
 
@@ -77,6 +107,9 @@ export async function POST(req: Request) {
     }
   }
 
+  const networkVisibility =
+    publishMode === "network" ? "ANONYMOUS_NETWORK" : "PRIVATE";
+
   const updated = await prisma.demand.update({
     where: { id: demandId },
     data: {
@@ -84,6 +117,8 @@ export async function POST(req: Request) {
       confirmedAt: new Date(),
       status: "ACTIVE",
       expiresAt: computeDemandExpiry(),
+      networkVisibility,
+      customerId,
     },
   });
 
@@ -95,15 +130,18 @@ export async function POST(req: Request) {
     entityId: demandId,
   }).catch(() => undefined);
 
-  // Durable ACTIVE is enough to unblock UX — matching continues asynchronously
-  void runMatchingForDemand(demandId).catch((err) => {
-    console.error("[demands/confirm] matching failed", demandId, err);
-  });
+  if (publishMode === "network") {
+    void runMatchingForDemand(demandId).catch((err) => {
+      console.error("[demands/confirm] matching failed", demandId, err);
+    });
+  }
 
   return NextResponse.json({
     ...updated,
     immediateMatchCount: 0,
     hasImmediateMatch: false,
-    matchingStarted: true,
+    matchingStarted: publishMode === "network",
+    publishMode,
+    customerId,
   });
 }

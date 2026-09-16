@@ -1,4 +1,8 @@
 import { cn } from "@/lib/utils";
+import {
+  relationshipLabelHe,
+  relationshipTone,
+} from "@/lib/vehicle-labels-he";
 
 const TONES = {
   private: "bg-v2-surface-secondary text-v2-text-muted border border-v2-border",
@@ -57,7 +61,20 @@ export function VisibilityBadge({
   return (
     <StatusBadge
       tone={visibility === "ANONYMOUS_NETWORK" ? "network" : "private"}
-      label={visibility === "ANONYMOUS_NETWORK" ? "ברשת האנונימית" : "פרטי"}
+      label={visibility === "ANONYMOUS_NETWORK" ? "פעיל ברשת" : "פרטי"}
+    />
+  );
+}
+
+export function RelationshipBadge({
+  relationship,
+}: {
+  relationship: string;
+}) {
+  return (
+    <StatusBadge
+      tone={relationshipTone(relationship)}
+      label={relationshipLabelHe(relationship)}
     />
   );
 }
