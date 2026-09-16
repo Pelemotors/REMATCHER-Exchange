@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -30,6 +31,44 @@ const PushOnboardingPrompt = dynamic(
 function isActive(pathname: string, href: string) {
   if (href === "/home") return pathname === "/home" || pathname === "/";
   return pathname.startsWith(href);
+}
+
+function reachedHref(pathname: string, href: string) {
+  if (href === "/home") return pathname === "/home" || pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function ShellLink({
+  href,
+  className,
+  active,
+  children,
+}: {
+  href: string;
+  className?: string;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  const [pending, setPending] = useState(false);
+  return (
+    <Link
+      href={href}
+      prefetch
+      aria-current={active ? "page" : undefined}
+      className={cn(className, pending && !active && styles.navItemPending)}
+      onClick={() => {
+        if (active) return;
+        setPending(true);
+        window.setTimeout(() => {
+          if (!reachedHref(window.location.pathname, href)) {
+            window.location.assign(href);
+          }
+        }, 700);
+      }}
+    >
+      {children}
+    </Link>
+  );
 }
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
@@ -117,31 +156,29 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             const active = isActive(pathname, item.href);
             if (item.capture) {
               return (
-                <Link
+                <ShellLink
                   key={item.href}
                   href={item.href}
-                  prefetch
-                  aria-current={active ? "page" : undefined}
+                  active={active}
                   className={cn(styles.captureSlot, active && styles.captureSlotActive)}
                 >
                   <span className={styles.captureFab}>
                     <Plus size={26} strokeWidth={2.5} aria-hidden />
                   </span>
                   <span>{item.label}</span>
-                </Link>
+                </ShellLink>
               );
             }
             return (
-              <Link
+              <ShellLink
                 key={item.href}
                 href={item.href}
-                prefetch
-                aria-current={active ? "page" : undefined}
+                active={active}
                 className={cn(styles.navItem, active && styles.navItemActive)}
               >
                 <item.icon size={20} strokeWidth={active ? 2 : 1.7} aria-hidden />
                 <span className={styles.navLabel}>{item.label}</span>
-              </Link>
+              </ShellLink>
             );
           })}
         </div>

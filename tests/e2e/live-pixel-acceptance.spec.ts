@@ -158,7 +158,7 @@ test.describe("Pixel-faithful Production live", () => {
     await expect(page.getByText("16 תמונות")).toBeVisible({ timeout: 15000 });
     await captureShot(page, "390-processing-16");
 
-    await expect(page.getByTestId("vehicle-candidate-card").or(page.getByText(/זיהיתי כאן/))).toBeVisible({
+    await expect(page.getByTestId("vehicle-candidate-card").first()).toBeVisible({
       timeout: 8 * 60_000,
     });
     const firstCandidateMs = Date.now() - t0;
@@ -260,7 +260,10 @@ test.describe("Pixel-faithful Production live", () => {
     writeFileSync(path.join(OUT, "batch16-report.json"), JSON.stringify(report, null, 2));
     expect(persisted).toBe(16);
     expect(autoOwnedBeforeIntent.length).toBe(0);
-    expect(net.failed.filter((f) => !f.url.includes("favicon")).length).toBeLessThan(3);
+    const hardFails = net.failed.filter(
+      (f) => !f.url.includes("favicon") && !f.url.includes("_rsc=") && !f.error.includes("ERR_ABORTED")
+    );
+    expect(hardFails, JSON.stringify(hardFails)).toHaveLength(0);
   });
 
   test("C performance matrix 1/5/10/16/30", async ({ page }) => {
@@ -326,7 +329,7 @@ test.describe("Pixel-faithful Production live", () => {
       await uploadGallery(page, files);
       await expect(page.getByText(/קיבלתי/)).toBeVisible({ timeout: 15000 });
       const ack = Date.now() - t0;
-      await expect(page.getByText("ביקוש לקוח").or(page.getByText(/CX-?5|מאזדה|לקוח/i))).toBeVisible({
+      await expect(page.getByText("ביקוש לקוח")).toBeVisible({
         timeout: 90000,
       });
       const ready = Date.now() - t0;
@@ -367,10 +370,7 @@ test.describe("Pixel-faithful Production live", () => {
     async function hop(from: string, to: string, click: () => Promise<void>, ready?: () => Promise<void>) {
       const t0 = Date.now();
       await click();
-      await page.waitForURL(new RegExp(to.replaceAll("/", "\\/")), {
-        timeout: 15000,
-        waitUntil: "domcontentloaded",
-      });
+      await expect(page).toHaveURL(new RegExp(to.replaceAll("/", "\\/")), { timeout: 15000 });
       const shell = Date.now() - t0;
       if (ready) await ready();
       const usable = Date.now() - t0;
@@ -397,15 +397,15 @@ test.describe("Pixel-faithful Production live", () => {
       const t0 = Date.now();
       const n = page.getByLabel("ניווט תחתון");
       await n.locator('a[href="/home"]').click();
-      await page.waitForURL(/\/home/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await expect(page).toHaveURL(/\/home/, { timeout: 12000 });
       await n.locator('a[href="/inventory"]').click();
-      await page.waitForURL(/\/inventory/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await expect(page).toHaveURL(/\/inventory/, { timeout: 12000 });
       await n.locator('a[href="/demand"]').click();
-      await page.waitForURL(/\/demand/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await expect(page).toHaveURL(/\/demand/, { timeout: 12000 });
       await n.locator('a[href="/intake/handoff"]').click();
-      await page.waitForURL(/\/intake/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await expect(page).toHaveURL(/\/intake/, { timeout: 12000 });
       await n.locator('a[href="/home"]').click();
-      await page.waitForURL(/\/home/, { timeout: 12000, waitUntil: "domcontentloaded" });
+      await expect(page).toHaveURL(/\/home/, { timeout: 12000 });
       cycleTimes.push(Date.now() - t0);
     }
     const report = {
