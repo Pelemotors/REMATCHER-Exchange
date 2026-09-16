@@ -13,14 +13,16 @@ export function Surface({
   depth = "base",
   className,
   as: Tag = "div",
+  id,
 }: {
   children: React.ReactNode;
   depth?: SurfaceDepth;
   className?: string;
   as?: "div" | "section" | "article";
+  id?: string;
 }) {
   return (
-    <Tag className={cn("rounded-md", depthClass[depth], className)}>
+    <Tag id={id} className={cn("rounded-md", depthClass[depth], className)}>
       {children}
     </Tag>
   );

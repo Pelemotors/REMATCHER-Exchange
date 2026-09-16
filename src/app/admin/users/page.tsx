@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Surface } from "@/components/ui/brand-v2";
 import { requireAdminPageSession } from "@/lib/admin-page-gate";
@@ -49,7 +50,9 @@ export default async function AdminUsersPage() {
               className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm"
             >
               <div>
-                <p className="font-medium text-v2-text-primary">{u.name}</p>
+                <p className="font-medium text-v2-text-primary">
+                  <Link href={`/admin/users/${u.id}`}>{u.name}</Link>
+                </p>
                 <p className="text-v2-text-secondary" dir="ltr">
                   {u.email}
                 </p>
@@ -61,6 +64,8 @@ export default async function AdminUsersPage() {
                   {" · "}
                   {u.accountStatus}
                   {u.emailVerifiedAt ? " · מייל מאומת" : " · מייל לא מאומת"}
+                  {" · "}
+                  {u.createdAt.toLocaleDateString("he-IL")}
                 </p>
               </div>
               <span className="text-xs text-v2-text-muted">

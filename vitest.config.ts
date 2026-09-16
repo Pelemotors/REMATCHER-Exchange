@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    isolate: true,
     env: {
       RATE_LIMIT_BACKEND: "memory",
       VITEST: "true",

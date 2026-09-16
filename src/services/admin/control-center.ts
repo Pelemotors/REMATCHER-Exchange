@@ -34,6 +34,14 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
     stuckOpportunities,
     revealsNoOutcome,
     pushFailures,
+    unverifiedUsers,
+    failedIntakes,
+    emptyEnabledCatalogs,
+    suspendedWithCatalog,
+    incompleteOnboarding,
+    suspendedUsers,
+    stuckIntakes,
+    brokenCatalogMedia,
   ] = await Promise.all([
     prisma.dealer.count({ where: { verificationStatus: "PENDING" } }),
     prisma.dealer.count({
@@ -72,6 +80,43 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
         createdAt: { gte: periodStart(1) },
       },
     }),
+    prisma.user.count({
+      where: { role: "DEALER_USER", emailVerifiedAt: null },
+    }),
+    prisma.intakeBatch.count({
+      where: { status: "FAILED" },
+    }),
+    prisma.dealerCatalog.count({
+      where: {
+        status: "ENABLED",
+        publications: { none: { isActive: true } },
+      },
+    }),
+    prisma.dealerCatalog.count({
+      where: {
+        status: "ENABLED",
+        dealer: { isActive: false },
+      },
+    }),
+    prisma.dealer.count({
+      where: {
+        verificationStatus: "VERIFIED",
+        OR: [
+          { onboardingState: null },
+          { onboardingState: { completedAt: null } },
+        ],
+      },
+    }),
+    prisma.user.count({ where: { accountStatus: "SUSPENDED" } }),
+    prisma.intakeBatch.count({
+      where: {
+        status: "PROCESSING",
+        processingStartedAt: { lte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      },
+    }),
+    prisma.catalogPublication.count({
+      where: { isActive: true, vehicle: { mediaReady: false } },
+    }),
   ]);
 
   const items: AdminAttentionItem[] = [];
@@ -90,6 +135,7 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
       type: "stuck_validations",
       label: "אימותים תקועים מעל 48 שעות",
       count: stuckValidations,
+      href: "/admin/matches",
       severity: "high",
     });
   }
@@ -98,6 +144,7 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
       type: "reveals_no_outcome",
       label: "חיבורים ללא תוצאה מעל 7 ימים",
       count: revealsNoOutcome,
+      href: "/admin/interest",
       severity: "medium",
     });
   }
@@ -106,6 +153,7 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
       type: "stuck_opportunities",
       label: "הזדמנויות פתוחות מעל 48 שעות",
       count: stuckOpportunities,
+      href: "/admin/opportunities",
       severity: "medium",
     });
   }
@@ -114,6 +162,7 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
       type: "no_inventory",
       label: "סוחרים מאומתים ללא מלאי",
       count: noInventoryDealers,
+      href: "/admin/dealers",
       severity: "low",
     });
   }
@@ -122,6 +171,7 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
       type: "no_demand",
       label: "סוחרים מאומתים ללא חיפוש פעיל",
       count: noDemandDealers,
+      href: "/admin/dealers",
       severity: "low",
     });
   }
@@ -130,7 +180,80 @@ export async function getAdminAttentionItems(): Promise<AdminAttentionItem[]> {
       type: "agent_failures",
       label: "כשלי AI/Agent ב-24 שעות",
       count: pushFailures,
+      href: "/admin/system",
       severity: "low",
+    });
+  }
+  if (unverifiedUsers > 0) {
+    items.push({
+      type: "unverified_users",
+      label: "משתמשי סוחר עם מייל לא מאומת",
+      count: unverifiedUsers,
+      href: "/admin/users",
+      severity: "medium",
+    });
+  }
+  if (failedIntakes > 0) {
+    items.push({
+      type: "failed_intakes",
+      label: "אצוות Intake שנכשלו",
+      count: failedIntakes,
+      href: "/admin/intakes",
+      severity: "high",
+    });
+  }
+  if (emptyEnabledCatalogs > 0) {
+    items.push({
+      type: "empty_catalogs",
+      label: "קטלוגים פעילים בלי רכבים מפורסמים",
+      count: emptyEnabledCatalogs,
+      href: "/admin/catalogs",
+      severity: "medium",
+    });
+  }
+  if (suspendedWithCatalog > 0) {
+    items.push({
+      type: "suspended_catalog",
+      label: "סוחר מושעה עם קטלוג פעיל",
+      count: suspendedWithCatalog,
+      href: "/admin/catalogs",
+      severity: "high",
+    });
+  }
+  if (incompleteOnboarding > 0) {
+    items.push({
+      type: "incomplete_onboarding",
+      label: "סוחרים מאומתים בלי onboarding שהושלם",
+      count: incompleteOnboarding,
+      href: "/admin/dealers",
+      severity: "low",
+    });
+  }
+  if (suspendedUsers > 0) {
+    items.push({
+      type: "suspended_users",
+      label: "משתמשים מושעים",
+      count: suspendedUsers,
+      href: "/admin/users",
+      severity: "medium",
+    });
+  }
+  if (stuckIntakes > 0) {
+    items.push({
+      type: "stuck_intakes",
+      label: "Intake תקוע בעיבוד מעל שעתיים",
+      count: stuckIntakes,
+      href: "/admin/intakes",
+      severity: "high",
+    });
+  }
+  if (brokenCatalogMedia > 0) {
+    items.push({
+      type: "broken_catalog_media",
+      label: "פרסום קטלוג בלי מדיה מוכנה",
+      count: brokenCatalogMedia,
+      href: "/admin/catalogs",
+      severity: "medium",
     });
   }
 

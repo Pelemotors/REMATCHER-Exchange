@@ -74,6 +74,7 @@ describe("catalog slug validation", () => {
 
 describe("catalog host rewrite helper", () => {
   it("extracts dealer slug hosts", () => {
+    expect(catalogSlugFromHost("galeria-test.rematcher.co.il")).toBe("galeria-test");
     expect(catalogSlugFromHost("galeria.rematcher.co.il")).toBe("galeria");
     expect(catalogSlugFromHost("Galeria.rematcher.co.il:443")).toBe("galeria");
   });

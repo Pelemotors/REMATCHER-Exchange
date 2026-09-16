@@ -20,6 +20,10 @@ const mockSellerInterestCount = vi.fn();
 const mockOutcomeCount = vi.fn();
 const mockValidationCount = vi.fn();
 const mockAiLogCount = vi.fn();
+const mockUserCount = vi.fn();
+const mockIntakeBatchCount = vi.fn();
+const mockDealerCatalogCount = vi.fn();
+const mockCatalogPublicationCount = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -48,6 +52,10 @@ vi.mock("@/lib/prisma", () => ({
     outcome: { count: (...args: unknown[]) => mockOutcomeCount(...args) },
     validationEvent: { count: (...args: unknown[]) => mockValidationCount(...args) },
     aiOperationLog: { count: (...args: unknown[]) => mockAiLogCount(...args) },
+    user: { count: (...args: unknown[]) => mockUserCount(...args) },
+    intakeBatch: { count: (...args: unknown[]) => mockIntakeBatchCount(...args) },
+    dealerCatalog: { count: (...args: unknown[]) => mockDealerCatalogCount(...args) },
+    catalogPublication: { count: (...args: unknown[]) => mockCatalogPublicationCount(...args) },
   },
 }));
 
@@ -152,6 +160,10 @@ describe("Admin attention queue", () => {
     mockSellerOpportunityCount.mockResolvedValue(0);
     mockRevealCount.mockResolvedValue(0);
     mockAiLogCount.mockResolvedValue(0);
+    mockUserCount.mockResolvedValue(0);
+    mockIntakeBatchCount.mockResolvedValue(0);
+    mockDealerCatalogCount.mockResolvedValue(0);
+    mockCatalogPublicationCount.mockResolvedValue(0);
   });
 
   it("surfaces pending dealer approvals", async () => {
