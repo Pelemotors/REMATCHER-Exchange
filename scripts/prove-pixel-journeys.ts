@@ -48,9 +48,11 @@ async function main() {
   });
   if (!buyer || !seller) throw new Error("QA dealers missing");
 
-  const buyerUser = await prisma.user.findFirst({ where: { dealerId: buyer.id } });
+  const buyerUser = await prisma.user.findFirst({
+    where: { memberships: { some: { dealerId: buyer.id } } },
+  });
   const sellerUser = await prisma.user.findFirst({
-    where: { dealerId: seller.id },
+    where: { memberships: { some: { dealerId: seller.id } } },
   });
   if (!buyerUser || !sellerUser) throw new Error("QA users missing");
 
@@ -141,7 +143,14 @@ async function proveJourney5(input: {
   const afterRun = await runMatchingForDemand(demand.id);
   const after = await prisma.candidateMatch.findFirst({
     where: { demandId: demand.id, vehicleId: vehicle.id },
-    select: { id: true, status: true, score: true, scoreBand: true, explanation: true },
+    select: {
+      id: true,
+      status: true,
+      score: true,
+      scoreBand: true,
+      explanationText: true,
+      explanationJson: true,
+    },
   });
   return {
     demandId: demand.id,

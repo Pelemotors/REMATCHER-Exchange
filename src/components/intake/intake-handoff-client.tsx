@@ -870,6 +870,7 @@ export function IntakeHandoffClient() {
           ) : null}
         </div>
 
+        {phase !== "capture" ? (
         <div className={styles.composerWrap}>
           <form
             className={styles.composer}
@@ -932,6 +933,7 @@ export function IntakeHandoffClient() {
             </button>
           </form>
         </div>
+        ) : null}
       </div>
     </div>
   );

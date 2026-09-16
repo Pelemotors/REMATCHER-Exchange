@@ -115,13 +115,12 @@ test.describe("Pixel-faithful Production live", () => {
     await expect(page.getByRole("heading", { name: "קליטת רכב" })).toBeVisible({
       timeout: 20000,
     });
-    await expect(page.getByText("שלח לי את הרכב")).toBeVisible();
-    await expect(page.getByText("בחר מהגלריה")).toBeVisible();
-    await expect(page.getByText("צלם רכב")).toBeVisible();
-    await expect(page.getByText("הדבק טקסט / מידע")).toBeVisible();
-    await expect(page.getByText(/WhatsApp/)).toBeVisible();
-    await expect(page.getByText("קליטת רכב").nth(0)).toBeVisible();
-    await expect(page.getByPlaceholder("כתוב ל-REMATCHER...")).toBeVisible();
+    await expect(page.getByRole("main").getByText("שלח לי את הרכב — אני כבר אטפל בשאר.")).toBeVisible();
+    await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible();
+    await expect(page.getByRole("main").getByText("צלם רכב").first()).toBeVisible();
+    await expect(page.getByRole("main").getByText("הדבק טקסט / מידע").first()).toBeVisible();
+    await expect(page.getByRole("main").getByText(/WhatsApp/)).toBeVisible();
+    await expect(page.getByPlaceholder("כתוב ל-REMATCHER...")).toHaveCount(0);
     const nav = page.getByLabel("ניווט תחתון");
     await expect(nav.getByText("בית")).toBeVisible();
     await expect(nav.getByText("המלאי")).toBeVisible();
@@ -143,7 +142,7 @@ test.describe("Pixel-faithful Production live", () => {
     const net = trackNetwork(page);
     await loginDealer(page, creds!);
     await page.goto(`${BASE}/intake/handoff`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("בחר מהגלריה")).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible({ timeout: 20000 });
 
     const t0 = Date.now();
     await page.locator('input[type="file"]').first().setInputFiles(files.slice(0, 16));
@@ -271,7 +270,7 @@ test.describe("Pixel-faithful Production live", () => {
       if (files.length < n) continue;
       const net = trackNetwork(page);
       await page.goto(`${BASE}/intake/handoff`, { waitUntil: "domcontentloaded" });
-      await expect(page.getByText("בחר מהגלריה")).toBeVisible({ timeout: 20000 });
+      await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible({ timeout: 20000 });
       const t0 = Date.now();
       await page.locator('input[type="file"]').first().setInputFiles(files);
       const marks: Record<string, number> = { upload_start: 0 };
@@ -316,7 +315,7 @@ test.describe("Pixel-faithful Production live", () => {
 
     const run = async (files: string[], name: string) => {
       await page.goto(`${BASE}/intake/handoff`, { waitUntil: "domcontentloaded" });
-      await expect(page.getByText("בחר מהגלריה")).toBeVisible({ timeout: 20000 });
+      await expect(page.getByRole("main").getByText("בחר מהגלריה").first()).toBeVisible({ timeout: 20000 });
       const t0 = Date.now();
       await page.locator('input[type="file"]').first().setInputFiles(files);
       await expect(page.getByText(/קיבלתי/)).toBeVisible({ timeout: 15000 });
