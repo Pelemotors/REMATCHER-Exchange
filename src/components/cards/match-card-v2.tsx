@@ -99,7 +99,41 @@ export function MatchCardV2({
       {fits.length > 0 && <ul className={styles.fitList}>{fits.map((f)=><li key={f} className="flex items-start gap-2 text-v2-text-primary"><Check className="mt-0.5 h-4 w-4 shrink-0 text-success" strokeWidth={2}/><span>{f}</span></li>)}</ul>}
       {gaps.length > 0 && <ul className={styles.gapList}>{gaps.map((g)=><li key={g} className="flex items-start gap-2 text-v2-text-secondary"><Minus className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2}/><span>{g}</span></li>)}</ul>}
       <div className={styles.privacy}><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75}/><span>{COPY.verifiedDealer} · {COPY.privacyNote}</span></div>
-      {connected && revealHref ? <div className={styles.actions}><a href={revealHref} className="v2-btn-signal flex-1 text-center">{COPY.contactDetailsCta}</a></div> : waiting ? <p className="rounded-sm bg-v2-surface-secondary px-3 py-2 text-sm text-v2-text-secondary">{COPY.waitingOtherSide}</p> : showActions ? <div className={styles.actions}><button className="v2-btn-signal flex-1" onClick={onInterested} disabled={loading} aria-busy={loading}>{loading ? "שולח..." : COPY.interested}</button><button className="v2-btn-secondary flex-1" onClick={onReject} disabled={loading}>{COPY.notRelevant}</button></div> : null}
+      {connected && revealHref ? (
+        <div className={styles.actions}>
+          <p className="mb-2 w-full text-center text-xs font-semibold text-success">
+            עניין הדדי · ניתן לחשיפה
+          </p>
+          <a href={revealHref} className="v2-btn-primary flex-1 text-center">
+            {COPY.contactDetailsCta}
+          </a>
+        </div>
+      ) : waiting ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-v2-gold">ממתין לעניין הדדי</p>
+          <p className="rounded-sm bg-v2-surface-secondary px-3 py-2 text-sm text-v2-text-secondary">
+            {COPY.waitingOtherSide}
+          </p>
+        </div>
+      ) : showActions ? (
+        <div className={styles.actions}>
+          <button
+            className="v2-btn-primary flex-1"
+            onClick={onInterested}
+            disabled={loading}
+            aria-busy={loading}
+          >
+            {loading ? "שולח..." : "אני מעוניין"}
+          </button>
+          <button
+            className="v2-btn-secondary flex-1"
+            onClick={onReject}
+            disabled={loading}
+          >
+            {COPY.notRelevant}
+          </button>
+        </div>
+      ) : null}
     </Surface>
   );
 }
