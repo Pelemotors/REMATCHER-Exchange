@@ -7,7 +7,7 @@ import { createVehicleForDealer } from "@/services/inventory/create-vehicle";
 const patchSchema = z
   .object({
     vehicleId: z.string().min(1).max(80),
-    status: z.enum(["SOLD"]).optional(),
+    status: z.enum(["SOLD", "ARCHIVED"]).optional(),
     fields: z
       .object({
         make: z.string().nullable().optional(),
@@ -287,6 +287,24 @@ export async function PATCH(req: Request) {
       vehicle: result.vehicle,
       alreadySold: result.alreadySold,
     });
+  }
+
+  if (status === "ARCHIVED") {
+    const { removeVehicleFromInventoryForDealer } = await import(
+      "@/services/inventory/remove-from-inventory"
+    );
+    const result = await removeVehicleFromInventoryForDealer({
+      dealerId: session.user.dealerId,
+      vehicleId,
+      source: "inventory_api",
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.error === "not_found" ? 404 : 400 }
+      );
+    }
+    return NextResponse.json({ ok: true, vehicle: result.vehicle });
   }
 
   if (reactivate) {

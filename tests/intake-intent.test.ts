@@ -22,6 +22,12 @@ describe("intake intent parsing", () => {
     expect(parseIntakeIntentText("בדוק את התמונות").all).toBeUndefined();
   });
 
+  it("כולם שלי חוץ מהאחרון is allExceptLast", () => {
+    expect(parseIntakeIntentText("כולם שלי חוץ מהאחרון").allExceptLast).toBe(
+      "OWNED"
+    );
+  });
+
   it("maps הראשון למלאי והשני טרייד", () => {
     const p = parseIntakeIntentText("הראשון למלאי והשני טרייד");
     expect(p.byIndex).toEqual(

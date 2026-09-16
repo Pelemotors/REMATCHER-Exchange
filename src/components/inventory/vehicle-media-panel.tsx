@@ -111,6 +111,7 @@ export function VehicleMediaPanel({ vehicleId }: { vehicleId: string }) {
         <h4 className="font-semibold text-v2-text-primary">תמונות הרכב</h4>
         <p className="mt-1 text-sm text-v2-text-secondary">
           חובה לפחות תמונת חוץ אחת ותמונת פנים אחת לפני שהרכב נכנס לרשת.
+          אפשר למחוק תמונה שהעלית בטעות — כפתור «מחק תמונה» על כל תמונה.
         </p>
         <p className="mt-1 text-sm text-v2-text-muted" role="status">
           {mediaReady
@@ -140,6 +141,13 @@ export function VehicleMediaPanel({ vehicleId }: { vehicleId: string }) {
                 alt={`תמונת ${CATEGORY_LABEL[m.category]}`}
                 className="h-28 w-full object-cover"
               />
+              <button
+                type="button"
+                className="absolute left-2 top-2 min-h-11 rounded-full bg-black/75 px-3 text-xs font-semibold text-white"
+                onClick={() => void remove(m.id)}
+              >
+                מחק תמונה
+              </button>
               <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1.5 text-xs text-v2-text-secondary">
                 <span>
                   {CATEGORY_LABEL[m.category]}

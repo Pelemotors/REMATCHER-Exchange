@@ -5,9 +5,11 @@ import { emitExchangeEvent } from "@/services/exchange/events";
 import {
   INTENT_TO_RELATIONSHIP,
   intentFromButton,
+  isDiscardIntent,
   parseIntakeIntentText,
   type IntakeIntentKind,
 } from "@/services/intake/intent";
+import { resolveIntakeCandidate } from "@/services/intake/review";
 
 export function orderIntakeCandidates<T extends { id: string; createdAt?: Date }>(
   candidates: Array<
@@ -135,6 +137,25 @@ export async function applyIntakeIntents(input: {
     });
   }
 
+  async function discardOne(candidateId: string) {
+    const r = await resolveIntakeCandidate({
+      dealerId: input.dealerId,
+      candidateId,
+      reject: true,
+    });
+    results.push({
+      candidateId,
+      intent: "EXTERNAL",
+      ok: r.ok,
+      error: r.ok ? undefined : "reject_failed",
+    });
+  }
+
+  if (input.candidateId && isDiscardIntent(input.intent)) {
+    await discardOne(input.candidateId);
+    return { ok: true as const, results };
+  }
+
   if (input.candidateId && input.intent) {
     const kind = intentFromButton(input.intent);
     if (!kind) return { ok: false as const, error: "invalid_intent" as const };
@@ -143,6 +164,25 @@ export async function applyIntakeIntents(input: {
   }
 
   const parsed = parseIntakeIntentText(input.message ?? input.intent ?? "");
+  if (parsed.discard) {
+    const target =
+      (input.candidateId
+        ? ordered.find((c) => c.id === input.candidateId)
+        : null) ?? pending[0];
+    if (target) await discardOne(target.id);
+    return results.length
+      ? { ok: true as const, results }
+      : { ok: false as const, error: "unparsed_intent" as const };
+  }
+
+  if (parsed.allExceptLast) {
+    const list = pending.length ? pending : ordered;
+    for (let i = 0; i < list.length - 1; i++) {
+      await applyOne(list[i]!.id, parsed.allExceptLast);
+    }
+    return { ok: true as const, results };
+  }
+
   if (parsed.all) {
     for (const c of pending.length ? pending : ordered) {
       await applyOne(c.id, parsed.all);
@@ -163,6 +203,26 @@ export async function applyIntakeIntents(input: {
       if (assigned.has(c.id)) continue;
       if (c.status === "COMMITTED" && c.dealerIntent) continue;
       await applyOne(c.id, parsed.rest);
+    }
+  }
+
+  if (parsed.focused) {
+    const msg = `${input.message ?? ""} ${input.intent ?? ""}`;
+    for (const c of ordered) {
+      if (assigned.has(c.id)) continue;
+      const gov = (c as { govIdentityJson?: { make?: string | null; model?: string | null } | null })
+        .govIdentityJson;
+      const tokens = [gov?.make, gov?.model].filter(
+        (t): t is string => typeof t === "string" && t.trim().length >= 2
+      );
+      if (
+        tokens.some((t) =>
+          new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(msg)
+        )
+      ) {
+        await applyOne(c.id, parsed.focused);
+        assigned.add(c.id);
+      }
     }
   }
 

@@ -39,9 +39,18 @@ type CandidateDto = {
   govState: string | null;
 };
 
+type DemandDraftDto = {
+  rawText?: string;
+  summaryHe?: string;
+  parsed?: unknown;
+  status?: string;
+  demandId?: string | null;
+};
+
 type BatchDto = {
   id: string;
   status: string;
+  demandDraft?: DemandDraftDto | null;
   media: Array<{
     id: string;
     thumbUrl: string | null;
@@ -128,6 +137,8 @@ export function IntakeHandoffClient() {
   const [composer, setComposer] = useState("");
   const [busyIntent, setBusyIntent] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const [demandBusy, setDemandBusy] = useState(false);
+  const [demandConfirmed, setDemandConfirmed] = useState(false);
   const seenCandidateCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -301,6 +312,39 @@ export function IntakeHandoffClient() {
     }
   }
 
+  async function submitTextOnly() {
+    if (!batchId || uploading || !caption.trim()) return;
+    setPhase("conversation");
+    setUploading(true);
+    setError(null);
+    setMediaCount(0);
+    try {
+      await fetch("/api/intake/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_text",
+          batchId,
+          text: caption.trim(),
+        }),
+      });
+      const ack = await fetch("/api/intake/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ack", batchId }),
+      });
+      if (!ack.ok) {
+        setError("הקליטה לא אושרה בשרת");
+        return;
+      }
+      history.replaceState(null, "", `/intake/handoff?batchId=${batchId}`);
+    } catch {
+      setError("שליחת הטקסט נכשלה");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function sendIntent(opts: {
     candidateId?: string;
     intent?: string;
@@ -359,6 +403,43 @@ export function IntakeHandoffClient() {
       body: JSON.stringify({ vehicleId, fields: { retailPrice: n } }),
     });
     await publishCatalog(vehicleId);
+  }
+
+  async function confirmDemandDraft() {
+    const draft = batch?.demandDraft;
+    if (!draft?.rawText || demandBusy) return;
+    setDemandBusy(true);
+    setError(null);
+    try {
+      const parsedRes = await fetch("/api/demands/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: draft.rawText }),
+      });
+      const parsed = await parsedRes.json();
+      if (!parsedRes.ok || !parsed.demandId) {
+        setError("לא הצלחתי לשמור את הביקוש");
+        return;
+      }
+      const confirmRes = await fetch("/api/demands/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          demandId: parsed.demandId,
+          confirmed: parsed.parsed ?? draft.parsed,
+          publishMode: "network",
+        }),
+      });
+      if (!confirmRes.ok) {
+        setError("האישור לא נשמר");
+        return;
+      }
+      setDemandConfirmed(true);
+      const getRes = await fetch(`/api/intake/batch?batchId=${batchId}`);
+      if (getRes.ok) setBatch((await getRes.json()) as BatchDto);
+    } finally {
+      setDemandBusy(false);
+    }
   }
 
   const thumbs = useMemo(() => {
@@ -423,12 +504,22 @@ export function IntakeHandoffClient() {
                     הדבק טקסט / מידע
                   </button>
                   {showPaste ? (
-                    <textarea
-                      className={styles.pasteBox}
-                      value={caption}
-                      onChange={(e) => setCaption(e.target.value)}
-                      placeholder="לדוגמה: מספר רכב, הערות…"
-                    />
+                    <>
+                      <textarea
+                        className={styles.pasteBox}
+                        value={caption}
+                        onChange={(e) => setCaption(e.target.value)}
+                        placeholder="לדוגמה: מחפש CX5 22+ עד 140"
+                      />
+                      <button
+                        type="button"
+                        className={styles.primaryAction}
+                        disabled={!caption.trim() || uploading || !batchId}
+                        onClick={() => void submitTextOnly()}
+                      >
+                        {uploading ? "שולח…" : "שלח ל-REMATCHER"}
+                      </button>
+                    </>
                   ) : null}
                 </div>
               )}
@@ -458,11 +549,16 @@ export function IntakeHandoffClient() {
                     <>
                       <span className={styles.processingDot} />
                       קיבלתי 👍
-                      {"\n"}בודק את הרכבים...
+                      {"\n"}
+                      {caption.trim() && !localThumbs.length
+                        ? "בודק מה הלקוח מחפש..."
+                        : "בודק את הרכבים..."}
                     </>
                   ) : (
                     <>
-                      קיבלתי {mediaCount} תמונות.
+                      {mediaCount
+                        ? `קיבלתי ${mediaCount} תמונות.`
+                        : "קיבלתי את ההודעה."}
                       {identified.length
                         ? `\nזיהיתי כאן ${identified.length} רכבים 👇`
                         : ""}
@@ -473,6 +569,34 @@ export function IntakeHandoffClient() {
                   )}
                 </div>
               </div>
+
+              {batch?.demandDraft?.summaryHe && !demandConfirmed ? (
+                <div className={styles.card}>
+                  <p className={styles.cardTitle}>ביקוש לקוח</p>
+                  <p className={styles.cardMeta} style={{ whiteSpace: "pre-line" }}>
+                    {batch.demandDraft.summaryHe}
+                  </p>
+                  <div className={styles.actions} style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className={`${styles.action} ${styles.actionPrimary}`}
+                      disabled={demandBusy}
+                      onClick={() => void confirmDemandDraft()}
+                    >
+                      {demandBusy ? "שומר…" : "נכון, שמור"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {demandConfirmed ? (
+                <div className={`${styles.card} ${styles.cardDone}`}>
+                  <p className={styles.cardTitle}>✓ הביקוש נשמר</p>
+                  <p className={styles.cardMeta}>
+                    REMATCHER תחפש עכשיו וגם בהמשך, בלי שתצטרך לחפש מחדש.
+                  </p>
+                </div>
+              ) : null}
 
               {identified.length >= 2 &&
               identified.some((c) => !c.dealerIntent) ? (
@@ -600,6 +724,19 @@ export function IntakeHandoffClient() {
                             {intent.label}
                           </button>
                         ))}
+                        <button
+                          type="button"
+                          className={styles.action}
+                          disabled={busyIntent != null}
+                          onClick={() =>
+                            void sendIntent({
+                              candidateId: c.id,
+                              intent: "DISCARD",
+                            })
+                          }
+                        >
+                          מחק / טעות
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -651,6 +788,27 @@ export function IntakeHandoffClient() {
               if (!text || !batchId) return;
               setComposer("");
               if (phase === "capture") return;
+              if (batch?.demandDraft && !demandConfirmed) {
+                void (async () => {
+                  await fetch("/api/intake/batch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      action: "add_text",
+                      batchId,
+                      text,
+                    }),
+                  });
+                  await fetch("/api/intake/batch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "ack", batchId }),
+                  });
+                  const getRes = await fetch(`/api/intake/batch?batchId=${batchId}`);
+                  if (getRes.ok) setBatch((await getRes.json()) as BatchDto);
+                })();
+                return;
+              }
               void sendIntent({ message: text });
             }}
           >

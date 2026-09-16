@@ -18,9 +18,10 @@ export async function refreshBatchStatus(batchId: string) {
 
   let batchStatus: "NEEDS_REVIEW" | "READY" | "COMMITTED" | "PROCESSING" =
     "PROCESSING";
-  if (openReview > 0) batchStatus = "NEEDS_REVIEW";
-  else if (total > 0 && committed === total) batchStatus = "COMMITTED";
-  else if (total > 0 && openReview === 0 && failed === 0) batchStatus = "READY";
+  if (total === 0) batchStatus = "READY";
+  else if (openReview > 0) batchStatus = "NEEDS_REVIEW";
+  else if (committed === total) batchStatus = "COMMITTED";
+  else if (openReview === 0 && failed === 0) batchStatus = "READY";
   else if (committed > 0) batchStatus = "READY";
 
   await prisma.intakeBatch.update({

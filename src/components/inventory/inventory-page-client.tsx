@@ -144,6 +144,7 @@ export function InventoryPageClient({
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [soldConfirm, setSoldConfirm] = useState<InventoryVehicle | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<InventoryVehicle | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [privateIntel, setPrivateIntel] = useState<{
     loading: boolean;
@@ -359,6 +360,27 @@ export function InventoryPageClient({
     }
   }
 
+  async function archiveVehicle(v: InventoryVehicle) {
+    if (saving) return;
+    setArchiveConfirm(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/inventory", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vehicleId: v.id, status: "ARCHIVED" }),
+      });
+      if (!res.ok) throw new Error("inventory_archive_failed");
+      setEditVehicle(null);
+      showToast("הרכב הוסר מהמלאי");
+      await load({ page: 1 });
+    } catch {
+      showToast("לא הצלחנו להסיר. שום דבר לא השתנה.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const segmentFilter =
     filter === "sold" ? "sold" : filter === "all" ? "all" : "active";
 
@@ -381,6 +403,7 @@ export function InventoryPageClient({
 
       <p className={styles.lede}>
         יש לך רכב? זרוק אותו לרשת — REMATCHER תחפש לו קונה.
+        טעות בהעלאה? פתח את הרכב, מחק תמונות, או «הסר מהמלאי» בלי לסמן נמכר.
       </p>
 
       <button
@@ -497,6 +520,9 @@ export function InventoryPageClient({
             <ButtonV2 variant="secondary" onClick={() => setSoldConfirm(editVehicle)} disabled={saving}>
               סמן כנמכר
             </ButtonV2>
+            <ButtonV2 variant="ghost" onClick={() => setArchiveConfirm(editVehicle)} disabled={saving}>
+              הסר מהמלאי
+            </ButtonV2>
             <ButtonV2 variant="ghost" onClick={() => setEditVehicle(null)} disabled={saving}>
               ביטול
             </ButtonV2>
@@ -507,6 +533,24 @@ export function InventoryPageClient({
             </Surface>
           )}
           <VehicleMediaPanel vehicleId={editVehicle.id} />
+        </Surface>
+      )}
+
+      {archiveConfirm && (
+        <Surface depth="raised" className="space-y-3 border border-v2-border p-4">
+          <p className="text-sm text-v2-text-primary">
+            להסיר את {vehicleName(archiveConfirm)} מהמלאי?
+            <br />
+            לא מסמנים נמכר — רק מורידים מהמלאי הפעיל (למשל טעות בהעלאה).
+          </p>
+          <div className="flex gap-2">
+            <ButtonV2 variant="signal" className="flex-1" onClick={() => archiveVehicle(archiveConfirm)} disabled={saving}>
+              {saving ? "מסיר..." : "כן, הסר מהמלאי"}
+            </ButtonV2>
+            <ButtonV2 variant="secondary" className="flex-1" onClick={() => setArchiveConfirm(null)} disabled={saving}>
+              ביטול
+            </ButtonV2>
+          </div>
         </Surface>
       )}
 

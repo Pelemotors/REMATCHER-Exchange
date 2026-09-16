@@ -15,6 +15,7 @@ import {
   INTAKE_OCR_CONCURRENCY,
   mapWithConcurrency,
 } from "@/services/intake/discovery";
+import { classifyIntakeBatchMedia } from "@/services/intake/classify-intake-pass";
 import type { ExtractedField } from "@/services/intake/text-extract";
 import type { Prisma } from "@prisma/client";
 
@@ -95,6 +96,12 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
       orderBy: { originalOrder: "asc" },
     });
 
+    const classified = await classifyIntakeBatchMedia({
+      dealerId,
+      batchId: batch.id,
+      accompanyingText: combinedText,
+    });
+
     const { extractPlateFromImageBytes } = await import(
       "@/services/intake/plate-ocr"
     );
@@ -107,6 +114,28 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
     >();
 
     await mapWithConcurrency(mediaRows, INTAKE_OCR_CONCURRENCY, async (media) => {
+      if (classified.skipOcrMediaIds.has(media.id)) {
+        const existing = (media.discoveryJson as DiscoveryTrace | null) ?? null;
+        await prisma.intakeMedia.update({
+          where: { id: media.id },
+          data: {
+            discoveryJson: toPrismaJson({
+              ...(existing ?? {
+                ocrAttempted: false,
+                ocrPlate: null,
+                ocrConfidence: null,
+                groupingCandidateKey: null,
+                groupingResult: null,
+                skipReason: null,
+              }),
+              ocrAttempted: false,
+              skipReason: "conversation_or_document",
+              groupingResult: "skipped_non_vehicle",
+            }),
+          },
+        });
+        return;
+      }
       const existing = (media.discoveryJson as DiscoveryTrace | null) ?? null;
       if (existing?.ocrAttempted && existing.ocrPlate) {
         ocrByMedia.set(media.id, {
@@ -189,7 +218,11 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
     }
 
     const groups = assignMediaToIdentityGroups(
-      discoveryInputs.filter((d) => !d.id.startsWith("text-anchor-"))
+      discoveryInputs.filter(
+        (d) =>
+          !d.id.startsWith("text-anchor-") &&
+          !classified.skipOcrMediaIds.has(d.id)
+      )
     );
 
     const commercialFields = commercial.fields as Record<string, unknown>;

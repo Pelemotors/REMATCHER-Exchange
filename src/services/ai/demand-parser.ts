@@ -98,7 +98,13 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
   const makeModelPairs: Array<[RegExp, string, string]> = [
     [/יונדאי\s+אקסנט|יונדיי\s+אקסנט|hyundai\s+accent/i, "Hyundai", "Accent"],
     [/סקודה\s+סופרב|skoda\s+superb/i, "Skoda", "Superb"],
-    [/מאזדה\s+cx[- ]?5|mazda\s+cx[- ]?5/i, "Mazda", "CX-5"],
+    [/מאזדה\s+cx[- ]?5|mazda\s+cx[- ]?5|\bcx5\b/i, "Mazda", "CX-5"],
+    [/טויוטה\s+ראב\s*4|toyota\s+rav\s*4|rav-?4|ראב\s*4/i, "Toyota", "RAV4"],
+    [/טויוטה\s+קורולה|toyota\s+corolla|קורולה/i, "Toyota", "Corolla"],
+    [/ב.?מ.?וו\s*x3|bmw\s*x3|\bx3\b/i, "BMW", "X3"],
+    [/יונדאי\s+טוסון|hyundai\s+tucson|טוסון/i, "Hyundai", "Tucson"],
+    [/ניסאן\s+אקסטרייל|nissan\s+x[- ]?trail|אקסטרייל/i, "Nissan", "X-Trail"],
+    [/קיה\s+ספורטאז|kia\s+sportage|ספורטאז/i, "Kia", "Sportage"],
   ];
   for (const [pattern, make, model] of makeModelPairs) {
     if (pattern.test(rawText)) {
@@ -115,7 +121,8 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     result.model = { value: "CX-5", status: "known", source: "inferred" };
   }
 
-  const yearMatch = text.match(/(?:20)?(\d{2})\s*(?:ומעלה|\+|and up)?/);
+  const yearPlus = text.match(/(?:20)?(\d{2})\s*(?:\+|ומעלה)/);
+  const yearMatch = yearPlus ?? text.match(/(?:משנת|שנת|year)\s*(?:20)?(\d{2})/);
   if (yearMatch) {
     const y = parseInt(yearMatch[1], 10);
     result.yearMin = { value: y < 100 ? 2000 + y : y, status: "known" };
@@ -126,6 +133,17 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     let budget = parseInt(budgetMatch[1], 10);
     if (budget < 1000) budget *= 1000;
     result.budgetMax = { value: budget, status: "known" };
+  }
+  const aroundBudget = text.match(/באזור\s+(\d+)/);
+  if (!result.budgetMax && aroundBudget) {
+    let budget = parseInt(aroundBudget[1], 10);
+    if (budget < 1000) budget *= 1000;
+    result.budgetMax = { value: budget, status: "known" };
+  }
+  const yearRange = text.match(/\b(1[5-9]|2[0-9])\s+(1[5-9]|2[0-9])\b/);
+  if (!result.yearMin && yearRange) {
+    result.yearMin = { value: 2000 + parseInt(yearRange[1], 10), status: "known" };
+    result.yearMax = { value: 2000 + parseInt(yearRange[2], 10), status: "known" };
   }
 
   const fuelMatch = rawText.match(/פלאג[\s־-]*אין(?:\s+היברידי)?|plug[\s-]*in(?:\s+hybrid)?|phev|היברידי|hybrid|hev|חשמלי|electric|\bev\b|דיזל|סולר|diesel|בנזין|gasoline|petrol|גפ[״"]?מ|lpg|cng|מימן|hydrogen/i);
@@ -166,9 +184,11 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     };
   }
 
-  const ownershipMatch = rawText.match(
-    /ליסינג|leasing|lease|השכרה|rental|rent|פרטי|private|חברה|company|corporate/i
-  );
+  const ownershipMatch = /לא השכרה|בלי השכרה/i.test(rawText)
+    ? null
+    : rawText.match(
+        /ליסינג|leasing|lease|השכרה|rental|rent|פרטי|private|חברה|company|corporate/i
+      );
   if (ownershipMatch) {
     const ownership = canonicalizeOwnershipSource(ownershipMatch[0]);
     if (ownership && ownership !== "TRADE_IN") {
@@ -189,6 +209,18 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
 
   if (text.includes("לא אדום") || text.includes("not red")) {
     result.exclusions.push({ field: "color", description: "לא אדום", value: "red" });
+  }
+  if (/עדיף(?:\s+ל)?\s*לבן|לבן עדיף/i.test(rawText) && !/צבע לא משנה|עזוב צבע/i.test(rawText)) {
+    result.colorPreferences = ["white"];
+    maybePushSoftConstraint(result, "color", "white", "עדיפות ללבן");
+  }
+  if (/לבן בלבד/i.test(rawText) && !/צבע לא משנה|עזוב צבע/i.test(rawText)) {
+    result.hardConstraints.push({ field: "color", value: "white", description: "לבן בלבד" });
+  }
+  if (/לא השכרה|בלי השכרה/i.test(rawText)) {
+    const hard = /בכלל|חובה|רק/.test(rawText);
+    const target = hard ? result.hardConstraints : result.exclusions;
+    target.push({ field: "ownershipSource", value: "RENTAL", description: "לא השכרה" });
   }
   if (text.includes("מפואר") || text.includes("premium") || text.includes("high trim")) {
     result.softPreferences.push({ field: "trim", description: "עדיפות לגרסה מפוארת", value: "high_trim" });
@@ -332,9 +364,11 @@ async function logDemandParseFallback(reason: string, userId?: string): Promise<
 }
 
 export async function parseDemand(rawText: string, userId?: string): Promise<ParsedDemand> {
+  const { applyLaterMessageWins } = await import("@/services/intake/conversation-text");
+  const text = applyLaterMessageWins(rawText);
   if (!isOpenAIConfigured()) {
     await logDemandParseFallback("OPENAI_API_KEY not configured — deterministic fallback", userId);
-    return sanitizeParsedDemand(parseDemandFallback(rawText), rawText, userId);
+    return sanitizeParsedDemand(parseDemandFallback(text), text, userId);
   }
 
   try {
@@ -343,17 +377,17 @@ export async function parseDemand(rawText: string, userId?: string): Promise<Par
       promptVersion: AI_PROMPT_VERSIONS.demandParser,
       model: AI_MODELS.demandParser,
       systemPrompt: SYSTEM_PROMPT,
-      userContent: rawText,
+      userContent: text,
       schemaName: "parsed_demand",
       schema: RESPONSE_SCHEMA as unknown as Record<string, unknown>,
       userId,
     });
-    return sanitizeParsedDemand(data, rawText, userId);
+    return sanitizeParsedDemand(data, text, userId);
   } catch (error) {
     await logDemandParseFallback(
       `OpenAI demand parse failed — deterministic fallback: ${error instanceof Error ? error.message : "unknown"}`,
       userId
     );
-    return sanitizeParsedDemand(parseDemandFallback(rawText), rawText, userId);
+    return sanitizeParsedDemand(parseDemandFallback(text), text, userId);
   }
 }

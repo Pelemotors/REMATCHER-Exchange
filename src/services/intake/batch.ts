@@ -238,6 +238,13 @@ export async function getIntakeBatchForDealer(input: {
       acknowledgedAt: batch.acknowledgedAt?.toISOString() ?? null,
       failureCode: batch.failureCode,
       failureMessage: batch.failureMessage,
+      demandDraft:
+        batch.sourceMetadata &&
+        typeof batch.sourceMetadata === "object" &&
+        !Array.isArray(batch.sourceMetadata) &&
+        "demandDraft" in batch.sourceMetadata
+          ? (batch.sourceMetadata as { demandDraft?: unknown }).demandDraft ?? null
+          : null,
       media: batch.media.map((m) => ({
         id: m.id,
         url: publicUrlForStorageKey(m.storageKey),
@@ -294,7 +301,14 @@ export async function getIntakeBatchForDealer(input: {
           const assigned = batch.candidates.some((c) =>
             c.media.some((row) => row.mediaId === m.id)
           );
-          const d = m.discoveryJson as { groupingResult?: string | null } | null;
+          const d = m.discoveryJson as {
+            groupingResult?: string | null;
+            inputKind?: string | null;
+          } | null;
+          if (d?.inputKind === "CUSTOMER_CONVERSATION" || d?.inputKind === "DOCUMENT") {
+            return false;
+          }
+          if (d?.groupingResult === "skipped_non_vehicle") return false;
           return !assigned || d?.groupingResult === "unresolved";
         })
         .map((m) => ({
