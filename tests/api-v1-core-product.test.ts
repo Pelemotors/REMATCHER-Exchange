@@ -532,3 +532,21 @@ describe("privacy status + consents", () => {
     expect(getConsentState).not.toHaveBeenCalledWith("dealer-a");
   });
 });
+
+describe("notification read alias", () => {
+  it("POST /notifications/{id}/read marks owned notification", async () => {
+    const { POST: v1NotifRead } = await import(
+      "@/app/api/v1/notifications/[id]/read/route"
+    );
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    const res = await v1NotifRead(authReq("/api/v1/notifications/n1/read", "token-a", { method: "POST" }), {
+      params: Promise.resolve({ id: "n1" }),
+    });
+    expect(res.status).toBe(200);
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "n1", userId: "user-a" },
+      })
+    );
+  });
+});
