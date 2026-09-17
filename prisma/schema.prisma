@@ -43,6 +43,28 @@ model User {
   deviceInstallations DeviceInstallation[]
   notificationEventPreferences NotificationEventPreference[]
   purchasedSubscriptions DealerSubscription[] @relation("SubscriptionPurchaser")
+  mobileSessions MobileSession[]
+}
+
+/** Opaque Mobile access+refresh pair. Web NextAuth cookies are unchanged. */
+model MobileSession {
+  id               String    @id @default(cuid())
+  userId           String
+  familyId         String
+  refreshTokenHash String    @unique
+  accessTokenHash  String    @unique
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  installationId   String?
+  platform         String?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
 }
 
 enum UserRole {
