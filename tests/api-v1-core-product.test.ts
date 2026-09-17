@@ -230,6 +230,31 @@ describe("assistant requires verified + privacy", () => {
     expect(json.error.code).toBe("PERMISSION_DEALER_UNVERIFIED");
     expect(runAssistantChatTurn).not.toHaveBeenCalled();
   });
+
+  it("POST confirm maps to chat turn with אשר/בטל", async () => {
+    const { POST: v1AssistantConfirm } = await import(
+      "@/app/api/v1/assistant/confirm/route"
+    );
+    vi.mocked(runAssistantChatTurn).mockResolvedValue({
+      ok: true,
+      body: { message: "בוצע", conversation: {} },
+    });
+    const res = await v1AssistantConfirm(
+      authReq("/api/v1/assistant/confirm", "token-a", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmed: true, action: "confirm_inventory_import" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(runAssistantChatTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dealerId: "dealer-a",
+        userId: "user-a",
+        message: "אשר",
+      })
+    );
+  });
 });
 
 describe("Dealer A ≠ Dealer B isolation", () => {
