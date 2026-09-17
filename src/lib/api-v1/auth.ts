@@ -4,6 +4,7 @@ import {
   resolveMobileAccess,
   type MobilePrincipal,
 } from "@/services/identity/mobile-session";
+import { hasCompletedPrivacyAiV1 } from "@/services/privacy/policy";
 import type { NextResponse } from "next/server";
 
 export type V1DealerAuth = {
@@ -40,7 +41,10 @@ export async function requireV1Dealer(req: Request): Promise<V1AuthResult> {
   return { ok: true, auth: { ctx, principal: resolved.principal } };
 }
 
-/** Inventory / matches / interest — same gates as Web requireVerifiedDealer. */
+/**
+ * Product routes — email + dealer verified + Privacy AI complete.
+ * Mirrors Web dealer layout hard gates (not UI-only).
+ */
 export async function requireV1VerifiedDealer(req: Request): Promise<V1AuthResult> {
   const result = await requireV1Dealer(req);
   if (!result.ok) return result;
@@ -50,6 +54,13 @@ export async function requireV1VerifiedDealer(req: Request): Promise<V1AuthResul
   }
   if (principal.verificationStatus !== "VERIFIED" || !principal.dealerActive) {
     return { ok: false, response: v1Error(ctx, "PERMISSION_DEALER_UNVERIFIED") };
+  }
+  const privacyOk = await hasCompletedPrivacyAiV1({
+    userId: principal.userId,
+    dealerId: principal.dealerId,
+  });
+  if (!privacyOk) {
+    return { ok: false, response: v1Error(ctx, "PERMISSION_PRIVACY_INCOMPLETE") };
   }
   return result;
 }

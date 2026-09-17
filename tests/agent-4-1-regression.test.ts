@@ -182,12 +182,18 @@ describe("Agent 4.1 — OCR fixture path", () => {
 
 describe("Agent 4.1 — live execution path markers", () => {
   it("chat route uses AGENT_VERSION not hardcoded 2.4", () => {
-    const src = readFileSync(
+    const chatRoute = readFileSync(
       join(root, "src/app/api/assistant/chat/route.ts"),
       "utf8"
     );
-    expect(src).toContain("AGENT_VERSION");
-    expect(src).not.toMatch(/agentVersion:\s*[\"']2\.4[\"']/);
+    const turn = readFileSync(
+      join(root, "src/services/assistant/assistant-chat-turn.ts"),
+      "utf8"
+    );
+    expect(chatRoute).toContain("runAssistantChatTurn");
+    expect(turn).toContain("AGENT_VERSION");
+    expect(chatRoute).not.toMatch(/agentVersion:\s*[\"']2\.4[\"']/);
+    expect(turn).not.toMatch(/agentVersion:\s*[\"']2\.4[\"']/);
   });
 
   it("agent loop imports deadline and intake tools", () => {

@@ -78,10 +78,11 @@ function mapBuyerMatch(
 
 export async function listBuyerMatches(
   dealerId: string,
-  options?: { demandId?: string; limit?: number }
+  options?: { demandId?: string; limit?: number; skip?: number }
 ): Promise<BuyerMatchListItem[]> {
   const demandId = options?.demandId?.trim() || undefined;
   const limit = options?.limit ?? (demandId ? 40 : 12);
+  const skip = Math.max(0, options?.skip ?? 0);
 
   const matches = await prisma.candidateMatch.findMany({
     where: {
@@ -93,6 +94,7 @@ export async function listBuyerMatches(
     },
     include: buyerMatchInclude(dealerId),
     orderBy: { score: "desc" },
+    skip,
     take: limit,
   });
 

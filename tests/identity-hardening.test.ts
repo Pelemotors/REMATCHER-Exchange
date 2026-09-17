@@ -80,7 +80,7 @@ describe("identity hardening sources", () => {
     expect(src).toContain("requireEntitlement");
     expect(src).toContain("assertEntitled");
     expect(read("src/app/api/assistant/chat/route.ts")).toContain(
-      "requireEntitlement:false"
+      "requireEntitlement: false"
     );
   });
 
