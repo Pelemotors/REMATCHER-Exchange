@@ -26,6 +26,9 @@ export async function GET(req: Request) {
       body: n.body,
       link: n.link,
       createdAt: n.createdAt.toISOString(),
+      readAt: n.readAt ? n.readAt.toISOString() : null,
     })),
+    unreadNotificationCount: snapshot.notifications.filter((n) => !n.readAt)
+      .length,
   });
 }

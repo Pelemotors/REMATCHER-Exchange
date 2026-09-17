@@ -35,6 +35,7 @@ export interface WorkCenterSnapshot {
     body: string | null;
     link: string | null;
     createdAt: Date;
+    readAt: Date | null;
   }>;
 }
 
@@ -78,6 +79,7 @@ export async function getWorkCenterSnapshot(
         body: true,
         link: true,
         createdAt: true,
+        readAt: true,
       },
     }),
   ]);
