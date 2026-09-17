@@ -32,6 +32,7 @@ npx prisma migrate deploy
 npx prisma generate
 
 echo "--- next build ---"
+unset NEXT_DIST_DIR
 NODE_ENV=production npx next build
 
 echo "--- update systemd GIT_COMMIT ---"
