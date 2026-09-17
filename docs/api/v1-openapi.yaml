@@ -1,0 +1,31 @@
+openapi: 3.0.3
+info:
+  title: REMATCHER Exchange Mobile API
+  version: v1
+  description: >
+    Additive /api/v1 surface. Web /api/* is unchanged.
+    Identity is never taken from client dealerId.
+servers:
+  - url: https://field-test-exchange.rematcher.co.il
+    description: Field Test — only sandbox for Mobile
+  - url: https://exchange.rematcher.co.il
+    description: Production (not for development clients)
+paths:
+  /api/v1/health:
+    get:
+      security: []
+      responses:
+        "200":
+          description: Public subset
+  /api/v1/me:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "401":
+          description: AUTH_UNAUTHENTICATED until B03
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

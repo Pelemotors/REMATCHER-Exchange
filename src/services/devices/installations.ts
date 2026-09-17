@@ -75,19 +75,24 @@ export async function registerOrUpdateInstallation(
 }
 
 export async function revokeInstallation(params: {
+  /** Required — never revoke another user's device by installationId alone. */
+  userId: string;
   installationId?: string;
-  userId?: string;
   pushToken?: string;
 }) {
   if (params.installationId) {
     const row = await prisma.deviceInstallation.updateMany({
-      where: { installationId: params.installationId, revokedAt: null },
+      where: {
+        installationId: params.installationId,
+        userId: params.userId,
+        revokedAt: null,
+      },
       data: { revokedAt: new Date(), pushToken: null },
     });
     return { revoked: row.count };
   }
 
-  if (params.pushToken && params.userId) {
+  if (params.pushToken) {
     const row = await prisma.deviceInstallation.updateMany({
       where: {
         userId: params.userId,
@@ -99,13 +104,9 @@ export async function revokeInstallation(params: {
     return { revoked: row.count };
   }
 
-  if (params.userId) {
-    const row = await prisma.deviceInstallation.updateMany({
-      where: { userId: params.userId, revokedAt: null },
-      data: { revokedAt: new Date(), pushToken: null },
-    });
-    return { revoked: row.count };
-  }
-
-  return { revoked: 0 };
+  const row = await prisma.deviceInstallation.updateMany({
+    where: { userId: params.userId, revokedAt: null },
+    data: { revokedAt: new Date(), pushToken: null },
+  });
+  return { revoked: row.count };
 }

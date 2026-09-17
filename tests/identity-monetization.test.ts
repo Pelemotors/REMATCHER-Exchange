@@ -904,8 +904,31 @@ describe("Devices", () => {
     expect(rotated.pushToken).toBe("tok-b");
     expect(rotated.id).toBe(first.id);
 
-    const revoked = await revokeInstallation({ installationId: "inst-1" });
+    const revoked = await revokeInstallation({
+      installationId: "inst-1",
+      userId: "u1",
+    });
     expect(revoked.revoked).toBe(1);
+  });
+
+  it("does not revoke another user's installationId (IDOR)", async () => {
+    await registerOrUpdateInstallation({
+      installationId: "inst-a",
+      platform: "IOS",
+      userId: "user-a",
+      dealerId: "dealer-a",
+      pushToken: "tok-a",
+    });
+    const stolen = await revokeInstallation({
+      installationId: "inst-a",
+      userId: "user-b",
+    });
+    expect(stolen.revoked).toBe(0);
+    const owner = await revokeInstallation({
+      installationId: "inst-a",
+      userId: "user-a",
+    });
+    expect(owner.revoked).toBe(1);
   });
 });
 

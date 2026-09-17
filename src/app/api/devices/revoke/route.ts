@@ -20,12 +20,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
+  const userId = authz.session.user.id;
   const result = await revokeInstallation({
-    installationId: parsed.data.installationId,
-    pushToken: parsed.data.pushToken,
-    userId: parsed.data.all || !parsed.data.installationId
-      ? authz.session.user.id
-      : undefined,
+    userId,
+    installationId: parsed.data.all ? undefined : parsed.data.installationId,
+    pushToken: parsed.data.all ? undefined : parsed.data.pushToken,
   });
 
   return NextResponse.json({ ok: true, ...result });
