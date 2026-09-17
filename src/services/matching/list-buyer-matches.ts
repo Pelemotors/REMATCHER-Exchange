@@ -17,6 +17,65 @@ export interface BuyerMatchListItem {
   revealId: string | null;
 }
 
+const buyerMatchInclude = (dealerId: string) => ({
+  vehicle: {
+    include: {
+      media: {
+        where: { isPrimary: true },
+        take: 1,
+        select: { storageKey: true },
+      },
+    },
+  },
+  buyerInterests: { where: { dealerId } },
+  sellerOpportunities: {
+    include: {
+      sellerInterest: {
+        include: {
+          mutualInterest: {
+            include: { reveal: { select: { id: true } } },
+          },
+        },
+      },
+    },
+    take: 1,
+  },
+});
+
+function mapBuyerMatch(
+  m: {
+    id: string;
+    demandId: string;
+    status: string;
+    vehicle: Parameters<typeof toBuyerMatchView>[0] & {
+      media: Array<{ storageKey: string }>;
+    };
+    buyerInterests: Array<{ status: string }>;
+    sellerOpportunities: Array<{
+      sellerInterest: {
+        mutualInterest: { reveal: { id: string } | null } | null;
+      } | null;
+    }>;
+  }
+): BuyerMatchListItem {
+  const primaryKey = m.vehicle.media[0]?.storageKey ?? null;
+  return {
+    id: m.id,
+    demandId: m.demandId,
+    status: m.status,
+    vehicle: toBuyerMatchView({
+      ...m.vehicle,
+      imageUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,
+    }),
+    interest: m.buyerInterests[0]
+      ? { status: m.buyerInterests[0].status }
+      : null,
+    revealId:
+      m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
+      null,
+  };
+}
+
 export async function listBuyerMatches(
   dealerId: string,
   options?: { demandId?: string; limit?: number }
@@ -32,50 +91,26 @@ export async function listBuyerMatches(
       },
       ...BUYER_VISIBLE_MATCH_WHERE,
     },
-    include: {
-      vehicle: {
-        include: {
-          media: {
-            where: { isPrimary: true },
-            take: 1,
-            select: { storageKey: true },
-          },
-        },
-      },
-      buyerInterests: { where: { dealerId } },
-      sellerOpportunities: {
-        include: {
-          sellerInterest: {
-            include: {
-              mutualInterest: {
-                include: { reveal: { select: { id: true } } },
-              },
-            },
-          },
-        },
-        take: 1,
-      },
-    },
+    include: buyerMatchInclude(dealerId),
     orderBy: { score: "desc" },
     take: limit,
   });
 
-  return matches.map((m) => {
-    const primaryKey = m.vehicle.media[0]?.storageKey ?? null;
-    return {
-      id: m.id,
-      demandId: m.demandId,
-      status: m.status,
-      vehicle: toBuyerMatchView({
-        ...m.vehicle,
-        imageUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,
-      }),
-      interest: m.buyerInterests[0]
-        ? { status: m.buyerInterests[0].status }
-        : null,
-      revealId:
-        m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
-        null,
-    };
+  return matches.map(mapBuyerMatch);
+}
+
+export async function getBuyerMatchForDealer(
+  dealerId: string,
+  matchId: string
+): Promise<BuyerMatchListItem | null> {
+  const match = await prisma.candidateMatch.findFirst({
+    where: {
+      id: matchId,
+      demand: { dealerId },
+      ...BUYER_VISIBLE_MATCH_WHERE,
+    },
+    include: buyerMatchInclude(dealerId),
   });
+  if (!match) return null;
+  return mapBuyerMatch(match);
 }

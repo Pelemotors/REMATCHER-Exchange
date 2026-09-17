@@ -17,13 +17,82 @@ paths:
       responses:
         "200":
           description: Public subset
+  /api/v1/auth/login:
+    post:
+      security: []
+      responses:
+        "200":
+          description: access + refresh + me
+        "401":
+          description: AUTH_UNAUTHENTICATED
+        "403":
+          description: PERMISSION_ACCOUNT_SUSPENDED / DEALER_DISABLED
+  /api/v1/auth/refresh:
+    post:
+      security: []
+      responses:
+        "200":
+          description: rotated pair
+        "401":
+          description: AUTH_REFRESH_EXPIRED / AUTH_TOKEN_REVOKED
+  /api/v1/auth/logout:
+    post:
+      security: []
+      responses:
+        "200":
+          description: family revoked
   /api/v1/me:
     get:
       security:
         - bearerAuth: []
       responses:
+        "200":
+          description: server-derived identity
         "401":
-          description: AUTH_UNAUTHENTICATED until B03
+          description: AUTH_UNAUTHENTICATED
+  /api/v1/home:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Work center snapshot
+  /api/v1/inventory:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dealer-owned inventory
+  /api/v1/matches:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Buyer privacy DTO list
+  /api/v1/matches/{id}:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Buyer privacy DTO
+        "404":
+          description: RESOURCE_NOT_FOUND
+  /api/v1/matches/{id}/interest:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: recordBuyerInterest result
+        "402":
+          description: REVEAL_ALLOWANCE_EXHAUSTED
+        "404":
+          description: RESOURCE_NOT_FOUND
+        "409":
+          description: MATCH_VEHICLE_UNAVAILABLE
 components:
   securitySchemes:
     bearerAuth:
