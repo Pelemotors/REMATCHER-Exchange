@@ -9,7 +9,9 @@ Mobile clients **must not** use Production (`https://exchange.rematcher.co.il`) 
 | Postgres | Docker `:5435` | Docker `:5436` |
 | Media | `/srv/gal/rematcher-exchange/field-test/media` | `/srv/gal/rematcher-exchange/media` |
 
-`/api/v1` is additive. Until B03, `GET /api/v1/me` returns `AUTH_UNAUTHENTICATED`. Preview iOS uses **mock repositories**, not this host.
+`/api/v1` is additive. Mobile Auth is opaque access (~15m) + rotatable refresh (~30d). Clients talk only to Field Test during Milestone 1. Production is not the sandbox.
+
+Build isolation: Field Test must set `NEXT_DIST_DIR=.next-field-test` so `next start` does not share Production `.next` chunks.
 
 Cron: self-host must use `Authorization: Bearer $CRON_SECRET`. A bare `x-vercel-cron` header is ignored unless `VERCEL_ENV` is set by the Vercel platform.
 
