@@ -35,6 +35,7 @@ const patchSchema = z
         retailPrice: z.number().int().min(0).nullable().optional(),
         b2bPrice: z.number().int().min(0).nullable().optional(),
         region: z.string().nullable().optional(),
+        conditionNotes: z.string().max(2000).nullable().optional(),
       })
       .strict()
       .optional(),

@@ -26,6 +26,7 @@ export type VehicleUpdateFields = {
   fuelType?: string | null;
   engineDisplacementCc?: number | null;
   features?: string[];
+  conditionNotes?: string | null;
   fieldProvenance?: Record<string, unknown>;
   status?: "ARCHIVED";
   rawInput?: string | null;
@@ -190,6 +191,7 @@ export async function updateVehicleForDealer(input: {
   if ("retailPrice" in f) data.retailPrice = f.retailPrice;
   if ("b2bPrice" in f) data.b2bPrice = f.b2bPrice;
   if ("region" in f) data.region = f.region;
+  if ("conditionNotes" in f) data.conditionNotes = f.conditionNotes;
   if ("rawInput" in f) data.rawInput = f.rawInput;
 
   if (f.fieldProvenance || identityRelevant || "ownershipType" in f || "features" in f) {
