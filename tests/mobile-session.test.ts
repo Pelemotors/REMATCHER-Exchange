@@ -25,6 +25,12 @@ import {
   MOBILE_ACCESS_TTL_MS,
 } from "@/services/identity/mobile-session";
 
+const userFindUnique = vi.mocked(prisma.user.findUnique);
+const sessionCreate = vi.mocked(prisma.mobileSession.create);
+const sessionFindUnique = vi.mocked(prisma.mobileSession.findUnique);
+const sessionUpdate = vi.mocked(prisma.mobileSession.update);
+const sessionUpdateMany = vi.mocked(prisma.mobileSession.updateMany);
+
 const dealer = {
   id: "dealer-a",
   businessName: "סוחר א",
@@ -63,8 +69,8 @@ describe("mobile session hashing", () => {
 
 describe("authenticateMobilePassword", () => {
   it("rejects a suspended account", async () => {
-    prisma.user.findUnique.mockResolvedValue(
-      activeUser({ accountStatus: "SUSPENDED" })
+    userFindUnique.mockResolvedValue(
+      activeUser({ accountStatus: "SUSPENDED" }) as never
     );
     const result = await authenticateMobilePassword({
       email: "a@example.com",
@@ -74,7 +80,7 @@ describe("authenticateMobilePassword", () => {
   });
 
   it("rejects a disabled dealer", async () => {
-    prisma.user.findUnique.mockResolvedValue(
+    userFindUnique.mockResolvedValue(
       activeUser({
         memberships: [
           {
@@ -83,7 +89,7 @@ describe("authenticateMobilePassword", () => {
             dealer: { ...dealer, isActive: false, verificationStatus: "DISABLED" },
           },
         ],
-      })
+      }) as never
     );
     const result = await authenticateMobilePassword({
       email: "a@example.com",
@@ -93,7 +99,7 @@ describe("authenticateMobilePassword", () => {
   });
 
   it("does not leak whether the email exists", async () => {
-    prisma.user.findUnique.mockResolvedValue(null);
+    userFindUnique.mockResolvedValue(null);
     const result = await authenticateMobilePassword({
       email: "missing@example.com",
       password: "secret-pass",
@@ -104,28 +110,28 @@ describe("authenticateMobilePassword", () => {
 
 describe("issue / resolve / rotate / revoke", () => {
   it("issues hashed tokens and resolves live membership", async () => {
-    prisma.mobileSession.create.mockImplementation(async ({ data }) => ({
+    sessionCreate.mockImplementation((async ({ data }: { data: Record<string, unknown> }) => ({
       id: "sess-1",
       ...data,
-    }));
-    prisma.user.findUnique.mockResolvedValue(activeUser());
+    })) as never);
+    userFindUnique.mockResolvedValue(activeUser() as never);
     const issued = await issueMobileSession({ userId: "user-a" });
     expect(issued.accessToken).toBeTruthy();
     expect(issued.refreshToken).toBeTruthy();
     expect(issued.expiresIn).toBe(Math.floor(MOBILE_ACCESS_TTL_MS / 1000));
-    const createData = prisma.mobileSession.create.mock.calls[0][0].data;
+    const createData = sessionCreate.mock.calls[0][0].data;
     expect(createData.accessTokenHash).toBe(hashMobileToken(issued.accessToken));
     expect(createData.refreshTokenHash).toBe(hashMobileToken(issued.refreshToken));
     expect(JSON.stringify(createData)).not.toContain(issued.accessToken);
 
-    prisma.mobileSession.findUnique.mockResolvedValue({
+    sessionFindUnique.mockResolvedValue({
       id: "sess-1",
       userId: "user-a",
       familyId: issued.familyId,
       revokedAt: null,
       accessExpiresAt: new Date(Date.now() + 60_000),
-    });
-    prisma.mobileSession.update.mockResolvedValue({});
+    } as never);
+    sessionUpdate.mockResolvedValue({} as never);
     const resolved = await resolveMobileAccess(issued.accessToken);
     expect(resolved.ok).toBe(true);
     if (resolved.ok) {
@@ -135,19 +141,19 @@ describe("issue / resolve / rotate / revoke", () => {
   });
 
   it("rejects expired access tokens", async () => {
-    prisma.mobileSession.findUnique.mockResolvedValue({
+    sessionFindUnique.mockResolvedValue({
       id: "sess-1",
       userId: "user-a",
       revokedAt: null,
       accessExpiresAt: new Date(Date.now() - 1000),
-    });
+    } as never);
     const result = await resolveMobileAccess("expired-token-value-xxxxx");
     expect(result).toEqual({ ok: false, code: "AUTH_TOKEN_EXPIRED" });
   });
 
   it("rotates refresh and revokes the family on reuse", async () => {
     const familyId = "fam-1";
-    prisma.mobileSession.findUnique.mockResolvedValueOnce({
+    sessionFindUnique.mockResolvedValueOnce({
       id: "sess-old",
       userId: "user-a",
       familyId,
@@ -155,38 +161,38 @@ describe("issue / resolve / rotate / revoke", () => {
       refreshExpiresAt: new Date(Date.now() + 86_400_000),
       installationId: null,
       platform: "ios",
-    });
-    prisma.user.findUnique.mockResolvedValue(activeUser());
-    prisma.mobileSession.update.mockResolvedValue({});
-    prisma.mobileSession.create.mockResolvedValue({ id: "sess-new" });
+    } as never);
+    userFindUnique.mockResolvedValue(activeUser() as never);
+    sessionUpdate.mockResolvedValue({} as never);
+    sessionCreate.mockResolvedValue({ id: "sess-new" } as never);
 
     const rotated = await refreshMobileSession("refresh-token-value-xxxxx");
     expect(rotated.ok).toBe(true);
 
-    prisma.mobileSession.findUnique.mockResolvedValueOnce({
+    sessionFindUnique.mockResolvedValueOnce({
       id: "sess-old",
       userId: "user-a",
       familyId,
       revokedAt: new Date(),
       refreshExpiresAt: new Date(Date.now() + 86_400_000),
-    });
-    prisma.mobileSession.updateMany.mockResolvedValue({ count: 1 });
+    } as never);
+    sessionUpdateMany.mockResolvedValue({ count: 1 });
     const reuse = await refreshMobileSession("refresh-token-value-xxxxx");
     expect(reuse).toEqual({ ok: false, code: "AUTH_TOKEN_REVOKED" });
-    expect(prisma.mobileSession.updateMany).toHaveBeenCalledWith({
+    expect(sessionUpdateMany).toHaveBeenCalledWith({
       where: { familyId, revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
   });
 
   it("logout revokes the whole family", async () => {
-    prisma.mobileSession.findUnique.mockResolvedValue({
+    sessionFindUnique.mockResolvedValue({
       id: "sess-1",
       familyId: "fam-9",
-    });
-    prisma.mobileSession.updateMany.mockResolvedValue({ count: 2 });
+    } as never);
+    sessionUpdateMany.mockResolvedValue({ count: 2 });
     await revokeMobileRefresh("refresh-token-value-xxxxx");
-    expect(prisma.mobileSession.updateMany).toHaveBeenCalledWith({
+    expect(sessionUpdateMany).toHaveBeenCalledWith({
       where: { familyId: "fam-9", revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
