@@ -94,3 +94,9 @@ Do not resolve product/legal questions inside a coding PR.
 ### D-T7 — Database hosting change
 - **Question:** Move Postgres off VPS before Mobile?
 - **Recommendation:** **no**. Not a Mobile prerequisite.
+
+### D-T8 — Milestone 1 backend (CLOSED)
+- **Decision:** Canonical Mobile backend for Milestone 1 is Production `https://exchange.rematcher.co.il`.
+- **Not used for M1:** `https://field-test-exchange.rematcher.co.il` and any synthetic seed dataset.
+- **Constraints:** isolated automated tests; no Production seed/reset; additive `MobileSession` migrate only after backup + rollback SQL; real iPhone login after security gates.
+

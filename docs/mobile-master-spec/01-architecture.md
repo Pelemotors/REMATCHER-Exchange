@@ -152,12 +152,17 @@ Not shared:
 
 | Env | API host | DB | Used by Mobile? |
 |---|---|---|---|
-| Development | local Exchange or Field Test | local/FT | yes (simulators) |
-| Field Test / Staging | `https://field-test-exchange.rematcher.co.il` | Docker `:5435` | **yes — default integration** |
-| Production | `https://exchange.rematcher.co.il` | Docker `:5436` | **TestFlight/Play production builds only** |
+| Isolated tests | in-process mocks / local test DB | never Production | unit/integration only |
+| Production | `https://exchange.rematcher.co.il` | Docker `:5436` | **Milestone 1 Debug + real iPhone** |
 
-Mobile **never** uses Production as a developer sandbox.  
-App Store / TestFlight production flavor must not silently fall back to Dev.
+**Milestone 1 canonical backend is Production** (`https://exchange.rematcher.co.il`). Do not stand up or require `field-test-exchange.rematcher.co.il` for M1.
+
+Production-as-real-use is not a license for unsafe development:
+
+- Automated tests stay isolated. They must not create, delete, or mutate Production data.
+- No seed/reset/destructive suites against Production.
+- `/api/v1` and Mobile Auth ship only after security gates, backup, rollback proof, and Web regression.
+- Client Debug scheme default is Production. It must not silently fall back to a fake dataset.
 
 Configuration strategy: compile-time flavors (iOS xcconfig / Android productFlavors). **No secrets in the binary.** Only public base URL, bundle IDs, associated domains, log level.
 

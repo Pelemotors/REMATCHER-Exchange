@@ -24,7 +24,7 @@ Gate 0 (this spec approved)
                                               │
                                               └── M10 (token plumbing; send waits B14/B15)
 
-Gate 1 = B01–B05 + B04 IDOR + auth tests A≠B on Field Test
+Gate 1 = B01–B05 + B04 IDOR + isolated auth tests A≠B / revoke / suspended
 
 P01 (Login) ── P02 (gates)
     └── P03 Home ──┬── P04 Capture
@@ -44,7 +44,7 @@ P01 (Login) ── P02 (gates)
 | API door | B01, B05, B18 | Gate 0 |
 | Auth | B02, B03 | B01 |
 | Hardening | B04 | can start IDOR immediately |
-| Native shells | M01–M06, M08 | Gate 0; **mocks only** until Gate 1 |
+| Native shells | M01–M06, M08 | Gate 0; URLSession against Production only after Gate 1 |
 | Domain v1 | B06–B11, B19 | B03 |
 | Push | B13–B16, M10 | B03; send credentials |
 | Deletion | B17 | legal POLICY |
@@ -52,7 +52,7 @@ P01 (Login) ── P02 (gates)
 
 ## Cannot parallel
 
-- M07 live Field Test login before B03.
+- M07 live Production login after Gate 1 (no seed users; real dealer).
 - P04 live uploads before B12 Bearer media.
 - Store push proof before B14/B15 credentials.
 - Gate 6 before Gate 5 device matrix.
@@ -64,8 +64,8 @@ P01 (Login) ── P02 (gates)
 | Gate | Exit |
 |---|---|
 | **0** | This spec approved. No code. |
-| **1** | Backend P0: v1 auth, envelope, A≠B, revoke, suspended, device IDOR fixed, Field Test only |
-| **2** | iOS+Android build/run against mocks or Field Test login+me+tabs |
+| **1** | Backend P0: v1 auth, envelope, A≠B, revoke, suspended, device IDOR fixed; isolated tests; Production migrate after backup |
+| **2** | iOS build/run against live Production login+me+tabs (Android UI not required for M1) |
 | **3** | Core parity: Home, Capture, Inventory, Demand, Matches, Opp, Val, Reveal |
 | **4** | Push, deep links real AASA/assetlinks, media, Agent, account lifecycle (deletion per policy) |
 | **5** | Real devices, RTL, security retest, Web regression |

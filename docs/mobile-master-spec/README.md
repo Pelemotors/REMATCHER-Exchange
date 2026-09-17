@@ -1,7 +1,7 @@
 # REMATCHER Exchange Mobile — Master Spec
 
 **Status:** Specification only. Not an implementation. Not a repository.  
-**Gate:** Gate 0 — Architecture Approved — **pending human approval**.  
+**Gate 0 approved.** Milestone 1 iPhone backend is Production `https://exchange.rematcher.co.il`.  
 **Production baseline:** `6e1eda818b0daf567785953aa656711569f62179`  
 **Backend:** `Pelemotors/REMATCHER-Exchange`  
 **Canonical product:** https://exchange.rematcher.co.il

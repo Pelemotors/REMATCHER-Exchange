@@ -124,7 +124,7 @@ Admin APIs remain on `/api/admin` with the **admin** cookie. Dealer v1 must neve
 - [ ] Admin boundary
 - [ ] Rate limits on login/signup/forgot/intake/agent
 - [ ] No OpenAI keys / AUTH_SECRET / DATABASE_URL in Mobile binaries
-- [ ] Field Test ≠ Production base URL in Dev flavor
+- [ ] Milestone 1 Debug `API_BASE_URL` is `https://exchange.rematcher.co.il`
 
 ---
 

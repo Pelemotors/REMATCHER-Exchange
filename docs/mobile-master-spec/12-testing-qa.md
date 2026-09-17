@@ -7,7 +7,7 @@
 | Layer | What |
 |---|---|
 | Unit | matching, privacy-views, error mapper, token hash |
-| Integration | Prisma against Field Test DB |
+| Integration | Prisma mocked or dedicated isolated DB — **never Production** |
 | Authorization | matrix in 04 — **real DB, two dealers** |
 | Contract | OpenAPI snapshot vs route responses; golden JSON for match DTO (no seller fields) |
 

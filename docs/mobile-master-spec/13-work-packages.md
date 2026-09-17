@@ -1,6 +1,6 @@
 # 13 — Work Packages
 
-All packages are **reviewable, reversible, additive**. None may deploy Production without the Exchange deploy policy (GitHub `main` or the current locked deploy branch — follow `docs/DEPLOYMENT_POLICY.md` / Exchange production script). Field Test first.
+All packages are **reviewable, reversible, additive**. None may deploy Production without the Exchange production script, backup, rollback proof, and `npm test`. Isolated tests first; Production is the Milestone 1 iPhone backend after gates — not a destructive sandbox.
 
 Forbidden globally until a package lists it: Product screen redesign, Capacitor work, RN, OpenAI from clients, Production-as-sandbox.
 
@@ -10,7 +10,7 @@ Forbidden globally until a package lists it: Product screen redesign, Capacitor 
 
 **Rollback:** revert the PR; v1 unused by Web; feature-flag route mount if needed.  
 **Regression:** `npm test` + production build on Exchange packages that touch `src/`.  
-**Evidence:** PR description + Field Test curl/screenshots as listed.
+**Evidence:** PR description + isolated test output; Production smoke is public/unauthenticated only until real iPhone use.
 
 ---
 
@@ -31,7 +31,7 @@ Forbidden globally until a package lists it: Product screen redesign, Capacitor 
 - **Allowed:** `prisma/schema.prisma`, migration, `src/services/identity/mobile-session.ts`.
 - **Forbidden:** enabling migration on Production without backup + approval; Web NextAuth rewrite.
 - **Deps:** B01.
-- **AC:** unit tests for hash/rotate/reuse-detection; Field Test migrate only.
+- **AC:** unit tests for hash/rotate/reuse-detection; Production migrate only after backup + rollback SQL review.
 - **Security:** hashes only at rest.
 
 ### B03 — Auth endpoints
@@ -39,7 +39,7 @@ Forbidden globally until a package lists it: Product screen redesign, Capacitor 
 - **Allowed:** `src/app/api/v1/auth/**`, `src/app/api/v1/me/**`.
 - **Forbidden:** 30-day non-revocable access; cookie session as Mobile auth.
 - **Deps:** B02.
-- **AC:** Field Test login returns tokens; suspended rejected; reset revokes refresh.
+- **AC:** isolated login/refresh/logout tests pass; suspended rejected; Production login is real-user only (no seed accounts).
 - **Tests:** auth isolation + rate limit.
 
 ### B04 — Authorization hardening
@@ -120,7 +120,7 @@ Forbidden globally until a package lists it: Product screen redesign, Capacitor 
 - **Forbidden:** guessing legal retention.
 
 ### B18 — Environment hardening
-- **Scope:** CRON_SECRET required; strip/ignore `x-vercel-cron` on VPS; Field Test documented as Mobile sandbox; no Production client config in Dev.
+- **Scope:** CRON_SECRET required; strip/ignore `x-vercel-cron` on VPS; Milestone 1 Debug client uses Production URL; automated tests stay isolated.
 - **Deps:** none (can parallel).
 - **AC:** lifecycle unauthorized without secret.
 
@@ -152,13 +152,13 @@ Color/type/spacing from tokens.json.
 URLSession / OkHttp; envelope; requestId. Against **mocks**.
 
 ### M07 — Auth/session clients
-Keychain/Keystore. Against Field Test **only after Gate 1**.
+Keychain/Keystore. Against Production **only after Gate 1**. No destructive automated logins.
 
 ### M08 — Navigation shells
 Five tabs + gates.
 
 ### M09 — Deep-link foundations
-Router + allowlist; cannot hit Production host from Dev.
+Router + allowlist; Milestone 1 Debug uses Production API.
 
 ### M10 — Push foundations
 Permission + token plumbing; send depends on B14/B15.
