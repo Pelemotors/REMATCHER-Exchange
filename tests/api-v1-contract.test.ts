@@ -74,7 +74,7 @@ describe("GET /api/v1/health", () => {
 });
 
 describe("GET /api/v1/me", () => {
-  it("is unauthenticated until B03 and uses the v1 envelope", async () => {
+  it("uses the v1 envelope when unauthenticated", async () => {
     const res = await v1Me(
       new Request("http://local/api/v1/me", {
         headers: { "x-request-id": "req_me_fixture" },

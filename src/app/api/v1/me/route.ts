@@ -1,14 +1,17 @@
-import { resolveV1RequestContext } from "@/lib/api-v1/request-context";
-import { v1Error } from "@/lib/api-v1/respond";
+import { requireV1Dealer } from "@/lib/api-v1/auth";
+import { mePayload } from "@/lib/api-v1/me-payload";
+import { v1Json } from "@/lib/api-v1/respond";
+import { hasCompletedPrivacyAiV1 } from "@/services/privacy/policy";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Mobile identity door. Bearer session lands in B03.
- * Until then this route is unauthenticated → AUTH_UNAUTHENTICATED envelope.
- * Web /api/account/context is unchanged.
- */
 export async function GET(req: Request) {
-  const ctx = resolveV1RequestContext(req);
-  return v1Error(ctx, "AUTH_UNAUTHENTICATED");
+  const auth = await requireV1Dealer(req);
+  if (!auth.ok) return auth.response;
+  const { ctx, principal } = auth.auth;
+  const privacyAiComplete = await hasCompletedPrivacyAiV1({
+    userId: principal.userId,
+    dealerId: principal.dealerId,
+  });
+  return v1Json(ctx, mePayload(principal, { privacyAiComplete }));
 }
