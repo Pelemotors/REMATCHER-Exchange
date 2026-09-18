@@ -67,6 +67,12 @@ export async function POST(req: Request) {
     return v1Error(ctx, "RESOURCE_NOT_FOUND");
   }
 
+  const suppliedClientTurnId =
+    typeof body.clientTurnId === "string" && body.clientTurnId.trim()
+      ? body.clientTurnId.trim()
+      : "";
+  const clientTurnId = suppliedClientTurnId || randomUUID();
+
   const gate = await assertPendingActionOnThread({
     principal: {
       dealerId: principal.dealerId,
@@ -76,7 +82,9 @@ export async function POST(req: Request) {
     actionId: conversationActionId,
     threadPendingActionId,
   });
-  if (!gate.ok) {
+  // Pending may already be cleared after a succeeded confirm whose response
+  // was lost client-side. Allow the turn claim to replay that result.
+  if (!gate.ok && !suppliedClientTurnId) {
     return v1Error(
       ctx,
       "VALIDATION_INVALID_REQUEST",
@@ -87,11 +95,6 @@ export async function POST(req: Request) {
           : "no pending confirmation on this thread"
     );
   }
-
-  const clientTurnId =
-    typeof body.clientTurnId === "string" && body.clientTurnId.trim()
-      ? body.clientTurnId.trim()
-      : randomUUID();
 
   const message = body.confirmed ? "אשר" : "בטל";
 

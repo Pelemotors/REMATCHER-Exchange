@@ -181,42 +181,7 @@ export async function runAssistantChatTurn(params: {
     params.clientConversation
   );
 
-  // Exact ConversationAction binding (Mobile confirm path).
   const expectedActionId = params.conversationActionId?.trim();
-  if (expectedActionId) {
-    const pendingId = active?.pendingConfirmation?.conversationActionId;
-    if (!pendingId || pendingId !== expectedActionId) {
-      return {
-        ok: false,
-        error: "action_mismatch",
-        message:
-          "stale or mismatched conversationActionId — no execution",
-      };
-    }
-    const row = await prisma.conversationAction.findUnique({
-      where: { id: expectedActionId },
-    });
-    if (!row || row.threadId !== threadId) {
-      return {
-        ok: false,
-        error: "action_mismatch",
-        message:
-          "conversationActionId not pending on this thread — no execution",
-      };
-    }
-    const thread = await prisma.conversationThread.findUnique({
-      where: { id: threadId },
-      select: { dealerId: true },
-    });
-    if (!thread || thread.dealerId !== dealerId) {
-      return {
-        ok: false,
-        error: "action_mismatch",
-        message: "conversationAction authority mismatch — no execution",
-      };
-    }
-  }
-
   const clientTurnId = normalizeClientTurnId(params.clientTurnId);
   const turnKey =
     clientTurnId ??
@@ -256,6 +221,60 @@ export async function runAssistantChatTurn(params: {
       return { ok: true, body, replayed: true };
     }
     ownedTurnId = claim.turn.id;
+  }
+
+  // Exact ConversationAction binding — only after turn claim, so a completed
+  // confirm can replay even when pending was already cleared.
+  if (expectedActionId) {
+    const pendingId = active?.pendingConfirmation?.conversationActionId;
+    if (!pendingId || pendingId !== expectedActionId) {
+      if (ownedTurnId) {
+        await failConversationTurn({
+          turnId: ownedTurnId,
+          reason: "action_mismatch",
+        }).catch(() => undefined);
+      }
+      return {
+        ok: false,
+        error: "action_mismatch",
+        message:
+          "stale or mismatched conversationActionId — no execution",
+      };
+    }
+    const row = await prisma.conversationAction.findUnique({
+      where: { id: expectedActionId },
+    });
+    if (!row || row.threadId !== threadId) {
+      if (ownedTurnId) {
+        await failConversationTurn({
+          turnId: ownedTurnId,
+          reason: "action_mismatch",
+        }).catch(() => undefined);
+      }
+      return {
+        ok: false,
+        error: "action_mismatch",
+        message:
+          "conversationActionId not pending on this thread — no execution",
+      };
+    }
+    const thread = await prisma.conversationThread.findUnique({
+      where: { id: threadId },
+      select: { dealerId: true },
+    });
+    if (!thread || thread.dealerId !== dealerId) {
+      if (ownedTurnId) {
+        await failConversationTurn({
+          turnId: ownedTurnId,
+          reason: "action_mismatch",
+        }).catch(() => undefined);
+      }
+      return {
+        ok: false,
+        error: "action_mismatch",
+        message: "conversationAction authority mismatch — no execution",
+      };
+    }
   }
 
   // Confirm / cancel: atomic PENDING → EXECUTING before any executor.
