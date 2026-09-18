@@ -86,6 +86,16 @@ export async function applyCandidateIntent(input: {
     };
   }
 
+  // EXTERNAL is investigation-only: record intent, do not create inventory/workspace vehicle.
+  if (input.intent === "EXTERNAL") {
+    return {
+      ok: true as const,
+      vehicleId: null,
+      intent: input.intent,
+      deferredCommit: true as const,
+    };
+  }
+
   const committed = await commitOneCandidate(input.dealerId, candidate.id, {
     dealerRelationship: INTENT_TO_RELATIONSHIP[input.intent],
   });

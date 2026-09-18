@@ -200,11 +200,29 @@ export async function createVehicleForDealer(input: {
     };
   }
 
-  if (!requireIdentity && !fields.make && !fields.model && !fields.year) {
+  const plateFromProvenance = (() => {
+    const prov = fields.fieldProvenance;
+    if (!prov || typeof prov !== "object" || Array.isArray(prov)) return null;
+    const raw = (prov as Record<string, unknown>).licensePlate;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw) {
+      const v = (raw as { value?: unknown }).value;
+      return typeof v === "string" && v.trim() ? v.trim() : null;
+    }
+    return null;
+  })();
+
+  if (
+    !requireIdentity &&
+    !fields.make &&
+    !fields.model &&
+    !fields.year &&
+    !plateFromProvenance
+  ) {
     return {
       ok: false as const,
       error: "identity_incomplete" as const,
-      message: "חסרים שדות מינימליים (יצרן/דגם/שנה).",
+      message: "חסרים שדות מינימליים (יצרן/דגם/שנה או מספר רכב).",
     };
   }
 

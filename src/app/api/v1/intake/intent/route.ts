@@ -46,5 +46,13 @@ export async function POST(req: Request) {
         : "VALIDATION_INVALID_REQUEST"
     );
   }
+  const failed = result.results.find((r) => !r.ok);
+  if (failed?.error === "identity_incomplete") {
+    return v1Error(
+      ctx,
+      "VALIDATION_INVALID_REQUEST",
+      "חסרים פרטי רכב מינימליים להשלמת הפעולה"
+    );
+  }
   return v1Json(ctx, result);
 }

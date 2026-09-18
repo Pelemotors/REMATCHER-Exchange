@@ -1,0 +1,197 @@
+{
+  "healthCommit": "87f9914a5f3bc56c3b17e5831de6f3ba87ee16c1",
+  "isolation": {
+    "betaInsufficient": false,
+    "realInsufficient": true,
+    "betaCohort": 0,
+    "realCohort": 2,
+    "proven": true
+  },
+  "intelBetaAll200": true,
+  "intelRealAll200": true,
+  "matchMyCustomersMakeModel": {
+    "http": 200,
+    "insufficientData": false,
+    "cohortLevel": 0,
+    "matchCount": 0,
+    "ok": true,
+    "hasPrivacyNote": false,
+    "leaks": false
+  },
+  "intentEXTERNAL": {
+    "http": 500,
+    "body": {
+      "raw": ""
+    },
+    "candidateId": "cmu7b2ey5003tjkye1le0j88p",
+    "batchId": "cmu7b1wpg000sjkyezsy37b12",
+    "priorIntent": "EXTERNAL",
+    "status": "READY"
+  },
+  "notificationsNullLeak": false,
+  "notifTitles": [
+    {
+      "title": "הרכב סומן כנמכר",
+      "body": "Renault Clio 2022 הוסר מהמלאי הפעיל. נמכר דרך חיבור של REMATCHER? אפשר גם להוסיף"
+    },
+    {
+      "title": "הרכב סומן כנמכר",
+      "body": "רכב שטרם זוהה הוסר מהמלאי הפעיל. נמכר דרך חיבור של REMATCHER? אפשר גם להוסיף מלא"
+    }
+  ],
+  "plate4656581": {
+    "id": "cmu7b2ey5003tjkye1le0j88p",
+    "status": "READY",
+    "missingFields": [],
+    "govState": "NOT_FOUND",
+    "dealerIntent": "EXTERNAL",
+    "confidenceBand": "MEDIUM"
+  },
+  "synth": {
+    "dealers": 6,
+    "vehicles": 48,
+    "demands": 24
+  },
+  "intel": {
+    "beta": {
+      "MARKET_OVERVIEW": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "CHECK_DEMAND": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "CHECK_SUPPLY": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "COMPARE_SIMILAR": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "CHECK_BUY_PRICE": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false,
+        "verdict": null
+      },
+      "CHECK_LIQUIDITY": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false,
+        "label": "UNKNOWN"
+      },
+      "CHECK_TRADE_RISK": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false,
+        "label": "UNKNOWN"
+      },
+      "MATCH_MY_CUSTOMERS": {
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "matchCount": 0,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      }
+    },
+    "real": {
+      "MARKET_OVERVIEW": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "CHECK_DEMAND": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "CHECK_SUPPLY": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "COMPARE_SIMILAR": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      },
+      "CHECK_BUY_PRICE": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false,
+        "verdict": null
+      },
+      "CHECK_LIQUIDITY": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false,
+        "label": "UNKNOWN"
+      },
+      "CHECK_TRADE_RISK": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false,
+        "label": "UNKNOWN"
+      },
+      "MATCH_MY_CUSTOMERS": {
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "matchCount": 1,
+        "ok": true,
+        "hasPrivacyNote": false,
+        "leaks": false
+      }
+    }
+  }
+}

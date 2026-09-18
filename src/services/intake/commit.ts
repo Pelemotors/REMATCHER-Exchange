@@ -219,7 +219,11 @@ export async function commitOneCandidate(
   });
 
   if (!created.ok) {
-    throw new Error(created.error);
+    return {
+      ok: false as const,
+      error: created.error,
+      message: "message" in created ? created.message : undefined,
+    };
   }
 
   await attachMediaToExisting(
