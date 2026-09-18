@@ -59,6 +59,14 @@ const threadRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+describe("conversation list search wiring", () => {
+  it("listThreads passes q into prisma where", () => {
+    const src = read("src/services/conversation/threads.ts");
+    expect(src).toContain("input.q");
+    expect(src).toContain("contains: trimmed");
+  });
+});
+
 describe("conversation thread access", () => {
   beforeEach(() => {
     vi.clearAllMocks();

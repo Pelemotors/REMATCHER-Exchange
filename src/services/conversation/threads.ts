@@ -14,14 +14,38 @@ import type {
 } from "@/services/conversation/types";
 import type { ConversationThreadStatus } from "@prisma/client";
 
-function listWhere(principal: ConversationPrincipal, status?: ConversationThreadStatus) {
+function listWhere(
+  principal: ConversationPrincipal,
+  status?: ConversationThreadStatus,
+  q?: string
+) {
   const statusFilter = status ?? { not: "DELETED" as const };
-  return {
+  const base = {
     dealerId: principal.dealerId,
     status: statusFilter,
     OR: [
       { ownerUserId: principal.userId },
       { visibility: "DEALER_SHARED" as const },
+    ],
+  };
+  const trimmed = q?.trim();
+  if (!trimmed) return base;
+  return {
+    ...base,
+    AND: [
+      {
+        OR: [
+          { title: { contains: trimmed, mode: "insensitive" as const } },
+          { compactSummary: { contains: trimmed, mode: "insensitive" as const } },
+          {
+            messages: {
+              some: {
+                text: { contains: trimmed, mode: "insensitive" as const },
+              },
+            },
+          },
+        ],
+      },
     ],
   };
 }
@@ -49,7 +73,7 @@ export async function listThreads(
 ): Promise<{ threads: ThreadRecord[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(input.limit ?? 30, 1), 100);
   const rows = await prisma.conversationThread.findMany({
-    where: listWhere(input.principal, input.status),
+    where: listWhere(input.principal, input.status, input.q),
     orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
     take: limit + 1,
     ...(input.cursor

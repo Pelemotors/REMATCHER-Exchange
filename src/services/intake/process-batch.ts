@@ -59,6 +59,18 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
     },
   });
 
+  if (batch.conversationThreadId) {
+    const { intakePrincipalForDealer, recordIntakeProcessingStarted } =
+      await import("@/services/conversation/intake-bridge");
+    const principal = await intakePrincipalForDealer(dealerId);
+    if (principal) {
+      await recordIntakeProcessingStarted({
+        principal,
+        batchId: batch.id,
+      }).catch(() => undefined);
+    }
+  }
+
   await emitExchangeEvent({
     eventType: "intake.batch.process_started",
     dealerId,
@@ -426,6 +438,37 @@ export async function processIntakeBatch(dealerId: string, batchId: string) {
     });
 
     await refreshBatchStatus(batch.id);
+
+    const batchAfter = await prisma.intakeBatch.findFirst({
+      where: { id: batch.id },
+      select: { conversationThreadId: true },
+    });
+    if (batchAfter?.conversationThreadId) {
+      const {
+        intakePrincipalForDealer,
+        recordVehicleIdentifiedForCandidate,
+        recordIntentRequest,
+      } = await import("@/services/conversation/intake-bridge");
+      const principal = await intakePrincipalForDealer(dealerId);
+      if (principal) {
+        const freshCandidates = await prisma.vehicleCandidate.findMany({
+          where: { batchId: batch.id, dealerId },
+          select: { id: true },
+        });
+        for (const c of freshCandidates) {
+          await recordVehicleIdentifiedForCandidate({
+            principal,
+            batchId: batch.id,
+            candidateId: c.id,
+          }).catch(() => undefined);
+        }
+        await recordIntentRequest({
+          principal,
+          batchId: batch.id,
+          candidateCount: freshCandidates.length,
+        }).catch(() => undefined);
+      }
+    }
 
     await emitExchangeEvent({
       eventType: "intake.batch.process_completed",

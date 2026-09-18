@@ -1,0 +1,15 @@
+{
+  "message": {
+    "id": "msg_new",
+    "threadId": "thread_example",
+    "role": "USER",
+    "kind": "TEXT",
+    "text": "הודעה חדשה",
+    "payloadJson": null,
+    "entityType": null,
+    "entityId": null,
+    "intakeBatchId": null,
+    "source": "api_v1",
+    "createdAt": "2026-09-18T12:01:00.000Z"
+  }
+}

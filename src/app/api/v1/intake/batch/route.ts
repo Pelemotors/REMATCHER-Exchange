@@ -103,6 +103,7 @@ export async function POST(req: Request) {
     const result = await acknowledgeIntakeBatch({
       dealerId,
       batchId: body.batchId,
+      userId: principal.userId,
     });
     if (!result.ok) {
       return v1Error(
@@ -144,6 +145,7 @@ export async function POST(req: Request) {
     }
     const result = await createOrResumeIntakeBatch({
       dealerId,
+      userId: principal.userId,
       clientBatchId: body.clientBatchId,
       source: body.source as IntakeSource,
       sourceMetadata: body.sourceMetadata,

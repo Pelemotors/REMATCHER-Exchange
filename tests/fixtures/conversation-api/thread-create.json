@@ -1,0 +1,14 @@
+{
+  "thread": {
+    "id": "thread_new",
+    "title": "שיחה חדשה",
+    "titleSource": "AUTO",
+    "status": "ACTIVE",
+    "source": "OTHER",
+    "visibility": "PRIVATE_USER",
+    "lastMessageAt": null,
+    "preview": null,
+    "mediaCount": 0,
+    "compactSummary": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "thread": {
+    "id": "thread_example",
+    "title": "Toyota Corolla 2020",
+    "titleSource": "AUTO",
+    "status": "ACTIVE",
+    "source": "AGENT",
+    "visibility": "PRIVATE_USER",
+    "lastMessageAt": "2026-09-18T12:00:00.000Z",
+    "preview": "שלום, איך אפשר לעזור?",
+    "mediaCount": 3,
+    "compactSummary": null
+  }
+}

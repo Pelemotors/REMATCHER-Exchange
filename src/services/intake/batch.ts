@@ -21,6 +21,7 @@ export const INTAKE_MAX_FILE_BYTES = 12 * 1024 * 1024;
 
 export async function createOrResumeIntakeBatch(input: {
   dealerId: string;
+  userId?: string;
   source: IntakeSource;
   clientBatchId: string;
   sourceMetadata?: Record<string, unknown>;
@@ -42,7 +43,23 @@ export async function createOrResumeIntakeBatch(input: {
       idempotencyKey: `intake-batch-resume:${existing.id}`,
       metadata: { clientBatchId: input.clientBatchId, resumed: true },
     }).catch(() => undefined);
-    return { ok: true as const, batch: existing, resumed: true as const };
+    let conversationThreadId = existing.conversationThreadId;
+    if (!conversationThreadId && input.userId) {
+      const { ensureThreadForIntakeBatch } = await import(
+        "@/services/conversation/intake-bridge"
+      );
+      const linked = await ensureThreadForIntakeBatch({
+        principal: { dealerId: input.dealerId, userId: input.userId },
+        batchId: existing.id,
+      });
+      conversationThreadId = linked.threadId;
+    }
+    return {
+      ok: true as const,
+      batch: existing,
+      resumed: true as const,
+      conversationThreadId,
+    };
   }
 
   const batch = await prisma.intakeBatch.create({
@@ -64,7 +81,24 @@ export async function createOrResumeIntakeBatch(input: {
     idempotencyKey: `intake-batch-create:${input.dealerId}:${input.clientBatchId}`,
     metadata: { clientBatchId: input.clientBatchId, source: input.source },
   }).catch(() => undefined);
-  return { ok: true as const, batch, resumed: false as const };
+  let conversationThreadId: string | null = null;
+  if (input.userId) {
+    const { ensureThreadForIntakeBatch } = await import(
+      "@/services/conversation/intake-bridge"
+    );
+    const linked = await ensureThreadForIntakeBatch({
+      principal: { dealerId: input.dealerId, userId: input.userId },
+      batchId: batch.id,
+    });
+    conversationThreadId = linked.threadId;
+  }
+
+  return {
+    ok: true as const,
+    batch,
+    resumed: false as const,
+    conversationThreadId,
+  };
 }
 
 export async function addIntakeMedia(input: {
@@ -175,6 +209,7 @@ export async function addIntakeText(input: {
 export async function acknowledgeIntakeBatch(input: {
   dealerId: string;
   batchId: string;
+  userId?: string;
 }) {
   const batch = await prisma.intakeBatch.findFirst({
     where: { id: input.batchId, dealerId: input.dealerId },
@@ -185,6 +220,22 @@ export async function acknowledgeIntakeBatch(input: {
     return { ok: false as const, error: "empty_batch" as const };
   }
 
+  let conversationThreadId = batch.conversationThreadId;
+  if (!conversationThreadId && input.userId) {
+    const { ensureThreadForIntakeBatch, recordIntakeMediaReceived } =
+      await import("@/services/conversation/intake-bridge");
+    const linked = await ensureThreadForIntakeBatch({
+      principal: { dealerId: input.dealerId, userId: input.userId },
+      batchId: batch.id,
+    });
+    conversationThreadId = linked.threadId;
+    await recordIntakeMediaReceived({
+      principal: { dealerId: input.dealerId, userId: input.userId },
+      batchId: batch.id,
+      mediaCount: batch._count.media,
+    }).catch(() => undefined);
+  }
+
   if (batch.acknowledgedAt) {
     return {
       ok: true as const,
@@ -193,6 +244,7 @@ export async function acknowledgeIntakeBatch(input: {
       mediaCount: batch._count.media,
       textCount: batch._count.texts,
       acknowledgedAt: batch.acknowledgedAt.toISOString(),
+      conversationThreadId,
       idempotent: true as const,
     };
   }
@@ -218,6 +270,21 @@ export async function acknowledgeIntakeBatch(input: {
     operational: true,
   }).catch(() => undefined);
 
+  if (!conversationThreadId && input.userId) {
+    const { ensureThreadForIntakeBatch, recordIntakeMediaReceived } =
+      await import("@/services/conversation/intake-bridge");
+    const linked = await ensureThreadForIntakeBatch({
+      principal: { dealerId: input.dealerId, userId: input.userId },
+      batchId: updated.id,
+    });
+    conversationThreadId = linked.threadId;
+    await recordIntakeMediaReceived({
+      principal: { dealerId: input.dealerId, userId: input.userId },
+      batchId: updated.id,
+      mediaCount: batch._count.media,
+    }).catch(() => undefined);
+  }
+
   return {
     ok: true as const,
     batchId: updated.id,
@@ -225,6 +292,7 @@ export async function acknowledgeIntakeBatch(input: {
     mediaCount: batch._count.media,
     textCount: batch._count.texts,
     acknowledgedAt: now.toISOString(),
+    conversationThreadId,
   };
 }
 

@@ -91,10 +91,16 @@ vi.mock("@/services/events/log-event", () => ({
 
 vi.mock("@/services/assistant/assistant-chat-turn", () => ({
   getAssistantConversationPayload: vi.fn(async () => ({
+    threadId: "thread-a",
     conversation: {},
     recentTurns: [],
   })),
   runAssistantChatTurn: vi.fn(),
+}));
+
+vi.mock("@/services/conversation/gateway-projection", () => ({
+  assertPendingActionOnThread: vi.fn(async () => ({ ok: true })),
+  syncGatewayPendingProjection: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/services/intake/batch", () => ({
@@ -231,6 +237,18 @@ describe("assistant requires verified + privacy", () => {
     expect(runAssistantChatTurn).not.toHaveBeenCalled();
   });
 
+  it("POST chat rejects missing threadId", async () => {
+    const res = await v1AssistantChatPost(
+      authReq("/api/v1/assistant/chat", "token-a", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: "שלום" }),
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(runAssistantChatTurn).not.toHaveBeenCalled();
+  });
+
   it("POST confirm maps to chat turn with אשר/בטל", async () => {
     const { POST: v1AssistantConfirm } = await import(
       "@/app/api/v1/assistant/confirm/route"
@@ -243,7 +261,11 @@ describe("assistant requires verified + privacy", () => {
       authReq("/api/v1/assistant/confirm", "token-a", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ confirmed: true, action: "confirm_inventory_import" }),
+        body: JSON.stringify({
+          confirmed: true,
+          action: "confirm_inventory_import",
+          threadId: "thread-a",
+        }),
       })
     );
     expect(res.status).toBe(200);
@@ -251,6 +273,7 @@ describe("assistant requires verified + privacy", () => {
       expect.objectContaining({
         dealerId: "dealer-a",
         userId: "user-a",
+        threadId: "thread-a",
         message: "אשר",
       })
     );

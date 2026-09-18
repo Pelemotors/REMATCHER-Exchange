@@ -179,6 +179,20 @@ export async function applyCandidateIntent(input: {
     operational: true,
   }).catch(() => undefined);
 
+  const { intakePrincipalForDealer, recordIntentApplied } = await import(
+    "@/services/conversation/intake-bridge"
+  );
+  const principal = await intakePrincipalForDealer(input.dealerId);
+  if (principal) {
+    await recordIntentApplied({
+      principal,
+      batchId: candidate.batchId,
+      candidateId: candidate.id,
+      intent: input.intent,
+      vehicleId: committed.vehicleId,
+    }).catch(() => undefined);
+  }
+
   return {
     ok: true as const,
     vehicleId: committed.vehicleId,

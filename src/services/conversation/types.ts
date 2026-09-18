@@ -45,6 +45,7 @@ export type ListThreadsInput = {
   status?: ConversationThreadStatus;
   limit?: number;
   cursor?: string;
+  q?: string;
 };
 
 export type AppendMessageInput = {

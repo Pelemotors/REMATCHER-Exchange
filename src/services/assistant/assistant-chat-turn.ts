@@ -8,12 +8,16 @@ import {
   type ConversationState,
 } from "@/services/assistant/conversation-state";
 import {
-  loadAgentConversationState,
+  loadThreadAgentState,
   resolveActiveConversationState,
-  saveAgentConversationState,
+  saveThreadAgentState,
 } from "@/services/assistant/conversation-persistence";
 import { runExchangeAssistantV2 } from "@/services/assistant/v2-orchestrator";
 import { AGENT_VERSION } from "@/services/assistant/tools/registry";
+import { appendMessage } from "@/services/conversation/messages";
+import { syncGatewayPendingProjection } from "@/services/conversation/gateway-projection";
+import type { ConversationPrincipal } from "@/services/conversation/types";
+import { ConversationAccessError } from "@/services/conversation/auth";
 
 export type AssistantChatUiContext = {
   route: string;
@@ -28,27 +32,67 @@ export type AssistantChatUiContext = {
 };
 
 export type AssistantChatTurnResult =
-  | { ok: false; error: "message_required" }
+  | {
+      ok: false;
+      error:
+        | "message_required"
+        | "thread_required"
+        | "thread_forbidden"
+        | "thread_not_found";
+    }
   | {
       ok: true;
       body: Record<string, unknown>;
     };
 
-export async function getAssistantConversationPayload(dealerId: string) {
-  const state = await loadAgentConversationState(dealerId);
+export async function getAssistantConversationPayload(
+  principal: ConversationPrincipal,
+  threadId: string
+) {
+  const { state } = await loadThreadAgentState(principal, threadId);
   return {
+    threadId,
     conversation: state ?? {},
     recentTurns: state?.recentTurns ?? [],
   };
 }
 
+async function persistTurnMessages(params: {
+  principal: ConversationPrincipal;
+  threadId: string;
+  userText: string;
+  assistantText: string | null | undefined;
+  turnKey: string;
+}) {
+  await appendMessage(params.principal, {
+    threadId: params.threadId,
+    role: "USER",
+    kind: "TEXT",
+    text: params.userText,
+    source: "USER_TEXT",
+    idempotencyKey: `thread:${params.threadId}:user:${params.turnKey}`,
+  }).catch(() => undefined);
+
+  if (params.assistantText && params.assistantText.trim()) {
+    await appendMessage(params.principal, {
+      threadId: params.threadId,
+      role: "ASSISTANT",
+      kind: "TEXT",
+      text: params.assistantText,
+      source: "AGENT",
+      idempotencyKey: `thread:${params.threadId}:assistant:${params.turnKey}`,
+    }).catch(() => undefined);
+  }
+}
+
 /**
- * Shared Web + Mobile assistant turn — same inventory-import shortcuts and
- * runExchangeAssistantV2 path. Client conversation never overrides stored state.
+ * Shared Web + Mobile assistant turn — THREAD-SCOPED operational state.
+ * Client conversation never overrides stored thread state.
  */
 export async function runAssistantChatTurn(params: {
   dealerId: string;
   userId: string;
+  threadId?: string;
   message?: string;
   context?: AssistantChatUiContext;
   clientConversation?: ConversationState;
@@ -56,18 +100,55 @@ export async function runAssistantChatTurn(params: {
   const message = params.message?.trim();
   if (!message) return { ok: false, error: "message_required" };
 
+  const threadId = params.threadId?.trim();
+  if (!threadId) return { ok: false, error: "thread_required" };
+
+  const principal: ConversationPrincipal = {
+    dealerId: params.dealerId,
+    userId: params.userId,
+  };
+
+  let stored: ConversationState | undefined;
+  try {
+    ({ state: stored } = await loadThreadAgentState(principal, threadId));
+  } catch (e) {
+    if (e instanceof ConversationAccessError) {
+      return {
+        ok: false,
+        error: e.code === "forbidden" ? "thread_forbidden" : "thread_not_found",
+      };
+    }
+    throw e;
+  }
+
   const { dealerId, userId } = params;
-  const stored = await loadAgentConversationState(dealerId);
   const active = resolveActiveConversationState(
     stored,
     params.clientConversation
   );
 
+  const turnKey = `${Date.now()}_${Buffer.from(message).toString("base64url").slice(0, 32)}`;
+
   await logAppEvent({
     eventType: "assistant_opened",
     dealerId,
-    metadata: { userId },
+    metadata: { userId, threadId },
   });
+
+  const save = async (
+    next: ConversationState | undefined,
+    previous: ConversationState | undefined,
+    assistantMessage?: string
+  ) => {
+    await saveThreadAgentState(principal, threadId, next);
+    await syncGatewayPendingProjection({
+      principal,
+      threadId,
+      previous,
+      next,
+      assistantMessage,
+    });
+  };
 
   if (/בדוק את קובץ המלאי שהעליתי|בדיקת קובץ מלאי/i.test(message)) {
     const job = await prisma.inventoryImport.findFirst({
@@ -75,12 +156,21 @@ export async function runAssistantChatTurn(params: {
       orderBy: { createdAt: "desc" },
     });
     if (!job) {
+      const text = "לא מצאתי קובץ מלאי שממתין לבדיקה.";
+      await persistTurnMessages({
+        principal,
+        threadId,
+        userText: message,
+        assistantText: text,
+        turnKey,
+      });
       return {
         ok: true,
         body: {
           intent: "UPDATE_INVENTORY",
-          message: "לא מצאתי קובץ מלאי שממתין לבדיקה.",
+          message: text,
           conversation: active ?? {},
+          threadId,
           agentVersion: AGENT_VERSION,
         },
       };
@@ -111,7 +201,14 @@ export async function runAssistantChatTurn(params: {
         { role: "assistant" as const, text },
       ].slice(-12),
     };
-    await saveAgentConversationState(dealerId, next);
+    await save(next, active, text);
+    await persistTurnMessages({
+      principal,
+      threadId,
+      userText: message,
+      assistantText: text,
+      turnKey,
+    });
     return {
       ok: true,
       body: {
@@ -119,6 +216,7 @@ export async function runAssistantChatTurn(params: {
         message: text,
         requiresConfirmation: next.pendingConfirmation,
         conversation: next,
+        threadId,
         agentVersion: AGENT_VERSION,
       },
     };
@@ -131,13 +229,22 @@ export async function runAssistantChatTurn(params: {
         pendingConfirmation: undefined,
         goal: undefined,
       };
-      await saveAgentConversationState(dealerId, next);
+      await save(next, active, "ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.");
+      const text = "ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.";
+      await persistTurnMessages({
+        principal,
+        threadId,
+        userText: message,
+        assistantText: text,
+        turnKey,
+      });
       return {
         ok: true,
         body: {
           intent: "UPDATE_INVENTORY",
-          message: "ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.",
+          message: text,
           conversation: next,
+          threadId,
           agentVersion: AGENT_VERSION,
         },
       };
@@ -162,13 +269,21 @@ export async function runAssistantChatTurn(params: {
           { role: "assistant" as const, text },
         ].slice(-12),
       };
-      await saveAgentConversationState(dealerId, next);
+      await save(next, active, text);
+      await persistTurnMessages({
+        principal,
+        threadId,
+        userText: message,
+        assistantText: text,
+        turnKey,
+      });
       return {
         ok: true,
         body: {
           intent: "UPDATE_INVENTORY",
           message: text,
           conversation: next,
+          threadId,
           agentVersion: AGENT_VERSION,
         },
       };
@@ -182,11 +297,21 @@ export async function runAssistantChatTurn(params: {
     context: params.context ?? { route: "/" },
     conversation: active,
   });
-  await saveAgentConversationState(dealerId, response.conversation);
+  await save(response.conversation, active, response.message);
+  const assistantText =
+    typeof response.message === "string" ? response.message : null;
+  await persistTurnMessages({
+    principal,
+    threadId,
+    userText: message,
+    assistantText,
+    turnKey,
+  });
   return {
     ok: true,
     body: {
       ...response,
+      threadId,
       agentVersion: response.meta?.agentVersion ?? AGENT_VERSION,
     },
   };

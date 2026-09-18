@@ -1,6 +1,8 @@
 import { requireV1VerifiedDealer } from "@/lib/api-v1/auth";
 import { parseV1Json } from "@/lib/api-v1/parse-json";
 import { v1Error, v1Json } from "@/lib/api-v1/respond";
+import { serializeThreadDTO } from "@/services/conversation/dto";
+import { fetchThreadPresentationExtras } from "@/services/conversation/thread-presentation";
 import { createThread, listThreads } from "@/services/conversation/threads";
 import type { ConversationThreadSource } from "@prisma/client";
 
@@ -21,14 +23,25 @@ export async function GET(req: Request) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limitRaw = url.searchParams.get("limit");
   const limit = limitRaw ? Number(limitRaw) : undefined;
+  const q = url.searchParams.get("q") ?? undefined;
 
+  const p = { userId: principal.userId, dealerId: principal.dealerId };
   const result = await listThreads({
-    principal: { userId: principal.userId, dealerId: principal.dealerId },
+    principal: p,
     status,
     cursor,
     limit: Number.isFinite(limit) ? limit : undefined,
+    q,
   });
-  return v1Json(ctx, result);
+
+  const threads = await Promise.all(
+    result.threads.map(async (t) => {
+      const extras = await fetchThreadPresentationExtras(p, t.id);
+      return serializeThreadDTO(t, extras);
+    })
+  );
+
+  return v1Json(ctx, { threads, nextCursor: result.nextCursor });
 }
 
 export async function POST(req: Request) {
@@ -54,12 +67,14 @@ export async function POST(req: Request) {
     return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
   }
 
-  const thread = await createThread({
+  const row = await createThread({
     principal: { userId: principal.userId, dealerId: principal.dealerId },
     title: typeof body.title === "string" ? body.title : undefined,
     source: source ?? "OTHER",
     visibility:
       body.visibility === "DEALER_SHARED" ? "DEALER_SHARED" : "PRIVATE_USER",
   });
-  return v1Json(ctx, { thread });
+  const p = { userId: principal.userId, dealerId: principal.dealerId };
+  const extras = await fetchThreadPresentationExtras(p, row.id);
+  return v1Json(ctx, { thread: serializeThreadDTO(row, extras) });
 }

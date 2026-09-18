@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "id": "msg_1",
+      "threadId": "thread_example",
+      "role": "USER",
+      "kind": "TEXT",
+      "text": "שלום",
+      "payloadJson": null,
+      "entityType": null,
+      "entityId": null,
+      "intakeBatchId": null,
+      "source": "api_v1",
+      "createdAt": "2026-09-18T12:00:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}

@@ -6,3 +6,7 @@ export * from "@/services/conversation/titles";
 export * from "@/services/conversation/intake-bridge";
 export * from "@/services/conversation/legacy-migrate";
 export * from "@/services/conversation/types";
+export * from "@/services/conversation/dto";
+export * from "@/services/conversation/thread-agent-state";
+export * from "@/services/conversation/gateway-projection";
+export * from "@/services/conversation/media";

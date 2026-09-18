@@ -1,6 +1,7 @@
 import { requireV1VerifiedDealer } from "@/lib/api-v1/auth";
 import { parseV1Json } from "@/lib/api-v1/parse-json";
 import { v1Error, v1Json } from "@/lib/api-v1/respond";
+import { serializeMessageDTO } from "@/services/conversation/dto";
 import { appendMessage, listMessages } from "@/services/conversation/messages";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,10 @@ export async function GET(
       cursor,
       limit: Number.isFinite(limit) ? limit : undefined,
     });
-    return v1Json(ctx, result);
+    return v1Json(ctx, {
+      items: result.messages.map(serializeMessageDTO),
+      nextCursor: result.nextCursor,
+    });
   } catch {
     return v1Error(ctx, "RESOURCE_NOT_FOUND");
   }
@@ -55,7 +59,7 @@ export async function POST(
     typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined;
 
   try {
-    const { message, created } = await appendMessage(principalFrom(principal), {
+    const { message } = await appendMessage(principalFrom(principal), {
       threadId: id,
       role: "USER",
       kind: "TEXT",
@@ -63,11 +67,7 @@ export async function POST(
       idempotencyKey: idempotencyKey ?? null,
       source: "api_v1",
     });
-    return v1Json(ctx, {
-      message,
-      created,
-      agentHandoff: { pending: true, hint: "use_assistant_chat_for_agent_turn" },
-    });
+    return v1Json(ctx, { message: serializeMessageDTO(message) });
   } catch {
     return v1Error(ctx, "RESOURCE_NOT_FOUND");
   }
