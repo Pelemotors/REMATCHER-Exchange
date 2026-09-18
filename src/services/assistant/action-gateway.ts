@@ -189,8 +189,8 @@ export async function runActionGateway(params: {
     if (pending.action === "create_inventory") {
       const draft = conversation?.pendingInventoryDraft;
       if (!draft) {
-        meta.policyResult = "REQUIRE_CLARIFICATION";
-        meta.executionOutcome = "NO_EXECUTION";
+        meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
         return {
           intent: "UPDATE_INVENTORY",
           message: "אין כרגע טיוטת רכב לשמירה.",
@@ -203,8 +203,8 @@ export async function runActionGateway(params: {
       }
       const snapshot = inventoryDraftSnapshot(draft);
       if (!snapshot.canSave) {
-        meta.policyResult = "REQUIRE_CLARIFICATION";
-        meta.executionOutcome = "NO_EXECUTION";
+        meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
         return {
           intent: "UPDATE_INVENTORY",
           message: "עדיין חסרים פרטי הזיהוי הבסיסיים של הרכב לפני שמירה.",
@@ -224,7 +224,10 @@ export async function runActionGateway(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message: result.message ?? "לא הצלחתי לשמור את הרכב.",
-          conversation,
+          conversation: {
+            ...conversation,
+            pendingConfirmation: undefined,
+          },
           meta,
         };
       }
@@ -267,7 +270,10 @@ export async function runActionGateway(params: {
         return {
           intent: "VALIDATION",
           message: "לא הצלחתי לאשר את הזמינות.",
-          conversation,
+          conversation: {
+            ...conversation,
+            pendingConfirmation: undefined,
+          },
           meta,
         };
       }
@@ -281,7 +287,10 @@ export async function runActionGateway(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message: "אין הרשאה לרכב הזה.",
-          conversation,
+          conversation: {
+            ...conversation,
+            pendingConfirmation: undefined,
+          },
           meta,
         };
       }
@@ -302,7 +311,10 @@ export async function runActionGateway(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message: "לא הצלחתי לסמן את הרכב כנמכר.",
-          conversation,
+          conversation: {
+            ...conversation,
+            pendingConfirmation: undefined,
+          },
           meta,
         };
       }
@@ -359,9 +371,10 @@ export async function runActionGateway(params: {
       return {
         intent: "UPDATE_INVENTORY",
         message: msg,
-        conversation: result.ok
-          ? { ...conversation, pendingConfirmation: undefined }
-          : conversation,
+        conversation: {
+          ...conversation,
+          pendingConfirmation: undefined,
+        },
         meta,
         ...(result.ok &&
         "vehicleId" in result &&

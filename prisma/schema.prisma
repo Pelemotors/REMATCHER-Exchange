@@ -1925,6 +1925,12 @@ enum ConversationActionStatus {
   EXPIRED
 }
 
+enum ConversationTurnStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model ConversationThread {
   id               String                    @id @default(cuid())
   dealerId         String
@@ -1946,6 +1952,7 @@ model ConversationThread {
   owner        User                  @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   messages     ConversationMessage[]
   actions      ConversationAction[]
+  turns        ConversationTurn[]
   intakeBatches IntakeBatch[]
 
   @@index([dealerId, ownerUserId, status, lastMessageAt(sort: Desc)])
@@ -1989,4 +1996,24 @@ model ConversationAction {
 
   @@unique([threadId, idempotencyKey])
   @@index([threadId, status, updatedAt(sort: Desc)])
+}
+
+/** Atomic turn claim for clientTurnId concurrency / idempotency. */
+model ConversationTurn {
+  id                 String                 @id @default(cuid())
+  threadId           String
+  clientTurnId       String
+  requestFingerprint String
+  status             ConversationTurnStatus @default(PROCESSING)
+  resultJson         Json?
+  claimedAt          DateTime               @default(now())
+  leaseExpiresAt     DateTime
+  completedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  thread ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, clientTurnId])
+  @@index([threadId, status, leaseExpiresAt])
 }

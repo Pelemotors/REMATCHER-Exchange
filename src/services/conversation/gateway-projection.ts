@@ -92,7 +92,7 @@ export async function syncGatewayPendingProjection(input: {
     const row = await prisma.conversationAction.findFirst({
       where: {
         threadId: input.threadId,
-        status: "PENDING_CONFIRMATION",
+        status: { in: ["PENDING_CONFIRMATION", "EXECUTING"] },
         ...(prevPending.conversationActionId
           ? { id: prevPending.conversationActionId }
           : { gatewayActionId: prevPending.action }),

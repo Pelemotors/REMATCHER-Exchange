@@ -22,6 +22,13 @@ import {
   syncGatewayPendingProjection,
   type ProjectionClearance,
 } from "@/services/conversation/gateway-projection";
+import {
+  claimConversationTurn,
+  buildTurnRequestFingerprint,
+  completeConversationTurn,
+  failConversationTurn,
+} from "@/services/conversation/turn-claim";
+import { claimPendingActionForExecution } from "@/services/conversation/actions";
 import type { ConversationPrincipal } from "@/services/conversation/types";
 import { ConversationAccessError } from "@/services/conversation/auth";
 
@@ -45,7 +52,12 @@ export type AssistantChatTurnResult =
         | "thread_required"
         | "thread_forbidden"
         | "thread_not_found"
-        | "action_mismatch";
+        | "action_mismatch"
+        | "IDEMPOTENCY_CONFLICT"
+        | "TURN_IN_PROGRESS"
+        | "ACTION_IN_PROGRESS"
+        | "ACTION_ALREADY_COMPLETED"
+        | "ACTION_TERMINAL";
       message?: string;
     }
   | {
@@ -72,45 +84,6 @@ function normalizeClientTurnId(raw: string | undefined): string | undefined {
   // Stable client UUID / opaque id — reject empty / oversized.
   if (t.length < 8 || t.length > 128) return undefined;
   return t;
-}
-
-async function findCompletedTurnReplay(params: {
-  principal: ConversationPrincipal;
-  threadId: string;
-  turnKey: string;
-  stored: ConversationState | undefined;
-}): Promise<Record<string, unknown> | null> {
-  const userKey = `thread:${params.threadId}:user:${params.turnKey}`;
-  const assistantKey = `thread:${params.threadId}:assistant:${params.turnKey}`;
-  const [userMsg, assistantMsg] = await Promise.all([
-    prisma.conversationMessage.findUnique({
-      where: {
-        threadId_idempotencyKey: {
-          threadId: params.threadId,
-          idempotencyKey: userKey,
-        },
-      },
-    }),
-    prisma.conversationMessage.findUnique({
-      where: {
-        threadId_idempotencyKey: {
-          threadId: params.threadId,
-          idempotencyKey: assistantKey,
-        },
-      },
-    }),
-  ]);
-  if (!userMsg) return null;
-  return {
-    intent: "UNKNOWN",
-    message: assistantMsg?.text ?? "",
-    conversation: params.stored ?? {},
-    requiresConfirmation: params.stored?.pendingConfirmation ?? null,
-    threadId: params.threadId,
-    agentVersion: AGENT_VERSION,
-    clientTurnId: params.turnKey,
-    replayed: true,
-  };
 }
 
 export async function getAssistantConversationPayload(
@@ -223,11 +196,7 @@ export async function runAssistantChatTurn(params: {
     const row = await prisma.conversationAction.findUnique({
       where: { id: expectedActionId },
     });
-    if (
-      !row ||
-      row.threadId !== threadId ||
-      row.status !== "PENDING_CONFIRMATION"
-    ) {
+    if (!row || row.threadId !== threadId) {
       return {
         ok: false,
         error: "action_mismatch",
@@ -248,20 +217,83 @@ export async function runAssistantChatTurn(params: {
     }
   }
 
+  const clientTurnId = normalizeClientTurnId(params.clientTurnId);
   const turnKey =
-    normalizeClientTurnId(params.clientTurnId) ??
+    clientTurnId ??
     `${Date.now()}_${Buffer.from(message).toString("base64url").slice(0, 32)}`;
 
-  // Turn-level idempotency: identical clientTurnId replays without re-execution.
-  if (normalizeClientTurnId(params.clientTurnId)) {
-    const replay = await findCompletedTurnReplay({
-      principal,
+  let ownedTurnId: string | undefined;
+  if (clientTurnId) {
+    const fingerprint = buildTurnRequestFingerprint({
       threadId,
-      turnKey,
-      stored: active,
+      message,
+      conversationActionId: expectedActionId,
+      context: params.context,
     });
-    if (replay) {
-      return { ok: true, body: replay, replayed: true };
+    const claim = await claimConversationTurn({
+      threadId,
+      clientTurnId,
+      requestFingerprint: fingerprint,
+    });
+    if (!claim.ok) {
+      return {
+        ok: false,
+        error: claim.error,
+        message: claim.message,
+      };
+    }
+    if (!claim.owned) {
+      const body = {
+        ...claim.body,
+        threadId,
+        clientTurnId,
+        replayed: true,
+        agentVersion:
+          typeof claim.body.agentVersion === "string"
+            ? claim.body.agentVersion
+            : AGENT_VERSION,
+      };
+      return { ok: true, body, replayed: true };
+    }
+    ownedTurnId = claim.turn.id;
+  }
+
+  // Confirm / cancel: atomic PENDING → EXECUTING before any executor.
+  const pendingActionId =
+    expectedActionId ||
+    active?.pendingConfirmation?.conversationActionId ||
+    undefined;
+  if (
+    pendingActionId &&
+    active?.pendingConfirmation &&
+    (isConfirmation(message) || isRejection(message))
+  ) {
+    if (isConfirmation(message)) {
+      const actionClaim = await claimPendingActionForExecution({
+        principal,
+        threadId,
+        actionId: pendingActionId,
+      });
+      if (!actionClaim.ok) {
+        if (ownedTurnId) {
+          await failConversationTurn({
+            turnId: ownedTurnId,
+            reason: actionClaim.error,
+          }).catch(() => undefined);
+        }
+        return {
+          ok: false,
+          error:
+            actionClaim.error === "ACTION_IN_PROGRESS"
+              ? "ACTION_IN_PROGRESS"
+              : actionClaim.error === "ACTION_ALREADY_COMPLETED"
+                ? "ACTION_ALREADY_COMPLETED"
+                : actionClaim.error === "ACTION_TERMINAL"
+                  ? "ACTION_TERMINAL"
+                  : "action_mismatch",
+          message: actionClaim.error,
+        };
+      }
     }
   }
 
@@ -270,6 +302,16 @@ export async function runAssistantChatTurn(params: {
     dealerId,
     metadata: { userId, threadId },
   });
+
+  const finishOk = async (
+    body: Record<string, unknown>
+  ): Promise<AssistantChatTurnResult> => {
+    const out = { ...body, clientTurnId: turnKey, threadId };
+    if (ownedTurnId) {
+      await completeConversationTurn({ turnId: ownedTurnId, body: out });
+    }
+    return { ok: true, body: out, replayed: false };
+  };
 
   const save = async (
     next: ConversationState | undefined,
@@ -291,6 +333,7 @@ export async function runAssistantChatTurn(params: {
     });
   };
 
+  try {
   if (/בדוק את קובץ המלאי שהעליתי|בדיקת קובץ מלאי/i.test(message)) {
     const job = await prisma.inventoryImport.findFirst({
       where: { dealerId, status: "PREVIEW" },
@@ -305,17 +348,12 @@ export async function runAssistantChatTurn(params: {
         assistantText: text,
         turnKey,
       });
-      return {
-        ok: true,
-        body: {
-          intent: "UPDATE_INVENTORY",
-          message: text,
-          conversation: active ?? {},
-          threadId,
-          agentVersion: AGENT_VERSION,
-          clientTurnId: turnKey,
-        },
-      };
+      return finishOk({
+        intent: "UPDATE_INVENTORY",
+        message: text,
+        conversation: active ?? {},
+        agentVersion: AGENT_VERSION,
+      });
     }
     const p = job.previewJson as unknown as {
       rows?: Array<{
@@ -352,18 +390,13 @@ export async function runAssistantChatTurn(params: {
       turnKey,
     });
     const pending = saved?.pendingConfirmation ?? next.pendingConfirmation;
-    return {
-      ok: true,
-      body: {
-        intent: "UPDATE_INVENTORY",
-        message: text,
-        requiresConfirmation: pending,
-        conversation: saved ?? next,
-        threadId,
-        agentVersion: AGENT_VERSION,
-        clientTurnId: turnKey,
-      },
-    };
+    return finishOk({
+      intent: "UPDATE_INVENTORY",
+      message: text,
+      requiresConfirmation: pending,
+      conversation: saved ?? next,
+      agentVersion: AGENT_VERSION,
+    });
   }
 
   if (active?.pendingConfirmation?.action === "confirm_inventory_import") {
@@ -382,17 +415,12 @@ export async function runAssistantChatTurn(params: {
         assistantText: text,
         turnKey,
       });
-      return {
-        ok: true,
-        body: {
-          intent: "UPDATE_INVENTORY",
-          message: text,
-          conversation: next,
-          threadId,
-          agentVersion: AGENT_VERSION,
-          clientTurnId: turnKey,
-        },
-      };
+      return finishOk({
+        intent: "UPDATE_INVENTORY",
+        message: text,
+        conversation: next,
+        agentVersion: AGENT_VERSION,
+      });
     }
     if (isConfirmation(message)) {
       const importId = String(
@@ -423,17 +451,12 @@ export async function runAssistantChatTurn(params: {
           assistantText: text,
           turnKey,
         });
-        return {
-          ok: true,
-          body: {
-            intent: "UPDATE_INVENTORY",
-            message: text,
-            conversation: next,
-            threadId,
-            agentVersion: AGENT_VERSION,
-            clientTurnId: turnKey,
-          },
-        };
+        return finishOk({
+          intent: "UPDATE_INVENTORY",
+          message: text,
+          conversation: next,
+          agentVersion: AGENT_VERSION,
+        });
       } catch {
         const text = "לא הצלחתי לאשר את קליטת המלאי. נסה שוב.";
         const next: ConversationState = {
@@ -449,17 +472,12 @@ export async function runAssistantChatTurn(params: {
           assistantText: text,
           turnKey,
         });
-        return {
-          ok: true,
-          body: {
-            intent: "UPDATE_INVENTORY",
-            message: text,
-            conversation: next,
-            threadId,
-            agentVersion: AGENT_VERSION,
-            clientTurnId: turnKey,
-          },
-        };
+        return finishOk({
+          intent: "UPDATE_INVENTORY",
+          message: text,
+          conversation: next,
+          agentVersion: AGENT_VERSION,
+        });
       }
     }
   }
@@ -488,16 +506,20 @@ export async function runAssistantChatTurn(params: {
     turnKey,
   });
   const conversation = saved ?? response.conversation;
-  return {
-    ok: true,
-    body: {
-      ...response,
-      conversation,
-      requiresConfirmation:
-        conversation?.pendingConfirmation ?? response.requiresConfirmation,
-      threadId,
-      agentVersion: response.meta?.agentVersion ?? AGENT_VERSION,
-      clientTurnId: turnKey,
-    },
-  };
+  return finishOk({
+    ...response,
+    conversation,
+    requiresConfirmation:
+      conversation?.pendingConfirmation ?? response.requiresConfirmation,
+    agentVersion: response.meta?.agentVersion ?? AGENT_VERSION,
+  });
+  } catch (err) {
+    if (ownedTurnId) {
+      await failConversationTurn({
+        turnId: ownedTurnId,
+        reason: err instanceof Error ? err.message : "turn_failed",
+      }).catch(() => undefined);
+    }
+    throw err;
+  }
 }

@@ -48,7 +48,7 @@ async function main() {
   // Dynamic imports after server-only stub
   const { prisma } = await import("../src/lib/prisma");
   const { createThread } = await import("../src/services/conversation/threads");
-  const { appendMessage, listMessages } = await import(
+  const { listMessages } = await import(
     "../src/services/conversation/messages"
   );
   const {
@@ -74,10 +74,10 @@ async function main() {
   const dbEvidence = await assertVpsDb(process.env.DATABASE_URL ?? "");
   report.dbAuthority = { ok: true, evidence: dbEvidence };
 
-  // Dedicated verification dealer
+  // Dedicated verification dealer — always SYNTHETIC (never REAL market)
   let dealer = await prisma.dealer.findFirst({
     where: { businessName: VERIFY_DEALER_NAME },
-    select: { id: true },
+    select: { id: true, marketMode: true, cohort: true },
   });
   if (!dealer) {
     dealer = await prisma.dealer.create({
@@ -89,9 +89,23 @@ async function main() {
         verificationStatus: "VERIFIED",
         isActive: true,
         cohort: "VERIFICATION",
-        marketMode: "REAL",
+        marketMode: "SYNTHETIC",
+        canAccessSyntheticMarket: true,
       },
-      select: { id: true },
+      select: { id: true, marketMode: true, cohort: true },
+    });
+  } else if (
+    dealer.marketMode !== "SYNTHETIC" ||
+    dealer.cohort !== "VERIFICATION"
+  ) {
+    dealer = await prisma.dealer.update({
+      where: { id: dealer.id },
+      data: {
+        marketMode: "SYNTHETIC",
+        cohort: "VERIFICATION",
+        canAccessSyntheticMarket: true,
+      },
+      select: { id: true, marketMode: true, cohort: true },
     });
   }
 
@@ -126,8 +140,8 @@ async function main() {
   }
   const p = { dealerId: dealer.id, userId: membership.userId };
   report.verificationDealer = {
-    ok: true,
-    evidence: `DEDICATED name="${VERIFY_DEALER_NAME}" dealerId=${p.dealerId}`,
+    ok: dealer.marketMode === "SYNTHETIC",
+    evidence: `DEDICATED name="${VERIFY_DEALER_NAME}" dealerId=${p.dealerId} marketMode=${dealer.marketMode}`,
   };
 
   const trashThreads: string[] = [];
@@ -135,6 +149,9 @@ async function main() {
 
   async function hardCleanup() {
     if (trashThreads.length) {
+      await prisma.conversationTurn.deleteMany({
+        where: { threadId: { in: trashThreads } },
+      });
       await prisma.conversationMessage.deleteMany({
         where: { threadId: { in: trashThreads } },
       });
@@ -153,8 +170,11 @@ async function main() {
   }
 
   try {
-    // A — clientTurnId turn idempotency via runAssistantChatTurn
+    // A — real first execution + sequential/concurrent retry + conflict + action race
     {
+      const { claimPendingActionForExecution } = await import(
+        "../src/services/conversation/actions"
+      );
       const t = await createThread({
         principal: p,
         title: `${RUN_PREFIX}-${runId}-exact-one`,
@@ -163,27 +183,11 @@ async function main() {
       });
       trashThreads.push(t.id);
       const clientTurnId = `${RUN_PREFIX}-${runId}-turn-a`;
-      await appendMessage(p, {
-        threadId: t.id,
-        role: "USER",
-        kind: "TEXT",
-        text: "שלום בדיקת אימות",
-        source: "USER_TEXT",
-        idempotencyKey: `thread:${t.id}:user:${clientTurnId}`,
-      });
-      await appendMessage(p, {
-        threadId: t.id,
-        role: "ASSISTANT",
-        kind: "TEXT",
-        text: "היי",
-        source: "AGENT",
-        idempotencyKey: `thread:${t.id}:assistant:${clientTurnId}`,
-      });
       const first = await runAssistantChatTurn({
         dealerId: p.dealerId,
         userId: p.userId,
         threadId: t.id,
-        message: "שלום בדיקת אימות",
+        message: "בדיקת קובץ מלאי",
         clientTurnId,
         context: { route: "/verify" },
       });
@@ -191,7 +195,7 @@ async function main() {
         dealerId: p.dealerId,
         userId: p.userId,
         threadId: t.id,
-        message: "שלום בדיקת אימות",
+        message: "בדיקת קובץ מלאי",
         clientTurnId,
         context: { route: "/verify" },
       });
@@ -200,15 +204,123 @@ async function main() {
       });
       const users = rows.filter((r) => r.role === "USER");
       const asst = rows.filter((r) => r.role === "ASSISTANT");
-      report.turnIdempotency = {
+      const turnRow = await prisma.conversationTurn.findUnique({
+        where: {
+          threadId_clientTurnId: { threadId: t.id, clientTurnId },
+        },
+      });
+      report.firstExecution = {
         ok:
           first.ok === true &&
-          first.replayed === true &&
+          first.replayed !== true &&
+          users.length === 1 &&
+          asst.length === 1 &&
+          turnRow?.status === "COMPLETED",
+        evidence: `replayed=${first.ok && !!first.replayed} USER=${users.length} ASSISTANT=${asst.length} turn=${turnRow?.status}`,
+      };
+      report.turnIdempotency = {
+        ok:
           second.ok === true &&
           second.replayed === true &&
           users.length === 1 &&
           asst.length === 1,
-        evidence: `USER=${users.length} ASSISTANT=${asst.length} replay1=${first.ok && first.replayed} replay2=${second.ok && second.replayed}`,
+        evidence: `replay2=${second.ok && second.replayed} USER=${users.length}`,
+      };
+
+      const tConc = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-concurrent`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(tConc.id);
+      const cid = `${RUN_PREFIX}-${runId}-conc`;
+      const [c1, c2] = await Promise.all([
+        runAssistantChatTurn({
+          dealerId: p.dealerId,
+          userId: p.userId,
+          threadId: tConc.id,
+          message: "בדיקת קובץ מלאי",
+          clientTurnId: cid,
+          context: { route: "/verify" },
+        }),
+        runAssistantChatTurn({
+          dealerId: p.dealerId,
+          userId: p.userId,
+          threadId: tConc.id,
+          message: "בדיקת קובץ מלאי",
+          clientTurnId: cid,
+          context: { route: "/verify" },
+        }),
+      ]);
+      const concUsers = await prisma.conversationMessage.count({
+        where: { threadId: tConc.id, role: "USER", kind: "TEXT" },
+      });
+      const owned =
+        (c1.ok && !c1.replayed ? 1 : 0) + (c2.ok && !c2.replayed ? 1 : 0);
+      const otherOk =
+        (!c1.ok && c1.error === "TURN_IN_PROGRESS") ||
+        (!c2.ok && c2.error === "TURN_IN_PROGRESS") ||
+        (c1.ok && !!c1.replayed) ||
+        (c2.ok && !!c2.replayed);
+      report.concurrentRetry = {
+        ok: concUsers === 1 && owned <= 1 && otherOk,
+        evidence: `users=${concUsers} owned=${owned} c1=${c1.ok ? `ok replay=${!!c1.replayed}` : c1.error} c2=${c2.ok ? `ok replay=${!!c2.replayed}` : c2.error}`,
+      };
+
+      const conflict = await runAssistantChatTurn({
+        dealerId: p.dealerId,
+        userId: p.userId,
+        threadId: t.id,
+        message: "הודעה אחרת לגמרי",
+        clientTurnId,
+        context: { route: "/verify" },
+      });
+      report.idempotencyConflict = {
+        ok: conflict.ok === false && conflict.error === "IDEMPOTENCY_CONFLICT",
+        evidence: `err=${conflict.ok ? "ok" : conflict.error}`,
+      };
+
+      const tAct = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-act-race`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(tAct.id);
+      const pendingRace = await syncGatewayPendingProjection({
+        principal: p,
+        threadId: tAct.id,
+        previous: undefined,
+        next: {
+          pendingConfirmation: {
+            action: "mark_sold",
+            label: "אשר",
+            payload: { vehicleId: "no-vehicle" },
+          },
+        },
+      });
+      const actId = pendingRace?.pendingConfirmation?.conversationActionId!;
+      await saveThreadAgentState(p, tAct.id, pendingRace);
+      const [a1, a2] = await Promise.all([
+        claimPendingActionForExecution({
+          principal: p,
+          threadId: tAct.id,
+          actionId: actId,
+        }),
+        claimPendingActionForExecution({
+          principal: p,
+          threadId: tAct.id,
+          actionId: actId,
+        }),
+      ]);
+      const winners = [a1, a2].filter((x) => x.ok).length;
+      const losers = [a1, a2].filter(
+        (x) => !x.ok && x.error === "ACTION_IN_PROGRESS"
+      ).length;
+      report.actionConcurrentClaim = {
+        ok: winners === 1 && losers === 1,
+        evidence: `winners=${winners} losers=${losers}`,
       };
     }
 

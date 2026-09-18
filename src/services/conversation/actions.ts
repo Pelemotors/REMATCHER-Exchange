@@ -105,6 +105,70 @@ export async function markActionCancelled(
 }
 
 /**
+ * Atomic PENDING_CONFIRMATION → EXECUTING. Only count===1 may run the executor.
+ */
+export async function claimPendingActionForExecution(input: {
+  principal: ConversationPrincipal;
+  threadId: string;
+  actionId: string;
+}): Promise<
+  | { ok: true; action: ConversationAction }
+  | {
+      ok: false;
+      error:
+        | "ACTION_IN_PROGRESS"
+        | "ACTION_ALREADY_COMPLETED"
+        | "ACTION_TERMINAL"
+        | "ACTION_MISMATCH"
+        | "no_pending";
+      status?: ConversationActionStatus;
+    }
+> {
+  await assertThreadAccess(input.principal, input.threadId);
+
+  const claimed = await prisma.conversationAction.updateMany({
+    where: {
+      id: input.actionId,
+      threadId: input.threadId,
+      status: "PENDING_CONFIRMATION",
+    },
+    data: { status: "EXECUTING" },
+  });
+
+  if (claimed.count === 1) {
+    const action = await prisma.conversationAction.findUniqueOrThrow({
+      where: { id: input.actionId },
+    });
+    return { ok: true, action };
+  }
+
+  const row = await prisma.conversationAction.findUnique({
+    where: { id: input.actionId },
+  });
+  if (!row || row.threadId !== input.threadId) {
+    return { ok: false, error: "ACTION_MISMATCH" };
+  }
+  if (row.status === "EXECUTING") {
+    return { ok: false, error: "ACTION_IN_PROGRESS", status: row.status };
+  }
+  if (row.status === "SUCCEEDED") {
+    return {
+      ok: false,
+      error: "ACTION_ALREADY_COMPLETED",
+      status: row.status,
+    };
+  }
+  if (
+    row.status === "FAILED" ||
+    row.status === "CANCELLED" ||
+    row.status === "EXPIRED"
+  ) {
+    return { ok: false, error: "ACTION_TERMINAL", status: row.status };
+  }
+  return { ok: false, error: "no_pending", status: row.status };
+}
+
+/**
  * Execute through the existing Action Gateway (mutation authority unchanged).
  * ConversationAction rows are projection only until gateway confirms execution.
  */

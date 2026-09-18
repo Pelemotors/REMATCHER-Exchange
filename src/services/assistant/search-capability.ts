@@ -520,13 +520,13 @@ export async function executeSearchMutation(params: {
   if (pending.action === "activate_demand" && demandId) {
     if (!(await assertDemandOwned(dealerId, demandId))) {
       meta.executionOutcome = "FAILED";
-      return { intent: "CREATE_DEMAND_DRAFT", message: "אין הרשאה לחיפוש הזה.", meta };
+      return { intent: "CREATE_DEMAND_DRAFT", message: "אין הרשאה לחיפוש הזה.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     const result = await activateDemandForDealer({ dealerId, demandId });
     meta.responseType = "mutation_activate_demand";
     if (!result.ok) {
       meta.executionOutcome = "FAILED";
-      return { intent: "CREATE_DEMAND_DRAFT", message: "לא הצלחתי לפתוח את החיפוש.", meta };
+      return { intent: "CREATE_DEMAND_DRAFT", message: "לא הצלחתי לפתוח את החיפוש.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     meta.executionOutcome = "SUCCEEDED";
     return {
@@ -544,14 +544,14 @@ export async function executeSearchMutation(params: {
   if (pending.action === "update_demand" && demandId) {
     if (!(await assertDemandOwned(dealerId, demandId))) {
       meta.executionOutcome = "FAILED";
-      return { intent: "UPDATE_DEMAND", message: "אין הרשאה לעדכן את החיפוש הזה.", meta };
+      return { intent: "UPDATE_DEMAND", message: "אין הרשאה לעדכן את החיפוש הזה.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     const confirmed = pending.payload.confirmed as DemandConfirmed;
     const result = await updateDemandForDealer({ dealerId, demandId, confirmed });
     meta.responseType = "mutation_update_demand";
     if (!result.ok) {
       meta.executionOutcome = "FAILED";
-      return { intent: "UPDATE_DEMAND", message: "לא הצלחתי לעדכן את החיפוש.", meta };
+      return { intent: "UPDATE_DEMAND", message: "לא הצלחתי לעדכן את החיפוש.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     meta.executionOutcome = "SUCCEEDED";
     return {
@@ -596,13 +596,13 @@ export async function executeSearchMutation(params: {
   if (pending.action === "close_demand" && demandId) {
     if (!(await assertDemandOwned(dealerId, demandId))) {
       meta.executionOutcome = "FAILED";
-      return { intent: "CLOSE_DEMAND", message: "אין הרשאה לסגור את החיפוש הזה.", meta };
+      return { intent: "CLOSE_DEMAND", message: "אין הרשאה לסגור את החיפוש הזה.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     const result = await executeDemandClosure(dealerId, demandId);
     meta.responseType = "mutation_close";
     if (!result.ok) {
       meta.executionOutcome = "FAILED";
-      return { intent: "CLOSE_DEMAND", message: "לא הצלחתי לסגור את החיפוש.", meta };
+      return { intent: "CLOSE_DEMAND", message: "לא הצלחתי לסגור את החיפוש.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     meta.executionOutcome = "SUCCEEDED";
     return {
@@ -619,13 +619,13 @@ export async function executeSearchMutation(params: {
   if (pending.action === "renew_demand" && demandId) {
     if (!(await assertDemandOwned(dealerId, demandId))) {
       meta.executionOutcome = "FAILED";
-      return { intent: "UPDATE_DEMAND", message: "אין הרשאה לחדש את החיפוש הזה.", meta };
+      return { intent: "UPDATE_DEMAND", message: "אין הרשאה לחדש את החיפוש הזה.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     const result = await executeDemandRenewal(dealerId, demandId);
     meta.responseType = "mutation_renew";
     if (!result.ok) {
       meta.executionOutcome = "FAILED";
-      return { intent: "UPDATE_DEMAND", message: "לא הצלחתי לחדש את החיפוש.", meta };
+      return { intent: "UPDATE_DEMAND", message: "לא הצלחתי לחדש את החיפוש.", conversation: { pendingInventoryDraft: conversation?.pendingInventoryDraft, sessionContext: conversation?.sessionContext, pendingConfirmation: undefined }, meta };
     }
     meta.executionOutcome = "SUCCEEDED";
     return {

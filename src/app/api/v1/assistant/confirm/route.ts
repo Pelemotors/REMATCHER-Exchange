@@ -116,11 +116,22 @@ export async function POST(req: Request) {
       return v1Error(ctx, "PERMISSION_FORBIDDEN");
     }
     if (result.error === "action_mismatch") {
-      return v1Error(
-        ctx,
-        "VALIDATION_INVALID_REQUEST",
-        result.message ?? "conversationActionId mismatch — no execution"
-      );
+      return v1Error(ctx, "ACTION_MISMATCH", result.message);
+    }
+    if (result.error === "IDEMPOTENCY_CONFLICT") {
+      return v1Error(ctx, "IDEMPOTENCY_CONFLICT", result.message);
+    }
+    if (result.error === "TURN_IN_PROGRESS") {
+      return v1Error(ctx, "TURN_IN_PROGRESS", result.message);
+    }
+    if (result.error === "ACTION_IN_PROGRESS") {
+      return v1Error(ctx, "ACTION_IN_PROGRESS", result.message);
+    }
+    if (result.error === "ACTION_ALREADY_COMPLETED") {
+      return v1Error(ctx, "ACTION_ALREADY_COMPLETED", result.message);
+    }
+    if (result.error === "ACTION_TERMINAL") {
+      return v1Error(ctx, "ACTION_TERMINAL", result.message);
     }
     return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
   }
