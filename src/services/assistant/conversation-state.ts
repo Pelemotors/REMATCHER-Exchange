@@ -8,6 +8,8 @@ export interface PendingConfirmation {
   action: string;
   label: string;
   payload: Record<string, unknown>;
+  /** ConversationAction.id — required for mobile confirm. */
+  conversationActionId?: string;
 }
 
 export interface SessionContext {

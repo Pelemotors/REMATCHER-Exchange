@@ -15,7 +15,10 @@ import {
 import { runExchangeAssistantV2 } from "@/services/assistant/v2-orchestrator";
 import { AGENT_VERSION } from "@/services/assistant/tools/registry";
 import { appendMessage } from "@/services/conversation/messages";
-import { syncGatewayPendingProjection } from "@/services/conversation/gateway-projection";
+import {
+  syncGatewayPendingProjection,
+  type ProjectionClearance,
+} from "@/services/conversation/gateway-projection";
 import type { ConversationPrincipal } from "@/services/conversation/types";
 import { ConversationAccessError } from "@/services/conversation/auth";
 
@@ -54,6 +57,8 @@ export async function getAssistantConversationPayload(
     threadId,
     conversation: state ?? {},
     recentTurns: state?.recentTurns ?? [],
+    pendingConfirmation: state?.pendingConfirmation ?? null,
+    requiresConfirmation: state?.pendingConfirmation ?? null,
   };
 }
 
@@ -85,9 +90,23 @@ async function persistTurnMessages(params: {
   }
 }
 
+function clearanceForTurn(
+  message: string,
+  previous: ConversationState | undefined,
+  next: ConversationState | undefined
+): ProjectionClearance | undefined {
+  if (!previous?.pendingConfirmation || next?.pendingConfirmation) {
+    return undefined;
+  }
+  if (isConfirmation(message)) return "succeeded";
+  if (isRejection(message)) return "failed";
+  return undefined;
+}
+
 /**
  * Shared Web + Mobile assistant turn — THREAD-SCOPED operational state.
  * Client conversation never overrides stored thread state.
+ * Persist USER+ASSISTANT here only (clients must not double-POST /messages).
  */
 export async function runAssistantChatTurn(params: {
   dealerId: string;
@@ -138,15 +157,19 @@ export async function runAssistantChatTurn(params: {
   const save = async (
     next: ConversationState | undefined,
     previous: ConversationState | undefined,
-    assistantMessage?: string
-  ) => {
+    assistantMessage?: string,
+    clearance?: ProjectionClearance
+  ): Promise<ConversationState | undefined> => {
     await saveThreadAgentState(principal, threadId, next);
-    await syncGatewayPendingProjection({
+    const resolvedClearance =
+      clearance ?? clearanceForTurn(message, previous, next);
+    return syncGatewayPendingProjection({
       principal,
       threadId,
       previous,
       next,
       assistantMessage,
+      clearance: resolvedClearance,
     });
   };
 
@@ -201,7 +224,7 @@ export async function runAssistantChatTurn(params: {
         { role: "assistant" as const, text },
       ].slice(-12),
     };
-    await save(next, active, text);
+    const saved = await save(next, active, text);
     await persistTurnMessages({
       principal,
       threadId,
@@ -209,13 +232,14 @@ export async function runAssistantChatTurn(params: {
       assistantText: text,
       turnKey,
     });
+    const pending = saved?.pendingConfirmation ?? next.pendingConfirmation;
     return {
       ok: true,
       body: {
         intent: "UPDATE_INVENTORY",
         message: text,
-        requiresConfirmation: next.pendingConfirmation,
-        conversation: next,
+        requiresConfirmation: pending,
+        conversation: saved ?? next,
         threadId,
         agentVersion: AGENT_VERSION,
       },
@@ -229,8 +253,8 @@ export async function runAssistantChatTurn(params: {
         pendingConfirmation: undefined,
         goal: undefined,
       };
-      await save(next, active, "ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.");
       const text = "ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.";
+      await save(next, active, text, "failed");
       await persistTurnMessages({
         principal,
         threadId,
@@ -269,7 +293,7 @@ export async function runAssistantChatTurn(params: {
           { role: "assistant" as const, text },
         ].slice(-12),
       };
-      await save(next, active, text);
+      await save(next, active, text, "succeeded");
       await persistTurnMessages({
         principal,
         threadId,
@@ -297,7 +321,7 @@ export async function runAssistantChatTurn(params: {
     context: params.context ?? { route: "/" },
     conversation: active,
   });
-  await save(response.conversation, active, response.message);
+  const saved = await save(response.conversation, active, response.message);
   const assistantText =
     typeof response.message === "string" ? response.message : null;
   await persistTurnMessages({
@@ -307,10 +331,14 @@ export async function runAssistantChatTurn(params: {
     assistantText,
     turnKey,
   });
+  const conversation = saved ?? response.conversation;
   return {
     ok: true,
     body: {
       ...response,
+      conversation,
+      requiresConfirmation:
+        conversation?.pendingConfirmation ?? response.requiresConfirmation,
       threadId,
       agentVersion: response.meta?.agentVersion ?? AGENT_VERSION,
     },

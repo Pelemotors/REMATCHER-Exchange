@@ -10,9 +10,14 @@ import type { ConversationMessage } from "@prisma/client";
 
 export type MessageListResult = {
   messages: ConversationMessage[];
+  /** Cursor to load *older* messages (scroll up). */
   nextCursor: string | null;
 };
 
+/**
+ * Latest page first: returns the newest `limit` messages in chronological order.
+ * Pass nextCursor (oldest id in the page) to prepend older messages.
+ */
 export async function listMessages(input: {
   principal: ConversationPrincipal;
   threadId: string;
@@ -21,19 +26,24 @@ export async function listMessages(input: {
 }): Promise<MessageListResult> {
   await assertThreadAccess(input.principal, input.threadId);
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+
   const rows = await prisma.conversationMessage.findMany({
     where: { threadId: input.threadId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: limit + 1,
     ...(input.cursor
       ? { cursor: { id: input.cursor }, skip: 1 }
       : {}),
   });
+
   const hasMore = rows.length > limit;
-  const page = hasMore ? rows.slice(0, limit) : rows;
+  const pageNewestFirst = hasMore ? rows.slice(0, limit) : rows;
+  const chronological = [...pageNewestFirst].reverse();
+  const oldest = chronological[0];
+
   return {
-    messages: page,
-    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
+    messages: chronological,
+    nextCursor: hasMore && oldest ? oldest.id : null,
   };
 }
 

@@ -9,4 +9,4 @@ export * from "@/services/conversation/types";
 export * from "@/services/conversation/dto";
 export * from "@/services/conversation/thread-agent-state";
 export * from "@/services/conversation/gateway-projection";
-export * from "@/services/conversation/media";
+export * from "@/services/conversation/thread-intelligence";

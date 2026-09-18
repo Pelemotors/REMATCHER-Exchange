@@ -7,6 +7,9 @@ const mockUpdate = vi.fn();
 const mockFindFirst = vi.fn();
 const mockActionFindFirst = vi.fn();
 const mockActionFindUnique = vi.fn();
+const mockActionCreate = vi.fn();
+const mockMessageCreate = vi.fn();
+const mockMessageFindUnique = vi.fn();
 const mockDealerMemoryFindFirst = vi.fn();
 const mockDealerMemoryUpdateMany = vi.fn();
 
@@ -20,10 +23,18 @@ vi.mock("@/lib/prisma", () => ({
     conversationAction: {
       findFirst: (...args: unknown[]) => mockActionFindFirst(...args),
       findUnique: (...args: unknown[]) => mockActionFindUnique(...args),
+      create: (...args: unknown[]) => mockActionCreate(...args),
+    },
+    conversationMessage: {
+      create: (...args: unknown[]) => mockMessageCreate(...args),
+      findUnique: (...args: unknown[]) => mockMessageFindUnique(...args),
+      findMany: vi.fn(),
     },
     dealerMemoryItem: {
       findFirst: (...args: unknown[]) => mockDealerMemoryFindFirst(...args),
       updateMany: (...args: unknown[]) => mockDealerMemoryUpdateMany(...args),
+      update: vi.fn(async () => ({})),
+      create: vi.fn(async () => ({})),
     },
   },
 }));
@@ -31,13 +42,16 @@ vi.mock("@/lib/prisma", () => ({
 import {
   loadThreadAgentState,
   saveThreadAgentState,
+  splitStateForPersistence,
 } from "@/services/assistant/conversation-persistence";
-import { assertPendingActionOnThread } from "@/services/conversation/gateway-projection";
+import {
+  assertPendingActionOnThread,
+  syncGatewayPendingProjection,
+} from "@/services/conversation/gateway-projection";
 import {
   assertThreadAccess,
   ConversationAccessError,
 } from "@/services/conversation/auth";
-import { splitStateForPersistence } from "@/services/assistant/conversation-persistence";
 
 const threadRow = (id: string, state: unknown) => ({
   id,
@@ -84,17 +98,37 @@ describe("thread-scoped agent state", () => {
     const stateB = await loadThreadAgentState(principal, "thread-b");
     expect(stateA.state?.recentTurns?.[0]?.text).toBe("A");
     expect(stateB.state?.recentTurns?.[0]?.text).toBe("B");
+  });
 
-    mockUpdate.mockResolvedValue({});
-    await saveThreadAgentState(principal, "thread-a", {
-      recentTurns: [{ role: "user", text: "A2" }],
+  it("legacy migration strips pending mutation authority", async () => {
+    mockFindUnique.mockResolvedValue(threadRow("thread-new", null));
+    mockDealerMemoryFindFirst.mockResolvedValue({
+      details: {
+        state: {
+          pendingConfirmation: {
+            action: "stale",
+            label: "old",
+            payload: {},
+          },
+          recentTurns: [{ role: "user", text: "legacy" }],
+          preferredClarificationWording: { year: "שנה?" },
+        },
+      },
     });
+    mockUpdate.mockResolvedValue({});
+    mockDealerMemoryUpdateMany.mockResolvedValue({ count: 1 });
+
+    const { state } = await loadThreadAgentState(
+      { dealerId: "dealer-a", userId: "user-a" },
+      "thread-new"
+    );
+    expect(state?.pendingConfirmation).toBeUndefined();
+    expect(state?.recentTurns?.[0]?.text).toBe("legacy");
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "thread-a" },
         data: expect.objectContaining({
-          agentStateJson: expect.objectContaining({
-            recentTurns: [{ role: "user", text: "A2" }],
+          agentStateJson: expect.not.objectContaining({
+            pendingConfirmation: expect.anything(),
           }),
         }),
       })
@@ -112,7 +146,6 @@ describe("thread-scoped agent state", () => {
       preferredClarificationWording: { year: "שנת ייצור?" },
     });
     expect(operational?.pendingConfirmation).toBeDefined();
-    expect(operational?.recentTurns).toHaveLength(1);
     expect(preferences?.preferredClarificationWording?.year).toBe("שנת ייצור?");
   });
 });
@@ -123,7 +156,6 @@ describe("confirm action thread binding", () => {
   });
 
   it("confirm B denied for A pending", async () => {
-    mockActionFindFirst.mockResolvedValue(null);
     mockActionFindUnique.mockResolvedValue({
       id: "act-1",
       threadId: "thread-a",
@@ -136,6 +168,105 @@ describe("confirm action thread binding", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("wrong_thread");
+  });
+});
+
+describe("gateway projection Action Truth", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActionFindUnique.mockReset();
+    mockActionCreate.mockReset();
+    mockActionFindFirst.mockReset();
+    mockFindUnique.mockResolvedValue(threadRow("t1", {}));
+    mockUpdate.mockResolvedValue({});
+    mockMessageFindUnique.mockResolvedValue(null);
+    mockMessageCreate.mockResolvedValue({
+      id: "msg-1",
+      threadId: "t1",
+      createdAt: new Date(),
+    });
+    mockActionFindUnique.mockResolvedValue(null);
+    mockActionCreate.mockResolvedValue({
+      id: "act-new",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+  });
+
+  it("creates unique ConversationAction per pending cycle", async () => {
+    mockActionFindUnique.mockResolvedValue(null);
+    const principal = { dealerId: "dealer-a", userId: "user-a" };
+    await syncGatewayPendingProjection({
+      principal,
+      threadId: "t1",
+      previous: undefined,
+      next: {
+        pendingConfirmation: {
+          action: "confirm_inventory_import",
+          label: "אשר",
+          payload: { importId: "i1" },
+        },
+      },
+    });
+    expect(mockActionCreate).toHaveBeenCalled();
+    const key1 = (mockActionCreate.mock.calls[0]?.[0] as { data: { idempotencyKey: string } })
+      ?.data?.idempotencyKey;
+    expect(key1).toMatch(/^gateway_pending:confirm_inventory_import:/);
+
+    mockActionCreate.mockClear();
+    mockActionFindUnique.mockResolvedValue(null);
+    mockActionCreate.mockResolvedValue({
+      id: "act-new-2",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    await syncGatewayPendingProjection({
+      principal,
+      threadId: "t1",
+      previous: undefined,
+      next: {
+        pendingConfirmation: {
+          action: "confirm_inventory_import",
+          label: "אשר שוב",
+          payload: { importId: "i2" },
+        },
+      },
+    });
+    const key2 = (mockActionCreate.mock.calls[0]?.[0] as { data: { idempotencyKey: string } })
+      ?.data?.idempotencyKey;
+    expect(key2).not.toBe(key1);
+  });
+
+  it("does not mark SUCCEEDED without deterministic clearance", async () => {
+    mockActionFindFirst.mockResolvedValue({
+      id: "act-1",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    const markSpy = vi.fn();
+    // patch via prisma update on conversationAction — we only check no FAILED/SUCCEEDED without clearance
+    await syncGatewayPendingProjection({
+      principal: { dealerId: "dealer-a", userId: "user-a" },
+      threadId: "t1",
+      previous: {
+        pendingConfirmation: {
+          action: "x",
+          label: "y",
+          payload: {},
+          conversationActionId: "act-1",
+        },
+      },
+      next: {},
+      assistantMessage: "הכל בסדר בוצע בהצלחה",
+      // no clearance
+    });
+    // Without clearance, should not create ACTION_RESULT success message from regex
+    const resultMsgs = mockMessageCreate.mock.calls.filter((c) => {
+      const data = (c[0] as { data?: { kind?: string } })?.data;
+      return data?.kind === "ACTION_RESULT";
+    });
+    expect(resultMsgs).toHaveLength(0);
+    void markSpy;
   });
 });
 

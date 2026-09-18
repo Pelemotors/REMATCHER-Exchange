@@ -169,12 +169,21 @@ async function maybeMigrateLegacyStateIntoThread(
   if (!legacy || Object.keys(legacy).length === 0) return undefined;
 
   const { operational, preferences } = splitStateForPersistence(legacy);
-  if (Object.keys(operational).length > 0) {
+  // Never import stale mutation authority into a new thread.
+  const {
+    pendingConfirmation: _p,
+    pendingInventoryDraft: _d,
+    pendingInventoryMutation: _m,
+    pendingSearchDraft: _s,
+    ...safeOperational
+  } = operational;
+
+  if (Object.keys(safeOperational).length > 0) {
     await prisma.conversationThread.update({
       where: { id: threadId },
       data: {
-        agentStateJson: toPrismaJson(operational),
-        compactSummary: operational.compactSummary ?? null,
+        agentStateJson: toPrismaJson(safeOperational),
+        compactSummary: safeOperational.compactSummary ?? null,
       },
     });
   }
@@ -189,7 +198,7 @@ async function maybeMigrateLegacyStateIntoThread(
     },
     data: { status: "SUPERSEDED" },
   });
-  return Object.keys(operational).length ? operational : undefined;
+  return Object.keys(safeOperational).length ? safeOperational : undefined;
 }
 
 export async function loadThreadAgentState(

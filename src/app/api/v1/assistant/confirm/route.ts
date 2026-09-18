@@ -20,6 +20,7 @@ export async function POST(req: Request) {
   const body = parsed.body as {
     confirmed?: unknown;
     action?: unknown;
+    conversationActionId?: unknown;
     threadId?: unknown;
   };
 
@@ -33,18 +34,39 @@ export async function POST(req: Request) {
     return v1Error(ctx, "VALIDATION_INVALID_REQUEST", "threadId required");
   }
 
-  const actionId = typeof body.action === "string" ? body.action : undefined;
-  if (actionId) {
+  const conversationActionId =
+    typeof body.conversationActionId === "string"
+      ? body.conversationActionId.trim()
+      : "";
+  const actionRaw = typeof body.action === "string" ? body.action.trim() : "";
+
+  // Prefer ConversationAction.id; `action` may be either id or action-type.
+  const looksLikeId =
+    !!actionRaw &&
+    !actionRaw.includes("_") &&
+    actionRaw.length >= 20 &&
+    !/^confirm_/i.test(actionRaw);
+  const actionId = conversationActionId || (looksLikeId ? actionRaw : "");
+  const actionType = !actionId && actionRaw ? actionRaw : undefined;
+
+  if (actionId || actionType) {
     const gate = await assertPendingActionOnThread({
       principal: {
         dealerId: principal.dealerId,
         userId: principal.userId,
       },
       threadId,
-      actionId,
+      actionId: actionId || undefined,
+      actionType,
     });
     if (!gate.ok) {
-      return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
+      return v1Error(
+        ctx,
+        "VALIDATION_INVALID_REQUEST",
+        gate.reason === "wrong_thread"
+          ? "pending action belongs to another thread"
+          : "no pending confirmation on this thread"
+      );
     }
   }
 
@@ -73,7 +95,8 @@ export async function POST(req: Request) {
 
   return v1Json(ctx, {
     ...result.body,
-    action: typeof body.action === "string" ? body.action : undefined,
+    action: actionType || actionRaw || undefined,
+    conversationActionId: actionId || undefined,
     confirmed: body.confirmed,
     threadId,
   });
