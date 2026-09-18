@@ -20,9 +20,14 @@ const SYNTHETIC_PROFILES = [
 ] as const;
 
 const MODELS = [
-  { make: "Mazda", model: "CX-5", year: 2020 },
+  { make: "Mazda", model: "CX-5", year: 2022 },
   { make: "Hyundai", model: "Tucson", year: 2021 },
-  { make: "Kia", model: "Sportage", year: 2019 },
+  { make: "Kia", model: "Sportage", year: 2020 },
+  { make: "Nissan", model: "Qashqai", year: 2018 },
+  { make: "Seat", model: "Ateca", year: 2021 },
+  { make: "Toyota", model: "RAV4", year: 2022 },
+  { make: "Honda", model: "Jazz", year: 2021 },
+  { make: "Renault", model: "Clio", year: 2022 },
 ] as const;
 
 async function upsertSyntheticDealer(slug: string, city: string, region: string) {
@@ -30,19 +35,30 @@ async function upsertSyntheticDealer(slug: string, city: string, region: string)
   const existing = await prisma.dealer.findFirst({
     where: { email },
   });
-  if (existing) return existing;
+  if (existing) {
+    return prisma.dealer.update({
+      where: { id: existing.id },
+      data: {
+        marketMode: "SYNTHETIC",
+        verificationStatus: "VERIFIED",
+        isActive: true,
+      },
+    });
+  }
 
   return prisma.dealer.create({
     data: {
       businessName: `Synthetic Beta ${slug}`,
       contactName: "Beta Seed",
-      phone: `050-${Math.floor(Math.random() * 9000000 + 1000000)}`,
+      phone: `050${String(Math.floor(1000000 + Math.random() * 8999999))}`,
       email,
       city,
       region,
       verificationStatus: "VERIFIED",
+      isActive: true,
       marketMode: "SYNTHETIC",
       canAccessSyntheticMarket: false,
+      cohort: "SYNTHETIC_BETA",
     },
   });
 }
@@ -51,8 +67,9 @@ async function seedInventory(dealerId: string, idx: number) {
   for (let i = 0; i < MODELS.length; i++) {
     const m = MODELS[i]!;
     const plate = `9${String(idx).padStart(2, "0")}${String(i).padStart(4, "0")}`;
+    const tag = `synthetic:${plate}`;
     const existing = await prisma.vehicle.findFirst({
-      where: { dealerId, rawInput: { contains: `synthetic:${plate}` } },
+      where: { dealerId, rawInput: { contains: tag } },
     });
     if (existing) continue;
     await prisma.vehicle.create({
@@ -61,39 +78,50 @@ async function seedInventory(dealerId: string, idx: number) {
         status: "ACTIVE",
         visibility: "ANONYMOUS_NETWORK",
         mediaReady: true,
-        dealerRelationship: "INVENTORY",
+        dealerRelationship: "OWNED",
         make: m.make,
         model: m.model,
-        year: m.year,
-        mileage: 45000 + idx * 1000 + i * 500,
-        b2bPrice: 115000 + idx * 2000,
-        rawInput: `synthetic:${plate}`,
+        year: m.year + (idx % 3) - 1,
+        mileage: 35000 + idx * 1200 + i * 800,
+        ownershipHand: (i % 3) + 1,
+        ownershipType: i % 2 === 0 ? "PRIVATE" : "LEASING",
+        b2bPrice: 95000 + idx * 2500 + i * 1500,
+        retailPrice: 110000 + idx * 2500 + i * 1800,
+        rawInput: tag,
         fieldProvenance: toPrismaJson({
           licensePlate: { value: plate, source: "SYNTHETIC_SEED" },
+          fuel: {
+            value: i % 3 === 0 ? "HYBRID" : "GASOLINE",
+            source: "SYNTHETIC_SEED",
+          },
+          engine: { value: String(1600 + (i % 4) * 200), source: "SYNTHETIC_SEED" },
         }),
       },
     });
   }
 }
 
-async function seedDemand(dealerId: string, target: (typeof MODELS)[number]) {
-  const title = `${target.make} ${target.model}`;
+async function seedDemand(dealerId: string, target: (typeof MODELS)[number], idx: number) {
+  const rawText = `[Synthetic Beta] מחפש ${target.make} ${target.model} ${target.year - 1}+ עד ${130000 + idx * 5000}`;
   const existing = await prisma.demand.findFirst({
-    where: { dealerId, title, status: "ACTIVE" },
+    where: { dealerId, rawText, status: "ACTIVE" },
   });
   if (existing) return;
   await prisma.demand.create({
     data: {
       dealerId,
-      title,
       status: "ACTIVE",
       networkVisibility: "ANONYMOUS_NETWORK",
+      rawText,
       confirmedJson: toPrismaJson({
         make: target.make,
         model: target.model,
         yearMin: target.year - 1,
         yearMax: target.year + 1,
+        budgetMax: 130000 + idx * 5000,
       }),
+      confirmedAt: new Date(),
+      expiresAt: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
     },
   });
 }
@@ -104,7 +132,12 @@ async function main() {
     const d = await upsertSyntheticDealer(p.slug, p.city, p.region);
     dealers.push(d);
     await seedInventory(d.id, dealers.length);
-    await seedDemand(d, MODELS[dealers.length % MODELS.length]!);
+    // Each dealer publishes several overlapping anonymous demands
+    for (let j = 0; j < MODELS.length; j++) {
+      if ((j + dealers.length) % 2 === 0) {
+        await seedDemand(d.id, MODELS[j]!, dealers.length + j);
+      }
+    }
   }
 
   const betaRealId = process.env.SYNTHETIC_BETA_REAL_DEALER_ID?.trim();
@@ -116,8 +149,25 @@ async function main() {
     console.log(`Enabled synthetic beta access for REAL dealer ${betaRealId}`);
   }
 
+  // Also enable apple-review demo by email if present
+  await prisma.dealer.updateMany({
+    where: { email: "apple-review@rematcher.co.il", marketMode: "REAL" },
+    data: { canAccessSyntheticMarket: true, cohort: "APPLE_REVIEW" },
+  });
+
+  const synthSupply = await prisma.vehicle.count({
+    where: { dealer: { marketMode: "SYNTHETIC" }, status: "ACTIVE" },
+  });
+  const synthDemand = await prisma.demand.count({
+    where: { dealer: { marketMode: "SYNTHETIC" }, status: "ACTIVE" },
+  });
   console.log(
-    `Synthetic beta market: ${dealers.length} dealers (${dealers.map((d) => d.id).join(", ")})`
+    JSON.stringify({
+      dealers: dealers.length,
+      synthSupply,
+      synthDemand,
+      dealerIds: dealers.map((d) => d.id),
+    })
   );
 }
 
