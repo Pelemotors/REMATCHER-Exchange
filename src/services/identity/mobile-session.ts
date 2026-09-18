@@ -78,6 +78,11 @@ async function loadPrincipal(userId: string): Promise<
   };
 }
 
+/** Public wrapper for social / link flows after user resolution. */
+export async function loadPrincipalForUserId(userId: string) {
+  return loadPrincipal(userId);
+}
+
 export async function authenticateMobilePassword(params: {
   email: string;
   password: string;

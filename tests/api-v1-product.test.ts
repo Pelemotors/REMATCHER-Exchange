@@ -27,7 +27,27 @@ vi.mock("@/services/identity/mobile-session", () => ({
   issueMobileSession: vi.fn(),
   refreshMobileSession: vi.fn(),
   revokeMobileRefresh: vi.fn(),
+  hashMobileToken: vi.fn(() => "hashed-refresh-token"),
+  loadPrincipalForUserId: vi.fn(),
 }));
+
+vi.mock("@/services/devices/installations", () => ({
+  revokeInstallation: vi.fn().mockResolvedValue({ revoked: 0 }),
+}));
+
+vi.mock("@/lib/prisma", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/prisma")>();
+  return {
+    ...actual,
+    prisma: {
+      ...actual.prisma,
+      mobileSession: {
+        ...(actual.prisma as { mobileSession?: object }).mobileSession,
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    },
+  };
+});
 
 vi.mock("@/services/privacy/policy", () => ({
   hasCompletedPrivacyAiV1: vi.fn(async () => true),

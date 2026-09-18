@@ -19,6 +19,7 @@ function googleAudiences(): string[] {
   const ids = [
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_ANDROID_CLIENT_ID,
+    process.env.GOOGLE_IOS_CLIENT_ID,
     process.env.GOOGLE_WEB_CLIENT_ID,
   ]
     .map((v) => v?.trim())

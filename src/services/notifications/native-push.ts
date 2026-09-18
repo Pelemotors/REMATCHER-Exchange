@@ -19,6 +19,8 @@ export type NativePushRegistration = {
   platform: NativePushPlatform;
   /** APNs / FCM device token — never a VAPID endpoint */
   deviceToken: string;
+  /** Stable client installation id for logout/revoke ownership */
+  installationId?: string;
 };
 
 const NATIVE_ENDPOINT_PREFIX = {
@@ -83,6 +85,20 @@ export async function registerNativePushDevice(input: {
       invalidatedAt: null,
     },
   });
+
+  if (input.registration.installationId) {
+    const { registerOrUpdateInstallation } = await import(
+      "@/services/devices/installations"
+    );
+    await registerOrUpdateInstallation({
+      installationId: input.registration.installationId,
+      platform: input.registration.platform === "ios" ? "IOS" : "ANDROID",
+      userId: input.userId,
+      pushToken: token,
+      pushProvider: input.registration.platform === "ios" ? "APNS" : "FCM",
+      pushPermission: "GRANTED",
+    });
+  }
 
   return { ok: true };
 }

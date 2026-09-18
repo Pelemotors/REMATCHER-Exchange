@@ -14,18 +14,20 @@ const APPLE_JWKS = createRemoteJWKSet(
   new URL("https://appleid.apple.com/auth/keys")
 );
 
-function appleAudience(): string | string[] | null {
-  const id = process.env.APPLE_CLIENT_ID?.trim();
-  return id || null;
+function appleAudiences(): string[] {
+  const ids = [
+    process.env.APPLE_CLIENT_ID,
+    process.env.APPLE_BUNDLE_ID,
+    process.env.APPLE_IOS_CLIENT_ID,
+    "co.rematcher.exchange",
+  ]
+    .map((v) => v?.trim())
+    .filter((v): v is string => Boolean(v));
+  return [...new Set(ids)];
 }
 
 function hasAppleCredentials(): boolean {
-  return Boolean(
-    process.env.APPLE_CLIENT_ID?.trim() &&
-      process.env.APPLE_TEAM_ID?.trim() &&
-      process.env.APPLE_KEY_ID?.trim() &&
-      process.env.APPLE_PRIVATE_KEY?.trim()
-  );
+  return appleAudiences().length > 0;
 }
 
 function isFakeMode(): boolean {
@@ -70,8 +72,8 @@ export async function verifyAppleIdToken(
     return parseFakeAppleToken(idToken);
   }
 
-  const aud = appleAudience();
-  if (!aud) {
+  const aud = appleAudiences();
+  if (aud.length === 0) {
     if (isFakeMode()) return parseFakeAppleToken(idToken);
     throw new Error("APPLE_CLIENT_ID not configured");
   }

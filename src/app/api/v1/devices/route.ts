@@ -1,9 +1,6 @@
 /**
- * Native push device registration only.
- *
- * Revoke (/api/v1/devices/revoke or DELETE) is intentionally NOT exposed:
- * Web `/api/devices/revoke` historically had IDOR risk — do not ship revoke
- * on Mobile until ownership is proven safe end-to-end.
+ * Native push device registration.
+ * Owned revoke: POST /api/v1/devices/revoke (principal.userId required).
  */
 import { requireV1VerifiedDealer } from "@/lib/api-v1/auth";
 import { parseV1Json } from "@/lib/api-v1/parse-json";
@@ -32,6 +29,7 @@ export async function POST(req: Request) {
     platform?: unknown;
     deviceToken?: unknown;
     pushToken?: unknown;
+    installationId?: unknown;
   };
 
   const platform = parsePlatform(body.platform);
@@ -42,6 +40,8 @@ export async function POST(req: Request) {
         ? body.pushToken
         : "";
   const deviceToken = rawToken.trim();
+  const installationId =
+    typeof body.installationId === "string" ? body.installationId.trim() : "";
 
   if (!platform || !deviceToken) {
     return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
@@ -49,7 +49,11 @@ export async function POST(req: Request) {
 
   const result = await registerNativePushDevice({
     userId: principal.userId,
-    registration: { platform, deviceToken },
+    registration: {
+      platform,
+      deviceToken,
+      installationId: installationId || undefined,
+    },
   });
 
   if (!result.ok) {

@@ -1,37 +1,45 @@
-# iOS TestFlight — פעולות חיצוניות לבעלים בלבד
+# iOS TestFlight — פעולות חיצוניות לבעלים (Build #6 Delta)
 
-Engineering **לא** יכול לעקוף Apple signing / distribution.  
-Adapters (Share Extension + App Group) קיימים בקוד תחת `mobile/ios/`.
+Engineering **לא** יכול לעקוף Apple signing / distribution / Google Console.
 
-## מה חסר כדי להגיע ל־TestFlight External עם Share
+Canonical IDs (do not invent):
 
-| # | פעולה שלך | למה |
-|---|-----------|-----|
-| 1 | Apple Developer Program membership פעיל | חתימה + TestFlight |
-| 2 | App ID: `co.rematcher.exchange` | Containing app |
-| 3 | App ID ל־Share Extension (למשל `co.rematcher.exchange.ShareExtension`) | Share Sheet |
-| 4 | Capability: **App Groups** — `group.co.rematcher.exchange` על שני ה־IDs | Staging משותף |
-| 5 | יצירת App ב־App Store Connect | TestFlight |
-| 6 | Distribution certificate + provisioning profiles (App + Extension) | Build חתום ב־Xcode/CI |
-| 7 | Build + upload ל־App Store Connect (ממק־עם Xcode; אין macOS ב־VPS הזה) | Binary ל־TestFlight |
-| 8 | TestFlight → External testing + Beta App Review לפי הצורך | התקנה למשתמש רגיל |
+| Item | Value |
+|------|--------|
+| App Bundle ID | `co.rematcher.exchange` |
+| Share Extension Bundle ID | `co.rematcher.exchange.share` |
+| App Group | `group.co.rematcher.exchange` |
+| URL scheme | `rematcher` |
+| Production API | `https://exchange.rematcher.co.il` |
 
-## מה כבר מוכן בקוד
+## Apple Developer — EXTERNAL ACTION
 
-- Share Extension אמיתי: `mobile/ios/App/ShareExtension/` (images ≤40 + text, App Group staging)
-- Capacitor iOS `ShareStaging` plugin: `mobile/ios/App/ShareStaging/` (upload + ACK כמו Android)
-- Deep link: `rematcher-exchange://intake?clientBatchId=…&source=IOS_SHARE&staged=1`
-- Web: `/intake/handoff` קורא ל־`ShareStaging` גם עבור `IOS_SHARE`
-- עזרה ל־Mac: `mobile/ios/apply-share-sources.sh` + `AppDelegate+IntakeShare.swift.example`
-- Field Test URL ל־Web: `https://field-test-exchange.rematcher.co.il`
+1. App ID `co.rematcher.exchange` — enable **Sign in with Apple**
+2. App ID `co.rematcher.exchange.share` — create if missing
+3. App Groups capability: `group.co.rematcher.exchange` on App + Share
+4. Provisioning profiles (App + Share) for TestFlight/App Store
+5. Push capability on App ID (live send also needs `.p8`)
 
-## מה לא ניתן בשרת הזה
+## Google Cloud Console — EXTERNAL ACTION
 
-- אין Xcode / macOS → אין `.xcodeproj` / IPA מכאן
-- אין Apple credentials בשרת (בכוונה)
-- **לא ניתן להכריז PASS על Share Sheet בלי iPhone + build חתום**
+1. iOS OAuth client for `co.rematcher.exchange`
+2. Set public `GIDClientID` in Mobile Release config + Codemagic env
+3. Add reversed client-id URL scheme to Info.plist
+4. Set `GOOGLE_IOS_CLIENT_ID` (and/or `GOOGLE_CLIENT_ID`) on Backend for audience verification
 
-## אחרי ש־1–8 בוצעו
+## APNs — EXTERNAL ACTION
 
-על Mac: `npx cap add ios` → `bash mobile/ios/apply-share-sources.sh` → Xcode target/signing → TestFlight.  
-רק אז לבדוק: Photos/WhatsApp → Share → REMATCHER Exchange → Intake.
+`BLOCKED — EXTERNAL ACTION: configure APNs signing key (.p8)`
+
+Device registration / preferences / owned revoke are implemented in code.
+
+## Code already ready (Native SwiftUI repo)
+
+- Share Extension target + App Group staging → existing Intake
+- Apple + Google social login → `/api/v1/auth/social` + explicit `/api/v1/auth/link`
+- Account deletion UI under Privacy
+- Do **not** trigger Codemagic from Cursor — Owner runs Build #6 manually
+
+## Device-only (TestFlight)
+
+WhatsApp/Photos Share Sheet appearance, Apple/Google authorize on device, visual parity — see Mobile `docs/BUILD6_DELTA_PREFLIGHT.md`.
