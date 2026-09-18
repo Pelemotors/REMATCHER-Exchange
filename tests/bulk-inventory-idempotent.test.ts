@@ -42,12 +42,12 @@ describe("bulk inventory archive idempotent", () => {
       vehicleIds: ["v1"],
     });
 
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
     expect(result.alreadyInTargetStateCount).toBe(1);
     expect(result.affectedCount).toBe(0);
-    if (result.ok) {
-      expect(result.processedCount).toBe(1);
-      expect(result.failureCount).toBe(0);
-    }
+    expect(result.processedCount).toBe(1);
+    expect(result.failureCount).toBe(0);
     expect(mockRemove).not.toHaveBeenCalled();
   });
 
@@ -61,6 +61,8 @@ describe("bulk inventory archive idempotent", () => {
       vehicleIds: ["v2"],
     });
 
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
     expect(result.failures[0]?.error).toBe("sold_not_archivable");
     expect(mockRemove).not.toHaveBeenCalled();
   });
