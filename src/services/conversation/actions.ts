@@ -96,6 +96,14 @@ export async function markActionFailed(
   return patchActionStatus(principal, actionId, "FAILED", resultJson);
 }
 
+export async function markActionCancelled(
+  principal: ConversationPrincipal,
+  actionId: string,
+  resultJson?: unknown
+): Promise<ConversationAction | null> {
+  return patchActionStatus(principal, actionId, "CANCELLED", resultJson);
+}
+
 /**
  * Execute through the existing Action Gateway (mutation authority unchanged).
  * ConversationAction rows are projection only until gateway confirms execution.

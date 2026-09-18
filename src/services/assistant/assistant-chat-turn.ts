@@ -99,7 +99,7 @@ function clearanceForTurn(
     return undefined;
   }
   if (isConfirmation(message)) return "succeeded";
-  if (isRejection(message)) return "failed";
+  if (isRejection(message)) return "cancelled";
   return undefined;
 }
 
@@ -254,7 +254,7 @@ export async function runAssistantChatTurn(params: {
         goal: undefined,
       };
       const text = "ביטלתי. הקובץ נשאר כטיוטה ולא שינה את המלאי.";
-      await save(next, active, text, "failed");
+      await save(next, active, text, "cancelled");
       await persistTurnMessages({
         principal,
         threadId,

@@ -117,6 +117,19 @@ export async function syncGatewayPendingProjection(input: {
         idempotencyKey: `action_result:${row.id}:ok`,
         source: "action_gateway",
       });
+    } else if (clearance === "cancelled") {
+      await patchActionCancelled(input.principal, row.id, {
+        reason: "cancelled",
+      });
+      await appendMessage(input.principal, {
+        threadId: input.threadId,
+        role: "SYSTEM",
+        kind: "ACTION_RESULT",
+        text: input.assistantMessage ?? "הפעולה בוטלה",
+        payloadJson: { actionId: row.id, status: "CANCELLED" },
+        idempotencyKey: `action_result:${row.id}:cancelled`,
+        source: "action_gateway",
+      });
     } else {
       await markActionFailed(input.principal, row.id, {
         reason: clearance,
@@ -125,15 +138,26 @@ export async function syncGatewayPendingProjection(input: {
         threadId: input.threadId,
         role: "SYSTEM",
         kind: "ACTION_RESULT",
-        text: input.assistantMessage ?? "הפעולה בוטלה",
+        text: input.assistantMessage ?? "הפעולה נכשלה",
         payloadJson: { actionId: row.id, status: "FAILED" },
-        idempotencyKey: `action_result:${row.id}:${clearance}`,
+        idempotencyKey: `action_result:${row.id}:failed`,
         source: "action_gateway",
       });
     }
   }
 
   return state;
+}
+
+async function patchActionCancelled(
+  principal: ConversationPrincipal,
+  actionId: string,
+  resultJson?: unknown
+) {
+  const { markActionCancelled } = await import(
+    "@/services/conversation/actions"
+  );
+  return markActionCancelled(principal, actionId, resultJson);
 }
 
 export async function assertPendingActionOnThread(input: {
