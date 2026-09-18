@@ -45,6 +45,7 @@ model User {
   purchasedSubscriptions DealerSubscription[] @relation("SubscriptionPurchaser")
   mobileSessions MobileSession[]
   marketWatches MarketWatch[]
+  ownedConversations ConversationThread[]
 }
 
 /** Opaque Mobile access+refresh pair. Web NextAuth cookies are unchanged. */
@@ -142,6 +143,7 @@ model Dealer {
   dealerOpportunities DealerOpportunity[]
   catalog           DealerCatalog?
   marketWatches     MarketWatch[]
+  conversations     ConversationThread[]
 
   @@index([cohort])
 }
@@ -1470,6 +1472,7 @@ enum VehicleCandidateReviewStatus {
 model IntakeBatch {
   id                    String            @id @default(cuid())
   dealerId              String
+  conversationThreadId  String?
   source                IntakeSource
   status                IntakeBatchStatus @default(RECEIVING)
   clientBatchId         String
@@ -1485,14 +1488,16 @@ model IntakeBatch {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
-  dealer     Dealer             @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  media      IntakeMedia[]
-  texts      IntakeText[]
-  candidates VehicleCandidate[]
+  dealer              Dealer              @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  conversationThread  ConversationThread? @relation(fields: [conversationThreadId], references: [id], onDelete: SetNull)
+  media               IntakeMedia[]
+  texts               IntakeText[]
+  candidates          VehicleCandidate[]
 
   @@unique([dealerId, clientBatchId])
   @@index([dealerId, status, receivedAt])
   @@index([status, updatedAt])
+  @@index([conversationThreadId])
 }
 
 model IntakeMedia {
@@ -1860,4 +1865,128 @@ model IdentityLinkChallenge {
   createdAt    DateTime @default(now())
 
   @@index([userId, provider])
+}
+
+// ─── Conversation workspace (Phase A — additive; Agent blob retained) ───
+
+enum ConversationTitleSource {
+  AUTO
+  USER
+}
+
+enum ConversationThreadStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+enum ConversationThreadSource {
+  AGENT
+  HOME_CAPTURE
+  IOS_SHARE
+  CAMERA
+  PHOTO_LIBRARY
+  TEXT
+  CUSTOMER_SCREENSHOT
+  OTHER
+}
+
+enum ConversationVisibility {
+  PRIVATE_USER
+  DEALER_SHARED
+}
+
+enum ConversationMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ConversationMessageKind {
+  TEXT
+  MEDIA_GROUP
+  VEHICLE_CANDIDATE
+  DEMAND_DRAFT
+  CUSTOMER_CARD
+  INTELLIGENCE_RESULT
+  ACTION_CONFIRMATION
+  ACTION_RESULT
+  STATUS
+  ERROR
+}
+
+enum ConversationActionStatus {
+  PROPOSED
+  PENDING_CONFIRMATION
+  EXECUTING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model ConversationThread {
+  id               String                    @id @default(cuid())
+  dealerId         String
+  ownerUserId      String
+  title            String                    @default("שיחה חדשה")
+  titleSource      ConversationTitleSource   @default(AUTO)
+  status           ConversationThreadStatus  @default(ACTIVE)
+  source           ConversationThreadSource  @default(OTHER)
+  visibility       ConversationVisibility    @default(PRIVATE_USER)
+  agentStateJson   Json?
+  compactSummary   String?
+  lastMessageAt    DateTime?
+  archivedAt       DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  dealer       Dealer                @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  owner        User                  @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  messages     ConversationMessage[]
+  actions      ConversationAction[]
+  intakeBatches IntakeBatch[]
+
+  @@index([dealerId, ownerUserId, status, lastMessageAt(sort: Desc)])
+  @@index([dealerId, status])
+}
+
+model ConversationMessage {
+  id             String                  @id @default(cuid())
+  threadId       String
+  role           ConversationMessageRole
+  kind           ConversationMessageKind @default(TEXT)
+  text           String?
+  payloadJson    Json?
+  entityType     String?
+  entityId       String?
+  intakeBatchId  String?
+  source         String?
+  idempotencyKey String?
+  createdAt      DateTime                @default(now())
+
+  thread ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, idempotencyKey])
+  @@index([threadId, createdAt])
+}
+
+model ConversationAction {
+  id               String                   @id @default(cuid())
+  threadId         String
+  messageId        String?
+  actionType       String
+  status           ConversationActionStatus @default(PROPOSED)
+  payloadJson      Json?
+  resultJson       Json?
+  idempotencyKey   String?
+  gatewayActionId  String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  thread ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, idempotencyKey])
+  @@index([threadId, status, updatedAt(sort: Desc)])
 }
