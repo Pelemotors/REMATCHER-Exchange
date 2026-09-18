@@ -1,0 +1,26 @@
+{
+  "demandDraft": {
+    "rawText": "[16.9.2026, 17:46:12] לקוח: היי מחפש מאזדה CX5 2022\n[16.9.2026, 17:47:01] לקוח: עד 130 אלף תתקשר 050-9876543",
+    "summaryHe": "Mazda CX-5 2022 עד ₪130,000",
+    "status": "PENDING_DEALER_CONFIRM",
+    "customerHint": {
+      "name": null,
+      "confirmedPhone": null,
+      "requiresPhoneConfirmation": true,
+      "phoneCandidates": [
+        {
+          "raw": "050-9876543",
+          "normalized": "0509876543",
+          "attribution": "MESSAGE_BODY",
+          "confidence": "medium"
+        }
+      ]
+    },
+    "parsed": {
+      "make": "Mazda",
+      "model": "CX-5",
+      "yearMin": 2022,
+      "budgetMax": 130000
+    }
+  }
+}

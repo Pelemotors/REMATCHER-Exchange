@@ -1,0 +1,19 @@
+{
+  "id": "cand_fixture_1",
+  "make": "Hyundai",
+  "model": "Tucson",
+  "year": 2022,
+  "fuel": "GASOLINE",
+  "engine": "1600",
+  "trim": "Luxury",
+  "offeredPrice": 125000,
+  "askingPrice": 125000,
+  "govIdentity": {
+    "make": "Hyundai",
+    "model": "Tucson",
+    "year": 2022,
+    "fuel": "GASOLINE",
+    "engine": "1600",
+    "trim": "Luxury"
+  }
+}

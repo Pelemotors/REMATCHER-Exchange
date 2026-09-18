@@ -62,8 +62,14 @@ describe("RC hardening — intelligence privacy per-side", () => {
   });
 
   it("demand-heavy market balance does not auto-map to ELEVATED trade risk", () => {
-    expect(tradeRiskLabel(10, 20)).toBe("MODERATE");
-    expect(tradeRiskLabel(10, 20)).not.toBe("ELEVATED");
+    const label = tradeRiskLabel({
+      supplyCount: 10,
+      demandCount: 20,
+      supplyPrivacyOk: true,
+      demandPrivacyOk: true,
+    });
+    expect(["LOW", "MODERATE"]).toContain(label);
+    expect(label).not.toBe("ELEVATED");
   });
 
   it("year widening levels 0/1/2", () => {

@@ -2,24 +2,81 @@
   "ok": true,
   "action": "MARKET_OVERVIEW",
   "cohortLevel": 1,
-  "yearWidening": { "deltaYears": 1, "level": 1 },
+  "yearWidening": {
+    "deltaYears": 1,
+    "level": 1
+  },
+  "privacyNote": "Anonymous aggregates only. Raw cross-dealer rows are never returned.",
   "overview": {
-    "marketBalance": "BALANCED",
-    "liquidity": "MODERATE",
-    "tradeRisk": "LOW",
+    "cohortLevel": 1,
+    "yearWidening": {
+      "deltaYears": 1,
+      "level": 1
+    },
+    "demand": {
+      "activeCount": 14,
+      "insufficientData": false
+    },
+    "supply": {
+      "activeCount": 9,
+      "insufficientData": false
+    },
+    "buyerBudget": {
+      "p25": 105000,
+      "median": 112000,
+      "p75": 118000,
+      "insufficientData": false,
+      "priceFamily": "BUYER_BUDGET"
+    },
     "askingB2B": {
-      "p25": 95000,
-      "median": 102000,
-      "p75": 110000,
+      "p25": 119000,
+      "median": 123000,
+      "p75": 128000,
       "insufficientData": false,
       "priceFamily": "SUPPLY_ASKING_PRICE_B2B"
     },
-    "buyerBudget": {
-      "p25": null,
-      "median": null,
-      "p75": null,
+    "askingRetail": {
+      "p25": 132000,
+      "median": 139000,
+      "p75": 145000,
+      "insufficientData": false,
+      "priceFamily": "SUPPLY_ASKING_PRICE_RETAIL"
+    },
+    "mileage": {
+      "p25": 42000,
+      "median": 58000,
+      "p75": 72000,
+      "insufficientData": false,
+      "priceFamily": "SUPPLY_MILEAGE"
+    },
+    "fuelDistribution": {
+      "insufficientData": false,
+      "buckets": {
+        "GASOLINE": 5,
+        "DIESEL": 3,
+        "HYBRID": 1
+      }
+    },
+    "handDistribution": {
+      "insufficientData": false,
+      "buckets": {
+        "1": 6,
+        "2": 2
+      }
+    },
+    "engineDistribution": {
+      "insufficientData": false,
+      "buckets": {
+        "1600": 4,
+        "2000": 3
+      }
+    },
+    "ownershipDistribution": {
       "insufficientData": true,
-      "priceFamily": "BUYER_BUDGET"
-    }
+      "buckets": null
+    },
+    "marketBalance": "DEMAND_HEAVY",
+    "liquidity": "MODERATE",
+    "tradeRisk": "LOW"
   }
 }

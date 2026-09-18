@@ -30,9 +30,15 @@ describe("exchange intelligence privacy cloak", () => {
     expect(marketBalanceLabel(8, 4, true, false)).toBe("INSUFFICIENT_DATA");
   });
 
-  it("trade risk MODERATE not ELEVATED when supply is adequate", () => {
-    expect(tradeRiskLabel(10, 18)).toBe("MODERATE");
-    expect(tradeRiskLabel(10, 18)).not.toBe("ELEVATED");
+  it("trade risk MODERATE/LOW not ELEVATED when demand-heavy", () => {
+    const label = tradeRiskLabel({
+      supplyCount: 10,
+      demandCount: 18,
+      supplyPrivacyOk: true,
+      demandPrivacyOk: true,
+    });
+    expect(["LOW", "MODERATE"]).toContain(label);
+    expect(label).not.toBe("ELEVATED");
   });
 
   it("year window preserves demand span at level 0", () => {

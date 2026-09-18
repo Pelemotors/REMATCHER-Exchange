@@ -271,7 +271,33 @@ export async function getIntakeBatchForDealer(input: {
             make?: string | null;
             model?: string | null;
             year?: number | null;
+            fuel?: string | null;
+            fuelType?: string | null;
+            engine?: string | null;
+            engineDisplacementCc?: number | null;
+            trim?: string | null;
           } | null;
+          const commercial = (c.commercialJson ?? null) as {
+            offeredPrice?: number | null;
+            askingPrice?: number | null;
+            b2bPrice?: number | null;
+            retailPrice?: number | null;
+            price?: number | null;
+          } | null;
+          const offeredPrice =
+            (typeof commercial?.offeredPrice === "number"
+              ? commercial.offeredPrice
+              : null) ??
+            (typeof commercial?.askingPrice === "number"
+              ? commercial.askingPrice
+              : null) ??
+            (typeof commercial?.b2bPrice === "number" ? commercial.b2bPrice : null) ??
+            (typeof commercial?.price === "number" ? commercial.price : null);
+          const engine =
+            gov?.engine ??
+            (typeof gov?.engineDisplacementCc === "number"
+              ? String(gov.engineDisplacementCc)
+              : null);
           const thumbMedia = c.media[0]
             ? batch.media.find((m) => m.id === c.media[0]!.mediaId)
             : null;
@@ -280,16 +306,24 @@ export async function getIntakeBatchForDealer(input: {
             status: c.status,
             reviewStatus: c.reviewStatus,
             detectedPlate: c.detectedPlate,
+            plate: c.detectedPlate,
             plateNormalized: c.plateNormalized,
             dealerIntent: c.dealerIntent,
             confidenceBand: c.confidenceBand,
+            confidence: c.confidenceBand,
             missingFields: c.missingFields,
             committedVehicleId: c.committedVehicleId,
             existingVehicleId: c.existingVehicleId,
             govState: c.govState,
+            govIdentity: gov,
             make: gov?.make ?? null,
             model: gov?.model ?? null,
             year: gov?.year ?? null,
+            fuel: gov?.fuel ?? gov?.fuelType ?? null,
+            engine,
+            trim: gov?.trim ?? null,
+            offeredPrice,
+            askingPrice: offeredPrice,
             thumbUrl: thumbMedia
               ? publicThumbUrlForDisplayKey(thumbMedia.storageKey)
               : null,

@@ -21,11 +21,10 @@
  *   BALANCED — otherwise
  *   INSUFFICIENT_DATA — either side fails privacy or zero observations
  *
- * Trade risk (CHECK_TRADE_RISK) — evidence-based, not tied to market balance:
- *   ELEVATED — zero supply with demand, or ratio > 2.5 with supplyCount < 5
- *   MODERATE — ratio > 1.5 with adequate supply (>= 5)
- *   LOW — otherwise when both sides pass privacy
- *   UNKNOWN — either side fails privacy
+ * Trade risk (CHECK_TRADE_RISK) — evidence-based, separate from market balance:
+ *   Strong demand + scarce supply must NEVER elevate risk (LOW/MODERATE).
+ *   ELEVATED — supply-heavy / weak demand, offered price above B2B band, etc.
+ *   UNKNOWN — either side fails privacy or no usable evidence
  */
 import "server-only";
 import { prisma } from "@/lib/prisma";
@@ -128,6 +127,47 @@ function readVehicleFuel(v: MatchVehicleInput): CanonicalFuelType | null {
   return canonicalizeFuelType(raw);
 }
 
+/** Per-vehicle engine label from provenance — never copy subject.engineHint onto every row. */
+function readVehicleEngine(v: {
+  fieldProvenance?: unknown;
+}): string | null {
+  const prov = v.fieldProvenance;
+  if (!prov || typeof prov !== "object" || Array.isArray(prov)) return null;
+  const rec = prov as Record<string, unknown>;
+  for (const k of ["engine", "engineFamily", "engineDisplacementCc", "engineCc"]) {
+    const val = rec[k];
+    if (typeof val === "string" && val.trim()) return val.trim();
+    if (typeof val === "number" && val > 0) return String(Math.round(val));
+    if (val && typeof val === "object" && "value" in val) {
+      const inner = (val as { value?: unknown }).value;
+      if (typeof inner === "string" && inner.trim()) return inner.trim();
+      if (typeof inner === "number" && inner > 0) return String(Math.round(inner));
+    }
+  }
+  return null;
+}
+
+function readVehicleOwnershipType(v: {
+  ownershipType?: string | null;
+  fieldProvenance?: unknown;
+}): string | null {
+  if (typeof v.ownershipType === "string" && v.ownershipType.trim()) {
+    return v.ownershipType.trim().toUpperCase();
+  }
+  const prov = v.fieldProvenance;
+  if (!prov || typeof prov !== "object" || Array.isArray(prov)) return null;
+  const rec = prov as Record<string, unknown>;
+  for (const k of ["ownershipType", "ownershipSource", "source"]) {
+    const val = rec[k];
+    if (typeof val === "string" && val.trim()) return val.trim().toUpperCase();
+    if (val && typeof val === "object" && "value" in val) {
+      const inner = (val as { value?: unknown }).value;
+      if (typeof inner === "string" && inner.trim()) return inner.trim().toUpperCase();
+    }
+  }
+  return null;
+}
+
 function subjectYearSpan(subject: ResolvedIntelSubject): { min: number; max: number } | null {
   let min = subject.yearMin;
   let max = subject.yearMax ?? subject.yearMin;
@@ -165,6 +205,7 @@ type CohortRow = {
   engine: string | null;
   mileage: number | null;
   ownershipHand: number | null;
+  ownershipType: string | null;
   b2bPrice: number | null;
   retailPrice: number | null;
   budget: number | null;
@@ -234,8 +275,12 @@ function cloakCount(count: number, min: number, dealers: number, minDealers: num
   return { value: count, insufficientData: false };
 }
 
-function cloakDistribution(values: number[], rows: CohortRow[]) {
-  const dealers = distinctDealers(rows);
+/** Privacy eligibility from contributor rows only — not the full cohort side. */
+export function cloakDistribution(
+  values: number[],
+  contributorRows: Array<{ dealerId: string }>
+) {
+  const dealers = new Set(contributorRows.map((r) => r.dealerId)).size;
   const minObs = minDistributionObs();
   const minDealers = minDistinctDealers();
   if (values.length < minObs || dealers < minDealers) {
@@ -252,16 +297,17 @@ function cloakDistribution(values: number[], rows: CohortRow[]) {
   };
 }
 
-function cloakCategoricalDistribution(
-  rows: CohortRow[],
-  pick: (r: CohortRow) => string | null
+export function cloakCategoricalDistribution<T extends { dealerId: string }>(
+  rows: T[],
+  pick: (r: T) => string | null
 ) {
-  const dealers = distinctDealers(rows);
-  if (rows.length < minDistributionObs() || dealers < minDistinctDealers()) {
+  const contributors = rows.filter((r) => pick(r) != null);
+  const dealers = new Set(contributors.map((r) => r.dealerId)).size;
+  if (contributors.length < minDistributionObs() || dealers < minDistinctDealers()) {
     return { insufficientData: true as const, buckets: null as Record<string, number> | null };
   }
   const counts = new Map<string, number>();
-  for (const r of rows) {
+  for (const r of contributors) {
     const k = pick(r);
     if (!k) continue;
     counts.set(k, (counts.get(k) ?? 0) + 1);
@@ -315,20 +361,60 @@ export function marketBalanceLabel(
   return "BALANCED";
 }
 
+/**
+ * Trade risk is NOT the inverse of demand scarcity.
+ * Strong demand + scarce supply → easier to move → LOW/MODERATE, never ELEVATED.
+ * Elevated only from supply-heavy markets, weak demand, expensive acquisition, etc.
+ */
+export function tradeRiskLabel(input: {
+  supplyCount: number;
+  demandCount: number;
+  supplyPrivacyOk: boolean;
+  demandPrivacyOk: boolean;
+  offeredPrice?: number | null;
+  b2bMedian?: number | null;
+  b2bPrivacyOk?: boolean;
+}): "ELEVATED" | "MODERATE" | "LOW" | "UNKNOWN" {
+  if (!input.supplyPrivacyOk || !input.demandPrivacyOk) return "UNKNOWN";
+  if (input.supplyCount === 0 && input.demandCount === 0) return "UNKNOWN";
+
+  let score = 0;
+  // Supply-heavy / weak demand raises risk
+  if (input.demandCount === 0 && input.supplyCount > 0) score += 2;
+  else if (
+    input.demandCount > 0 &&
+    input.supplyCount >= input.demandCount * 1.5
+  ) {
+    score += input.supplyCount >= input.demandCount * 2.5 ? 2 : 1;
+  }
+
+  // Demand-heavy / scarce supply lowers acquisition/resale risk — never elevates
+  if (input.supplyCount === 0 && input.demandCount > 0) score -= 1;
+  else if (input.demandCount >= input.supplyCount * 1.5 && input.supplyCount > 0) score -= 1;
+
+  if (
+    input.b2bPrivacyOk &&
+    input.offeredPrice != null &&
+    input.offeredPrice > 0 &&
+    input.b2bMedian != null &&
+    input.b2bMedian > 0
+  ) {
+    const delta = (input.offeredPrice - input.b2bMedian) / input.b2bMedian;
+    if (delta >= 0.08) score += 2;
+    else if (delta <= -0.08) score -= 1;
+  }
+
+  if (score >= 2) return "ELEVATED";
+  if (score >= 1) return "MODERATE";
+  if (score <= -1) return "LOW";
+  return "LOW";
+}
+
 function liquidityLabel(supplyCount: number, demandCount: number): string {
   if (supplyCount >= 8 && demandCount >= 5) return "HIGH";
   if (supplyCount >= minCohort() && demandCount >= minCohort()) return "MODERATE";
   if (supplyCount > 0 || demandCount > 0) return "THIN";
   return "UNKNOWN";
-}
-
-function tradeRiskLabel(supplyCount: number, demandCount: number): string {
-  if (supplyCount === 0 && demandCount === 0) return "UNKNOWN";
-  if (supplyCount === 0 && demandCount > 0) return "ELEVATED";
-  const ratio = demandCount / supplyCount;
-  if (ratio > 2.5 && supplyCount < 5) return "ELEVATED";
-  if (ratio > 1.5 && supplyCount >= 5) return "MODERATE";
-  return "LOW";
 }
 
 function budgetFromConfirmed(confirmedJson: unknown): number | null {
@@ -450,6 +536,7 @@ async function loadNetworkRows(
         year: true,
         mileage: true,
         ownershipHand: true,
+        ownershipType: true,
         b2bPrice: true,
         retailPrice: true,
         fieldProvenance: true,
@@ -479,9 +566,10 @@ async function loadNetworkRows(
       yearMin: v.year,
       yearMax: v.year,
       fuel,
-      engine: subject.engineHint,
+      engine: readVehicleEngine(v),
       mileage: v.mileage,
       ownershipHand: v.ownershipHand,
+      ownershipType: readVehicleOwnershipType(v),
       b2bPrice: v.b2bPrice,
       retailPrice: v.retailPrice,
       budget: null,
@@ -519,6 +607,7 @@ async function loadNetworkRows(
       engine: typeof j.engine === "string" ? j.engine : null,
       mileage: null,
       ownershipHand: null,
+      ownershipType: null,
       b2bPrice: null,
       retailPrice: null,
       budget: budgetFromConfirmed(d.confirmedJson),
@@ -567,29 +656,38 @@ export async function runExchangeIntelligenceEngine(input: {
     minDealers
   );
 
-  const b2bPrices = supplyRows
-    .map((r) => r.b2bPrice)
-    .filter((p): p is number => p != null && p > 0);
-  const retailPrices = supplyRows
-    .map((r) => r.retailPrice)
-    .filter((p): p is number => p != null && p > 0);
-  const mileages = supplyRows
-    .map((r) => r.mileage)
-    .filter((m): m is number => m != null && m >= 0);
-  const buyerBudgets = demandRows
-    .map((r) => r.budget)
-    .filter((p): p is number => p != null && p > 0);
+  const b2bContributors = supplyRows.filter(
+    (r) => r.b2bPrice != null && r.b2bPrice > 0
+  );
+  const retailContributors = supplyRows.filter(
+    (r) => r.retailPrice != null && r.retailPrice > 0
+  );
+  const mileageContributors = supplyRows.filter(
+    (r) => r.mileage != null && r.mileage >= 0
+  );
+  const budgetContributors = demandRows.filter(
+    (r) => r.budget != null && r.budget > 0
+  );
 
-  const supplyB2B = cloakDistribution(b2bPrices, supplyRows);
-  const supplyRetail = cloakDistribution(retailPrices, supplyRows);
-  const supplyMileage = cloakDistribution(mileages, supplyRows);
-  const buyerBudget = cloakDistribution(buyerBudgets, demandRows);
+  const b2bPrices = b2bContributors.map((r) => r.b2bPrice!);
+  const retailPrices = retailContributors.map((r) => r.retailPrice!);
+  const mileages = mileageContributors.map((r) => r.mileage!);
+  const buyerBudgets = budgetContributors.map((r) => r.budget!);
+
+  const supplyB2B = cloakDistribution(b2bPrices, b2bContributors);
+  const supplyRetail = cloakDistribution(retailPrices, retailContributors);
+  const supplyMileage = cloakDistribution(mileages, mileageContributors);
+  const buyerBudget = cloakDistribution(buyerBudgets, budgetContributors);
 
   const supplyFuelDist = cloakCategoricalDistribution(supplyRows, (r) => r.fuel);
   const supplyHandDist = cloakCategoricalDistribution(supplyRows, (r) =>
     r.ownershipHand != null ? String(r.ownershipHand) : null
   );
   const supplyEngineDist = cloakCategoricalDistribution(supplyRows, (r) => r.engine);
+  const supplyOwnershipDist = cloakCategoricalDistribution(
+    supplyRows,
+    (r) => r.ownershipType
+  );
 
   const base = {
     ok: true as const,
@@ -673,7 +771,15 @@ export async function runExchangeIntelligenceEngine(input: {
   }
 
   if (input.action === "CHECK_TRADE_RISK") {
-    const label = !bothSidesPrivacyOk ? "UNKNOWN" : tradeRiskLabel(sc, dc);
+    const label = tradeRiskLabel({
+      supplyCount: sc,
+      demandCount: dc,
+      supplyPrivacyOk,
+      demandPrivacyOk,
+      offeredPrice: input.offeredPrice,
+      b2bMedian: supplyB2B.median,
+      b2bPrivacyOk: !supplyB2B.insufficientData,
+    });
     return {
       ...base,
       evidence: {
@@ -715,6 +821,7 @@ export async function runExchangeIntelligenceEngine(input: {
       fuelDistribution: supplyFuelDist,
       handDistribution: supplyHandDist,
       engineDistribution: supplyEngineDist,
+      ownershipDistribution: supplyOwnershipDist,
     };
   }
 
@@ -765,11 +872,20 @@ export async function runExchangeIntelligenceEngine(input: {
       fuelDistribution: supplyFuelDist,
       handDistribution: supplyHandDist,
       engineDistribution: supplyEngineDist,
+      ownershipDistribution: supplyOwnershipDist,
       marketBalance,
       liquidity: !bothSidesPrivacyOk ? "UNKNOWN" : liquidityLabel(sc, dc),
-      tradeRisk: !bothSidesPrivacyOk ? "UNKNOWN" : tradeRiskLabel(sc, dc),
+      tradeRisk: tradeRiskLabel({
+        supplyCount: sc,
+        demandCount: dc,
+        supplyPrivacyOk,
+        demandPrivacyOk,
+        offeredPrice: input.offeredPrice,
+        b2bMedian: supplyB2B.median,
+        b2bPrivacyOk: !supplyB2B.insufficientData,
+      }),
     },
   };
 }
 
-export { minCohort, minDistinctDealers, cloakCount, tradeRiskLabel, liquidityLabel };
+export { minCohort, minDistinctDealers, cloakCount, liquidityLabel };
