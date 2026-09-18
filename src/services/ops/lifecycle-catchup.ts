@@ -27,6 +27,14 @@ export async function runLifecycleCatchUp(params?: {
   const expiredDemands = await expireStaleDemands();
   const { sent: remindersSent } = await runSmartReminders();
 
+  const { evaluateMarketWatches } = await import(
+    "@/services/market-watch/evaluate"
+  );
+  const marketWatch = await evaluateMarketWatches().catch(() => ({
+    evaluated: 0,
+    notified: 0,
+  }));
+
   const { reconcilePilotInconsistencies } = await import(
     "@/services/ops/pilot-reconciliation"
   );
@@ -42,6 +50,7 @@ export async function runLifecycleCatchUp(params?: {
       remindersSent,
       overdueDemandsFound,
       ...reconciliation,
+      marketWatch,
       at: now.toISOString(),
     },
   });

@@ -5,10 +5,21 @@
 
 import { normalizePhoneIL } from "@/lib/phone";
 
+export type PhoneAttribution = "HEADER" | "MESSAGE" | "UNKNOWN";
+export type PhoneConfidence = "high" | "medium" | "low";
+
+export type PhoneCandidate = {
+  raw: string;
+  normalized: string | null;
+  attribution: PhoneAttribution;
+  confidence: PhoneConfidence;
+};
+
 export type CaptureCustomerHints = {
   name: string | null;
   phone: string | null;
   normalizedPhone: string | null;
+  phoneCandidates: PhoneCandidate[];
   demandCue: string | null;
   wantsClose: boolean;
   wantsPause: boolean;
@@ -22,14 +33,74 @@ export type CaptureCustomerHints = {
 const PHONE_RE =
   /(?:(?:\+?972[\s-]?)|0)(?:5\d|[2-489])[\s-]?\d{3}[\s-]?\d{4}/g;
 
+const WHATSAPP_HEADER_RE =
+  /^\[\d[^\]]*\]\s*[^:]+:\s*(.*)$/;
+
 const NAME_RE =
   /(?:לקוח|שם|קוראים לו|שמו|שמה)\s*[:\-]?\s*([א-תA-Za-z]{2,}(?:\s+[א-תA-Za-z]{2,}){0,2})/i;
 
+function lineAttribution(line: string, matchIndex: number): PhoneAttribution {
+  const header = line.match(WHATSAPP_HEADER_RE);
+  if (!header) return "UNKNOWN";
+  const bodyStart = line.indexOf(header[1] ?? "");
+  if (bodyStart >= 0 && matchIndex >= bodyStart) return "MESSAGE";
+  return "HEADER";
+}
+
+function confidenceFor(attribution: PhoneAttribution, normalized: string | null): PhoneConfidence {
+  if (!normalized) return "low";
+  if (attribution === "MESSAGE") return "high";
+  if (attribution === "HEADER") return "medium";
+  return "medium";
+}
+
+export function extractPhoneCandidates(text: string): PhoneCandidate[] {
+  const seen = new Set<string>();
+  const out: PhoneCandidate[] = [];
+  const lines = text.split(/\n/);
+  for (const line of lines) {
+    const re = new RegExp(PHONE_RE.source, PHONE_RE.flags);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      const raw = m[0].replace(/\s+/g, "");
+      const key = raw.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const normalized = normalizePhoneIL(raw);
+      const attribution = lineAttribution(line, m.index);
+      out.push({
+        raw,
+        normalized,
+        attribution,
+        confidence: confidenceFor(attribution, normalized),
+      });
+    }
+  }
+  return out;
+}
+
+function pickPreferredPhone(candidates: PhoneCandidate[]): {
+  phone: string | null;
+  normalizedPhone: string | null;
+} {
+  const high = candidates.filter((c) => c.confidence === "high" && c.normalized);
+  if (high.length === 1) {
+    return { phone: high[0]!.raw, normalizedPhone: high[0]!.normalized };
+  }
+  if (high.length > 1) {
+    return { phone: null, normalizedPhone: null };
+  }
+  const medium = candidates.filter((c) => c.confidence === "medium" && c.normalized);
+  if (medium.length === 1) {
+    return { phone: medium[0]!.raw, normalizedPhone: medium[0]!.normalized };
+  }
+  return { phone: null, normalizedPhone: null };
+}
+
 export function extractCustomerHintsFromText(text: string): CaptureCustomerHints {
-  const phones = text.match(PHONE_RE) ?? [];
-  const rawPhone = phones[0]?.replace(/\s+/g, "") ?? null;
+  const phoneCandidates = extractPhoneCandidates(text);
+  const picked = pickPreferredPhone(phoneCandidates);
   const nameMatch = text.match(NAME_RE);
-  // Fallback: "אחמד מחפש" / "עבור דני"
   let name = nameMatch?.[1]?.trim() ?? null;
   if (!name) {
     const m2 = text.match(
@@ -40,8 +111,9 @@ export function extractCustomerHintsFromText(text: string): CaptureCustomerHints
 
   return {
     name,
-    phone: rawPhone,
-    normalizedPhone: normalizePhoneIL(rawPhone),
+    phone: picked.phone,
+    normalizedPhone: picked.normalizedPhone,
+    phoneCandidates,
     demandCue: text.trim().slice(0, 500) || null,
     wantsClose: /מצאתי כבר|הסתדר|סגור(?:ים)? את החיפוש|כבר לקח/.test(text),
     wantsPause: /חודש הבא|תשים בצד|תעצור|pause|snooze|בהמשך/.test(text),

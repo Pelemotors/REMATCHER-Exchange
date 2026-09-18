@@ -1,6 +1,6 @@
 import "server-only";
 import { updateVehicleForDealer } from "@/services/inventory/update-vehicle";
-import { applyVehicleSoldLifecycle } from "@/services/inventory/sold-lifecycle";
+import { applyVehicleArchiveLifecycle } from "@/services/inventory/archive-lifecycle";
 
 /**
  * Remove a vehicle from active inventory without marking it SOLD.
@@ -18,7 +18,7 @@ export async function removeVehicleFromInventoryForDealer(input: {
     source: input.source ?? "inventory_api",
   });
   if (!result.ok) return result;
-  await applyVehicleSoldLifecycle({
+  await applyVehicleArchiveLifecycle({
     vehicleId: input.vehicleId,
     dealerId: input.dealerId,
     source: input.source ?? "archived",

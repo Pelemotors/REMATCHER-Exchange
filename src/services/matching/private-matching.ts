@@ -86,3 +86,96 @@ export async function matchPrivateVehicleToMyDemands(params: {
     matches: hits,
   };
 }
+
+/**
+ * Private Match: demand in THIS dealer's workspace ↔ THIS dealer's ACTIVE inventory.
+ * Includes PRIVATE visibility vehicles. Never mutates visibility.
+ */
+export async function matchDemandToMyInventory(params: {
+  dealerId: string;
+  demandId: string;
+}) {
+  const demand = await prisma.demand.findFirst({
+    where: {
+      id: params.demandId,
+      dealerId: params.dealerId,
+      status: "ACTIVE",
+    },
+    include: { constraints: true },
+  });
+  if (!demand || demand.confirmedJson == null) {
+    return { ok: false as const, error: "not_found" as const };
+  }
+
+  let structuredIntent;
+  try {
+    ({ structuredIntent } = legacyToSearchIntent(
+      demand.confirmedJson,
+      demand.constraints
+    ));
+  } catch {
+    return { ok: false as const, error: "not_found" as const };
+  }
+
+  const vehicles = await prisma.vehicle.findMany({
+    where: {
+      dealerId: params.dealerId,
+      status: "ACTIVE",
+    },
+    include: {
+      media: {
+        where: { isPrimary: true },
+        take: 1,
+        orderBy: { sortOrder: "asc" },
+        select: { storageKey: true },
+      },
+    },
+  });
+
+  const { publicThumbUrlForDisplayKey } = await import("@/lib/media/storage");
+
+  const hits: Array<{
+    vehicleId: string;
+    make: string | null;
+    model: string | null;
+    year: number | null;
+    thumbUrl: string | null;
+    band: string | null;
+    score: number;
+    hardPassed: boolean;
+  }> = [];
+
+  for (const vehicle of vehicles) {
+    try {
+      const ev = evaluateMatchV2({ vehicle, intent: structuredIntent });
+      if (
+        ev.resolutionState === "RESOLVED" &&
+        (ev.band === "NO_MATCH" || !ev.hardPassed)
+      ) {
+        continue;
+      }
+      const primaryKey = vehicle.media[0]?.storageKey ?? null;
+      hits.push({
+        vehicleId: vehicle.id,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year,
+        thumbUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,
+        band: ev.band,
+        score: ev.score,
+        hardPassed: ev.hardPassed,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  hits.sort((a, b) => b.score - a.score);
+
+  return {
+    ok: true as const,
+    demandId: demand.id,
+    matchCount: hits.length,
+    matches: hits,
+  };
+}

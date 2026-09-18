@@ -54,7 +54,10 @@ export async function POST(req: Request) {
   const customerName =
     customerOverride?.name?.trim() || hints.name || null;
   const customerPhone =
-    customerOverride?.phone?.trim() || hints.phone || null;
+    customerOverride?.phone?.trim() ||
+    hints.phone ||
+    hints.normalizedPhone ||
+    null;
 
   let customerId = demand.customerId;
   if (customerName || customerPhone) {

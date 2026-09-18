@@ -44,6 +44,7 @@ model User {
   notificationEventPreferences NotificationEventPreference[]
   purchasedSubscriptions DealerSubscription[] @relation("SubscriptionPurchaser")
   mobileSessions MobileSession[]
+  marketWatches MarketWatch[]
 }
 
 /** Opaque Mobile access+refresh pair. Web NextAuth cookies are unchanged. */
@@ -131,6 +132,7 @@ model Dealer {
   customers         Customer[]
   dealerOpportunities DealerOpportunity[]
   catalog           DealerCatalog?
+  marketWatches     MarketWatch[]
 
   @@index([cohort])
 }
@@ -1815,6 +1817,27 @@ model AppVersionPolicy {
   updateMessageHe        String?
   updatedAt              DateTime       @updatedAt
   createdAt              DateTime       @default(now())
+}
+
+model MarketWatch {
+  id               String    @id @default(cuid())
+  dealerId         String
+  userId           String?
+  queryMake        String
+  queryModel       String
+  yearMin          Int?
+  yearMax          Int?
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  lastEvaluatedAt  DateTime?
+  lastFingerprint  String?
+  lastNotifiedAt   DateTime?
+
+  dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([dealerId, active])
+  @@index([active, lastEvaluatedAt])
 }
 
 model IdentityLinkChallenge {
