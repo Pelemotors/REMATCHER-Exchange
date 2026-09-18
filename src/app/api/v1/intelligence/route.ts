@@ -125,6 +125,15 @@ export async function POST(req: Request) {
       includeCustomerPhone: true,
     });
     if (!result.ok) {
+      if (result.error === "subject_unresolved") {
+        return v1Error(
+          ctx,
+          "VALIDATION_INVALID_REQUEST",
+          result.reason === "make_model_unresolved"
+            ? "subject make/model could not be resolved"
+            : "subject not found"
+        );
+      }
       return v1Error(ctx, "RESOURCE_NOT_FOUND");
     }
     return v1Json(ctx, result);

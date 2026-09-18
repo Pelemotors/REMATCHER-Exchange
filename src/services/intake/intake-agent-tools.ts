@@ -5,6 +5,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { listIntakeBatchesForDealer } from "@/services/intake/batch";
+import { derivePlateIdentityState } from "@/services/intake/plate-identity";
 import { listOpenIntakeReviews } from "@/services/intake/review";
 import { diagnoseDemandMatches } from "@/services/matching/match-diagnostics";
 
@@ -55,6 +56,10 @@ export async function executeIntakeTool(
         reviewStatus: c.reviewStatus,
         detectedPlate: c.detectedPlate,
         missingFields: c.missingFields,
+        plateIdentityState: derivePlateIdentityState({
+          plateNormalized: c.plateNormalized,
+          govState: c.govState,
+        }),
         confidenceBand: c.confidenceBand,
         existingVehicleId: c.existingVehicleId,
         batchStatus: c.batch.status,
@@ -90,6 +95,10 @@ export async function executeIntakeTool(
         govIdentity: c.govIdentityJson,
         commercial: c.commercialJson,
         missingFields: c.missingFields,
+        plateIdentityState: derivePlateIdentityState({
+          plateNormalized: c.plateNormalized,
+          govState: c.govState,
+        }),
         existingVehicleId: c.existingVehicleId,
         confidenceBand: c.confidenceBand,
         batch: c.batch,

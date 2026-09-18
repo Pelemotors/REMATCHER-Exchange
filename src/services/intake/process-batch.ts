@@ -5,6 +5,7 @@ import { lookupVehicleByPlate } from "@/services/identity/gov-vehicle";
 import { extractCommercialFromText } from "@/services/intake/text-extract";
 import { classifyIntakeMediaCategory } from "@/services/intake/media-classify";
 import { emitExchangeEvent } from "@/services/exchange/events";
+import { logEvent } from "@/services/events/log-event";
 import {
   normalizePlate,
   refreshBatchStatus,
@@ -509,6 +510,17 @@ async function enrichCandidateIdentity(candidateId: string, dealerId: string) {
         govState: gov.state,
       },
       operational: true,
+    }).catch(() => undefined);
+
+    void logEvent({
+      eventType: "intake.gov_lookup",
+      dealerId,
+      entityType: "VehicleCandidate",
+      entityId: candidate.id,
+      metadata: {
+        govState: gov.state,
+        plateNormalized: candidate.plateNormalized,
+      },
     }).catch(() => undefined);
   } else {
     const commercial = (candidate.commercialJson ?? {}) as Record<

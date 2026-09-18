@@ -28,6 +28,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { logEvent } from "@/services/events/log-event";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
 import {
@@ -460,23 +461,34 @@ function priceDistributionBlock(
 export async function resolveExchangeIntelSubject(
   dealerId: string,
   subject: ExchangeIntelSubject
-): Promise<ResolvedIntelSubject | null> {
+): Promise<
+  | { ok: true; subject: ResolvedIntelSubject }
+  | { ok: false; error: "subject_unresolved"; reason: "make_model_unresolved" | "not_found" }
+> {
   if ("vehicleId" in subject && subject.vehicleId) {
     const v = await prisma.vehicle.findFirst({
       where: { id: subject.vehicleId, dealerId },
     });
-    if (!v?.make || !v.model) return null;
+    if (!v) return { ok: false, error: "subject_unresolved", reason: "not_found" };
+    if (!v?.make || !v.model) {
+      return { ok: false, error: "subject_unresolved", reason: "make_model_unresolved" };
+    }
     const id = canonicalizeMake(v.make);
     const model = canonicalizeModel(v.model);
-    if (!id || !model) return null;
+    if (!id || !model) {
+      return { ok: false, error: "subject_unresolved", reason: "make_model_unresolved" };
+    }
     return {
-      make: id,
-      model,
-      yearMin: v.year,
-      yearMax: v.year,
-      fuel: readVehicleFuel(v as MatchVehicleInput),
-      engineHint: null,
-      vehicleId: v.id,
+      ok: true,
+      subject: {
+        make: id,
+        model,
+        yearMin: v.year,
+        yearMax: v.year,
+        fuel: readVehicleFuel(v as MatchVehicleInput),
+        engineHint: null,
+        vehicleId: v.id,
+      },
     };
   }
   if ("demandId" in subject && subject.demandId) {
@@ -484,7 +496,9 @@ export async function resolveExchangeIntelSubject(
       where: { id: subject.demandId, dealerId },
       include: { constraints: true },
     });
-    if (!d?.confirmedJson) return null;
+    if (!d?.confirmedJson) {
+      return { ok: false, error: "subject_unresolved", reason: "not_found" };
+    }
     const j = d.confirmedJson as Record<string, unknown>;
     const make = canonicalizeMake(typeof j.make === "string" ? j.make : null);
     const model = canonicalizeModel(typeof j.model === "string" ? j.model : null);
@@ -494,41 +508,60 @@ export async function resolveExchangeIntelSubject(
         const u = structuredIntent.vehicleUniverse as { make?: string; model?: string } | undefined;
         const m2 = canonicalizeMake(u?.make ?? null);
         const mod2 = canonicalizeModel(u?.model ?? null);
-        if (!m2 || !mod2) return null;
+        if (!m2 || !mod2) {
+          return {
+            ok: false,
+            error: "subject_unresolved",
+            reason: "make_model_unresolved",
+          };
+        }
         return {
-          make: m2,
-          model: mod2,
-          yearMin: typeof j.yearMin === "number" ? j.yearMin : null,
-          yearMax: typeof j.yearMax === "number" ? j.yearMax : null,
-          fuel: canonicalizeFuelType(typeof j.fuel === "string" ? j.fuel : null),
-          engineHint: null,
-          demandId: d.id,
+          ok: true,
+          subject: {
+            make: m2,
+            model: mod2,
+            yearMin: typeof j.yearMin === "number" ? j.yearMin : null,
+            yearMax: typeof j.yearMax === "number" ? j.yearMax : null,
+            fuel: canonicalizeFuelType(typeof j.fuel === "string" ? j.fuel : null),
+            engineHint: null,
+            demandId: d.id,
+          },
         };
       } catch {
-        return null;
+        return { ok: false, error: "subject_unresolved", reason: "make_model_unresolved" };
       }
     }
     return {
-      make,
-      model,
-      yearMin: typeof j.yearMin === "number" ? j.yearMin : null,
-      yearMax: typeof j.yearMax === "number" ? j.yearMax : null,
-      fuel: canonicalizeFuelType(typeof j.fuel === "string" ? j.fuel : null),
-      engineHint: null,
-      demandId: d.id,
+      ok: true,
+      subject: {
+        make,
+        model,
+        yearMin: typeof j.yearMin === "number" ? j.yearMin : null,
+        yearMax: typeof j.yearMax === "number" ? j.yearMax : null,
+        fuel: canonicalizeFuelType(typeof j.fuel === "string" ? j.fuel : null),
+        engineHint: null,
+        demandId: d.id,
+      },
     };
   }
-  if (!("make" in subject) || !("model" in subject)) return null;
+  if (!("make" in subject) || !("model" in subject)) {
+    return { ok: false, error: "subject_unresolved", reason: "make_model_unresolved" };
+  }
   const make = canonicalizeMake(subject.make);
   const model = canonicalizeModel(subject.model);
-  if (!make || !model) return null;
+  if (!make || !model) {
+    return { ok: false, error: "subject_unresolved", reason: "make_model_unresolved" };
+  }
   return {
-    make,
-    model,
-    yearMin: subject.yearMin ?? null,
-    yearMax: subject.yearMax ?? null,
-    fuel: canonicalizeFuelType(subject.fuel ?? null),
-    engineHint: subject.engine ?? null,
+    ok: true,
+    subject: {
+      make,
+      model,
+      yearMin: subject.yearMin ?? null,
+      yearMax: subject.yearMax ?? null,
+      fuel: canonicalizeFuelType(subject.fuel ?? null),
+      engineHint: subject.engine ?? null,
+    },
   };
 }
 
@@ -632,10 +665,18 @@ export async function runExchangeIntelligenceEngine(input: {
   /** When false, omit customer phone from MATCH_MY_CUSTOMERS (agent safety). */
   includeCustomerPhone?: boolean;
 }) {
-  const resolved = await resolveExchangeIntelSubject(input.dealerId, input.subject);
-  if (!resolved) {
-    return { ok: false as const, error: "subject_unresolved" as const };
+  const resolvedWrap = await resolveExchangeIntelSubject(
+    input.dealerId,
+    input.subject
+  );
+  if (!resolvedWrap.ok) {
+    return {
+      ok: false as const,
+      error: resolvedWrap.error,
+      reason: resolvedWrap.reason,
+    };
   }
+  const resolved = resolvedWrap.subject;
 
   const rows = await loadNetworkRows(input.dealerId, resolved);
   const picked = pickCohort(rows, resolved);
@@ -706,6 +747,24 @@ export async function runExchangeIntelligenceEngine(input: {
     supplyDistinctDealers: supplyPrivacyOk ? supplyDealers : null,
     demandDistinctDealers: demandPrivacyOk ? demandDealers : null,
   };
+
+  const subjectType =
+    resolved.vehicleId != null
+      ? "vehicle"
+      : resolved.demandId != null
+        ? "demand"
+        : "make_model";
+
+  void logEvent({
+    eventType: "intelligence.engine_run",
+    dealerId: input.dealerId,
+    metadata: {
+      action: input.action,
+      subjectType,
+      cohortLevel: picked.level,
+      insufficientData: picked.insufficientData,
+    },
+  }).catch(() => undefined);
 
   const sc = supplyCloak.insufficientData ? 0 : supplyRows.length;
   const dc = demandCloak.insufficientData ? 0 : demandRows.length;

@@ -11,10 +11,7 @@ import {
 } from "@/services/intake/conversation-text";
 import { parseDemand } from "@/services/ai/demand-parser";
 import { summarizeDemandHe } from "@/services/intake/demand-summary";
-import {
-  extractCustomerHintsFromText,
-  isSafePhoneForPersist,
-} from "@/services/capture/customer-extract";
+import { buildIntakeDemandDraft } from "@/services/intake/demand-draft-build";
 import { resolveMediaAbsolutePath } from "@/lib/media/storage";
 import { readFile } from "node:fs/promises";
 import type { IntakeInputKind } from "@/services/intake/input-kind";
@@ -117,33 +114,15 @@ export async function classifyIntakeBatchMedia(input: {
   let demandDraft: Record<string, unknown> | null = null;
   if (looksLikeCustomerDemandText(conversationText)) {
     const parsed = await parseDemand(conversationText);
-    const hints = extractCustomerHintsFromText(conversationText);
-    const safePhone = isSafePhoneForPersist(hints);
-    const requiresPhoneConfirmation =
-      !safePhone &&
-      hints.phoneCandidates.some(
-        (c) => c.confidence === "high" || c.confidence === "medium"
-      );
-    demandDraft = {
-      rawText: conversationText,
+    const built = buildIntakeDemandDraft({
+      conversationText,
       parsed,
       summaryHe: summarizeDemandHe(parsed),
-      mediaIds: kinds
+      conversationMediaIds: kinds
         .filter((k) => k.kind === "CUSTOMER_CONVERSATION")
         .map((k) => k.mediaId),
-      status: "PENDING_DEALER_CONFIRM",
-      customerHint: {
-        name: hints.name,
-        confirmedPhone: safePhone ? hints.normalizedPhone ?? hints.phone : null,
-        phoneCandidates: hints.phoneCandidates.map((c) => ({
-          raw: c.raw,
-          normalized: c.normalized,
-          attribution: c.attribution,
-          confidence: c.confidence,
-        })),
-        requiresPhoneConfirmation,
-      },
-    };
+    });
+    demandDraft = built as Record<string, unknown> | null;
   }
 
   await prisma.intakeBatch.update({

@@ -43,6 +43,19 @@ export async function applyCandidateIntent(input: {
     return { ok: false as const, error: "rejected" as const };
   }
 
+  if (
+    candidate.dealerIntent === input.intent &&
+    candidate.status === "COMMITTED" &&
+    candidate.committedVehicleId
+  ) {
+    return {
+      ok: true as const,
+      vehicleId: candidate.committedVehicleId,
+      intent: input.intent,
+      idempotent: true as const,
+    };
+  }
+
   await prisma.vehicleCandidate.update({
     where: { id: candidate.id },
     data: { dealerIntent: input.intent },

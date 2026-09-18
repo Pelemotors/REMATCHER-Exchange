@@ -140,6 +140,18 @@ export async function commitOneCandidate(
           c.media.map((m) => m.media)
         );
         await applyAdditiveCommercial(existing.id, commercial);
+        if (opts?.dealerRelationship) {
+          const forcePrivate =
+            opts.dealerRelationship !== "OWNED" &&
+            opts.dealerRelationship !== "INVENTORY";
+          await prisma.vehicle.update({
+            where: { id: existing.id },
+            data: {
+              dealerRelationship: opts.dealerRelationship,
+              ...(forcePrivate ? { visibility: "PRIVATE" } : {}),
+            },
+          });
+        }
         await refreshVehicleMediaReady(existing.id);
         await prisma.vehicleCandidate.update({
           where: { id: c.id },

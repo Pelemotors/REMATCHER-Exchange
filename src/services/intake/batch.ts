@@ -11,6 +11,7 @@ import {
 } from "@/lib/media/storage";
 import type { IntakeSource, Prisma } from "@prisma/client";
 import { emitExchangeEvent } from "@/services/exchange/events";
+import { logEvent } from "@/services/events/log-event";
 import { derivePlateIdentityState } from "@/services/intake/plate-identity";
 
 /** Empirical: WhatsApp multi-share batches commonly stay under this; raise after device telemetry. */
@@ -33,6 +34,14 @@ export async function createOrResumeIntakeBatch(input: {
     },
   });
   if (existing) {
+    void logEvent({
+      eventType: "intake.batch.resume",
+      dealerId: input.dealerId,
+      entityType: "IntakeBatch",
+      entityId: existing.id,
+      idempotencyKey: `intake-batch-resume:${existing.id}`,
+      metadata: { clientBatchId: input.clientBatchId, resumed: true },
+    }).catch(() => undefined);
     return { ok: true as const, batch: existing, resumed: true as const };
   }
 
@@ -47,6 +56,14 @@ export async function createOrResumeIntakeBatch(input: {
         | undefined,
     },
   });
+  void logEvent({
+    eventType: "intake.batch.create",
+    dealerId: input.dealerId,
+    entityType: "IntakeBatch",
+    entityId: batch.id,
+    idempotencyKey: `intake-batch-create:${input.dealerId}:${input.clientBatchId}`,
+    metadata: { clientBatchId: input.clientBatchId, source: input.source },
+  }).catch(() => undefined);
   return { ok: true as const, batch, resumed: false as const };
 }
 

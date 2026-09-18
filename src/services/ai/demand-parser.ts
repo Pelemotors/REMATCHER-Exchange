@@ -106,8 +106,11 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
     [/ניסאן\s+אקסטרייל|nissan\s+x[- ]?trail|אקסטרייל/i, "Nissan", "X-Trail"],
     [/קיה\s+ספורטאז|kia\s+sportage|ספורטאז/i, "Kia", "Sportage"],
   ];
+  const searchClause =
+    rawText.match(/(?:מחפש|לקוח רוצה|יש לקוח|צריך)[^\n.]{0,160}/i)?.[0] ??
+    rawText;
   for (const [pattern, make, model] of makeModelPairs) {
-    if (pattern.test(rawText)) {
+    if (pattern.test(searchClause)) {
       result.make = { value: make, status: "known", source: "inferred" };
       result.model = { value: model, status: "known", source: "inferred" };
       break;
@@ -119,6 +122,19 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
   if (text.includes("cx5") || text.includes("cx-5") || text.includes("cx 5")) {
     result.make = { value: "Mazda", status: "known", source: "inferred" };
     result.model = { value: "CX-5", status: "known", source: "inferred" };
+  }
+
+  const yearFull = searchClause.match(/\b(20[12]\d)\b/);
+  if (yearFull && !result.yearMin) {
+    result.yearMin = { value: parseInt(yearFull[1], 10), status: "known" };
+  }
+
+  const budgetAlf = searchClause.match(/(?:עד\s*)?(\d{2,3})\s*אלף/);
+  if (budgetAlf && !result.budgetMax) {
+    result.budgetMax = {
+      value: parseInt(budgetAlf[1], 10) * 1000,
+      status: "known",
+    };
   }
 
   const yearPlus = text.match(/(?:20)?(\d{2})\s*(?:\+|ומעלה)/);
@@ -176,10 +192,27 @@ export function parseDemandFallback(rawText: string): ParsedDemand {
   }
 
   // Customer trade-in is NOT ownershipSource of the desired vehicle
-  const tradeInMention = /טרייד[\s־-]*אין|trade[\s-]*in/i.test(rawText);
+  const tradeInMention = /טרייד[\s־-]*אין|trade[\s-]*in|יש\s+טרייד|טרייד\s/i.test(
+    rawText
+  );
   if (tradeInMention) {
+    const tradeClause =
+      rawText.match(/(?:טרייד|trade[\s-]*in)[^\n.]{0,100}/i)?.[0] ?? rawText;
+    let tradeMake: string | null = null;
+    let tradeModel: string | null = null;
+    for (const [pattern, make, model] of makeModelPairs) {
+      if (pattern.test(tradeClause)) {
+        tradeMake = make;
+        tradeModel = model;
+        break;
+      }
+    }
     result.customerTradeIn = {
-      notes: "לקוח מציע טרייד-אין",
+      make: tradeMake,
+      model: tradeModel,
+      notes: tradeMake
+        ? `טרייד ${tradeMake} ${tradeModel ?? ""}`.trim()
+        : "לקוח מציע טרייד-אין",
       provenance: "user_stated",
     };
   }

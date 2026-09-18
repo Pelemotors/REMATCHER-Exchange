@@ -52,6 +52,15 @@ export async function setVehicleRelationship(params: {
   });
   if (!v) return { ok: false as const, error: "not_found" };
 
+  if (
+    params.relationship === "OWNED" &&
+    (v.dealerRelationship === "OFFERED_TO_ME" ||
+      v.dealerRelationship === "TRADE_IN_CANDIDATE" ||
+      v.dealerRelationship === "EXTERNAL")
+  ) {
+    return { ok: false as const, error: "use_convert_owned" as const };
+  }
+
   // Converting to non-owned must force PRIVATE (cannot stay network as offered/trade-in)
   const forcePrivate = !NETWORK_ELIGIBLE_RELATIONSHIPS.includes(params.relationship);
   const updated = await prisma.vehicle.update({
