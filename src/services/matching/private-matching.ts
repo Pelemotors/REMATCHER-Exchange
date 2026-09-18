@@ -8,19 +8,21 @@ import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-a
  * Full detail allowed — same privacy boundary.
  * Never mutates visibility / never publishes to network.
  */
-export async function matchPrivateVehicleToMyDemands(params: {
-  dealerId: string;
-  vehicleId: string;
-}) {
-  const vehicle = await prisma.vehicle.findFirst({
-    where: {
-      id: params.vehicleId,
-      dealerId: params.dealerId,
-      status: "ACTIVE",
-    },
-  });
-  if (!vehicle) return { ok: false as const, error: "not_found" };
+type PrivateDemandHit = {
+  demandId: string;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  band: string | null;
+  score: number;
+  hardPassed: boolean;
+  summary: string;
+};
 
+async function matchVehicleLikeToMyDemands(params: {
+  dealerId: string;
+  vehicle: Parameters<typeof evaluateMatchV2>[0]["vehicle"];
+}): Promise<PrivateDemandHit[]> {
   const demands = await prisma.demand.findMany({
     where: {
       dealerId: params.dealerId,
@@ -34,16 +36,7 @@ export async function matchPrivateVehicleToMyDemands(params: {
     },
   });
 
-  const hits: Array<{
-    demandId: string;
-    customerId: string | null;
-    customerName: string | null;
-    customerPhone: string | null;
-    band: string | null;
-    score: number;
-    hardPassed: boolean;
-    summary: string;
-  }> = [];
+  const hits: PrivateDemandHit[] = [];
 
   for (const demand of demands) {
     if (demand.confirmedJson == null) continue;
@@ -52,7 +45,10 @@ export async function matchPrivateVehicleToMyDemands(params: {
         demand.confirmedJson,
         demand.constraints
       );
-      const ev = evaluateMatchV2({ vehicle, intent: structuredIntent });
+      const ev = evaluateMatchV2({
+        vehicle: params.vehicle,
+        intent: structuredIntent,
+      });
       if (
         ev.resolutionState === "RESOLVED" &&
         (ev.band === "NO_MATCH" || !ev.hardPassed)
@@ -75,6 +71,26 @@ export async function matchPrivateVehicleToMyDemands(params: {
   }
 
   hits.sort((a, b) => b.score - a.score);
+  return hits;
+}
+
+export async function matchPrivateVehicleToMyDemands(params: {
+  dealerId: string;
+  vehicleId: string;
+}) {
+  const vehicle = await prisma.vehicle.findFirst({
+    where: {
+      id: params.vehicleId,
+      dealerId: params.dealerId,
+      status: "ACTIVE",
+    },
+  });
+  if (!vehicle) return { ok: false as const, error: "not_found" };
+
+  const hits = await matchVehicleLikeToMyDemands({
+    dealerId: params.dealerId,
+    vehicle,
+  });
 
   return {
     ok: true as const,
@@ -82,6 +98,55 @@ export async function matchPrivateVehicleToMyDemands(params: {
     relationship: vehicle.dealerRelationship,
     visibility: vehicle.visibility,
     publishedToNetwork: vehicle.visibility === "ANONYMOUS_NETWORK",
+    matchCount: hits.length,
+    matches: hits,
+  };
+}
+
+/**
+ * Private Match against dealer demands using a canonical make/model subject
+ * (unsaved Capture candidate / workspace vehicle without persisted vehicleId).
+ * Never depends on network privacy thresholds.
+ */
+export async function matchPrivateSubjectToMyDemands(params: {
+  dealerId: string;
+  make: string;
+  model: string;
+  yearMin?: number | null;
+  yearMax?: number | null;
+  fuel?: string | null;
+  engine?: string | null;
+}) {
+  const make = params.make.trim();
+  const model = params.model.trim();
+  if (!make || !model) {
+    return { ok: false as const, error: "subject_unresolved" as const };
+  }
+  const year =
+    params.yearMin ?? params.yearMax ?? null;
+  const stub = {
+    id: `subject:${make}:${model}:${year ?? "any"}`,
+    dealerId: params.dealerId,
+    make,
+    model,
+    year,
+    fuel: params.fuel ?? null,
+    fieldProvenance: params.engine
+      ? { engine: params.engine }
+      : null,
+  } as Parameters<typeof evaluateMatchV2>[0]["vehicle"];
+
+  const hits = await matchVehicleLikeToMyDemands({
+    dealerId: params.dealerId,
+    vehicle: stub,
+  });
+
+  return {
+    ok: true as const,
+    vehicleId: null as string | null,
+    relationship: null as string | null,
+    visibility: null as string | null,
+    publishedToNetwork: false,
     matchCount: hits.length,
     matches: hits,
   };

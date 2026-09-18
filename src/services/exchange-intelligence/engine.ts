@@ -41,7 +41,10 @@ import {
   canonicalizeModel,
   type CanonicalFuelType,
 } from "@/services/exchange/vehicle-identity";
-import { matchPrivateVehicleToMyDemands } from "@/services/matching/private-matching";
+import {
+  matchPrivateSubjectToMyDemands,
+  matchPrivateVehicleToMyDemands,
+} from "@/services/matching/private-matching";
 import type { MatchVehicleInput } from "@/services/matching/engine-v2";
 
 export type ExchangeIntelAction =
@@ -770,14 +773,30 @@ export async function runExchangeIntelligenceEngine(input: {
   const dc = demandCloak.insufficientData ? 0 : demandRows.length;
 
   if (input.action === "MATCH_MY_CUSTOMERS") {
-    if (!resolved.vehicleId) {
-      return { ok: false as const, error: "vehicleId_required" as const };
+    const priv = resolved.vehicleId
+      ? await matchPrivateVehicleToMyDemands({
+          dealerId: input.dealerId,
+          vehicleId: resolved.vehicleId,
+        })
+      : await matchPrivateSubjectToMyDemands({
+          dealerId: input.dealerId,
+          make: resolved.make,
+          model: resolved.model,
+          yearMin: resolved.yearMin,
+          yearMax: resolved.yearMax,
+          fuel: resolved.fuel,
+          engine: resolved.engineHint,
+        });
+    if (!priv.ok) {
+      if (priv.error === "subject_unresolved") {
+        return {
+          ok: false as const,
+          error: "subject_unresolved" as const,
+          reason: "make_model_unresolved" as const,
+        };
+      }
+      return { ok: false as const, error: "not_found" as const };
     }
-    const priv = await matchPrivateVehicleToMyDemands({
-      dealerId: input.dealerId,
-      vehicleId: resolved.vehicleId,
-    });
-    if (!priv.ok) return { ok: false as const, error: "not_found" as const };
     const matches = priv.matches.map((m) => ({
       demandId: m.demandId,
       customerName: m.customerName,

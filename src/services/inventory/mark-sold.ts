@@ -90,11 +90,18 @@ export async function markVehicleSoldForDealer(input: {
     });
 
     // Bounded Agent follow-up opportunity (domain-driven, not LLM guess)
-    const title = `${updated.make ?? ""} ${updated.model ?? ""} ${updated.year ?? ""}`.trim();
+    const { formatVehicleDisplayLabel } = await import(
+      "@/lib/vehicle-display-label"
+    );
+    const title = formatVehicleDisplayLabel({
+      make: updated.make,
+      model: updated.model,
+      year: updated.year,
+    });
     await notifyDealerUsers(input.dealerId, {
       type: "SYSTEM",
       title: "הרכב סומן כנמכר",
-      body: `${title || "הרכב"} הוסר מהמלאי הפעיל. נמכר דרך חיבור של REMATCHER? אפשר גם להוסיף מלאי חדש.`,
+      body: `${title} הוסר מהמלאי הפעיל. נמכר דרך חיבור של REMATCHER? אפשר גם להוסיף מלאי חדש.`,
       link: `/inventory?focus=${updated.id}&filter=sold`,
       entityType: "Vehicle",
       entityId: updated.id,

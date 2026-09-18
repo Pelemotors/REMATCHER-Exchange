@@ -113,6 +113,47 @@ describe("screenshot → demandDraft fixture", () => {
   });
 });
 
+describe("vehicle display label hygiene", () => {
+  it("never emits null null year", async () => {
+    const { formatVehicleDisplayLabel } = await import(
+      "@/lib/vehicle-display-label"
+    );
+    expect(
+      formatVehicleDisplayLabel({ make: null, model: null, year: 2013 })
+    ).toBe("רכב שטרם זוהה");
+    expect(
+      formatVehicleDisplayLabel({
+        make: "null",
+        model: "null",
+        year: 2013,
+        plate: "4656581",
+      })
+    ).toBe("רכב 4656581");
+    expect(
+      formatVehicleDisplayLabel({ make: null, model: null, year: null })
+    ).toBe("רכב שטרם זוהה");
+    expect(
+      formatVehicleDisplayLabel({
+        make: null,
+        model: null,
+        year: null,
+        plate: "4656581",
+      })
+    ).toBe("רכב 4656581");
+    expect(
+      formatVehicleDisplayLabel({ make: "Mazda", model: "CX-5", year: 2023 })
+    ).toBe("Mazda CX-5 2023");
+  });
+});
+
+describe("MATCH_MY_CUSTOMERS subject path", () => {
+  it("engine accepts make/model subject without requiring vehicleId", () => {
+    const src = read("src/services/exchange-intelligence/engine.ts");
+    expect(src).toContain("matchPrivateSubjectToMyDemands");
+    expect(src).not.toContain('error: "vehicleId_required"');
+  });
+});
+
 describe("exchange intelligence subject + CHECK_BUY_PRICE", () => {
   beforeEach(() => {
     vi.clearAllMocks();

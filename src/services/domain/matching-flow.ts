@@ -74,8 +74,15 @@ export async function runMatchingForDemand(demandId: string) {
         freshnessState === "STALE" ||
         freshnessState === "VALIDATION_REQUIRED"
       ) {
-        const title = `${vehicle.make ?? ""} ${vehicle.model ?? ""} ${vehicle.year ?? ""}`.trim();
-        await notifyFreshnessAttention(vehicle.dealerId, vehicle.id, title || "רכב");
+        const { formatVehicleDisplayLabel } = await import(
+          "@/lib/vehicle-display-label"
+        );
+        const title = formatVehicleDisplayLabel({
+          make: vehicle.make,
+          model: vehicle.model,
+          year: vehicle.year,
+        });
+        await notifyFreshnessAttention(vehicle.dealerId, vehicle.id, title);
       }
     }
 
