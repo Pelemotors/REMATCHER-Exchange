@@ -28,6 +28,7 @@ import {
 import { pendingSearchCloseMatchesPlan } from "@/services/assistant/turn-policy";
 import { assertEntitled, EntitlementError } from "@/services/entitlements";
 import { isMonetizationEnabled } from "@/services/product-policy";
+import { logPendingConfirmationInconsistency } from "@/services/assistant/action-truth";
 
 type GatewayResponse = AssistantResponse & {
   conversation?: ConversationState;
@@ -157,6 +158,12 @@ export async function runActionGateway(params: {
   if (proposal.kind === "CONFIRM_PENDING") {
     const pending = conversation?.pendingConfirmation;
     if (!pending) {
+      await logPendingConfirmationInconsistency({
+        dealerId: params.dealerId,
+        userMessage: params.message,
+        conversation,
+        reason: "confirm_without_pending",
+      });
       meta.policyResult = "REQUIRE_CLARIFICATION";
       return {
         intent: "UNKNOWN",
@@ -559,18 +566,32 @@ export async function runActionGateway(params: {
             facts,
           },
         };
+        const nextConversation: ConversationState = {
+          ...(conversation ?? {}),
+          pendingConfirmation: pending,
+        };
         return {
           intent: "UPDATE_INVENTORY",
           message: label,
           requiresConfirmation: pending,
           suggestions: [{ label: "כן" }, { label: "לא" }],
-          conversation: {
-            ...conversation,
-            pendingConfirmation: pending,
-          },
+          conversation: nextConversation,
           meta,
         };
       }
+
+      meta.policyResult = "REQUIRE_CONFIRMATION";
+      meta.responseType = "confirmation_intake_restated";
+      return {
+        intent: "UPDATE_INVENTORY",
+        message:
+          conversation.pendingConfirmation.label ??
+          "יש כבר פעולת קליטה שממתינה לאישור — אשר/י או בטל/י לפני פעולה חדשה.",
+        requiresConfirmation: conversation.pendingConfirmation,
+        suggestions: [{ label: "כן" }, { label: "לא" }],
+        conversation,
+        meta,
+      };
     }
 
     if (proposal.operation === "RETRY_INTAKE") {

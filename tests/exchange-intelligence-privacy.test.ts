@@ -67,7 +67,8 @@ describe("exchange intelligence privacy cloak", () => {
     expect(src).toContain("CHECK_TRADE_RISK");
     expect(src).toContain("supplyDistinctDealers");
     expect(src).toContain("demandDistinctDealers");
-    expect(src).toContain("Raw cross-dealer rows are never returned");
+    expect(src).not.toContain('privacyNote:');
+    expect(src).toContain("cloakCount");
     expect(src).toContain("INSUFFICIENT_DATA");
     expect(src).toContain("NETWORK_INTEL_MIN_DISTINCT_DEALERS");
   });

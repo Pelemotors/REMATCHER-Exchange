@@ -62,7 +62,6 @@ export function buildMarketOverviewContractFixture() {
     action: "MARKET_OVERVIEW" as const,
     cohortLevel: 1,
     yearWidening: { deltaYears: 1, level: 1 },
-    privacyNote: "Anonymous aggregates only. Raw cross-dealer rows are never returned.",
     overview: {
       cohortLevel: 1,
       yearWidening: { deltaYears: 1, level: 1 },

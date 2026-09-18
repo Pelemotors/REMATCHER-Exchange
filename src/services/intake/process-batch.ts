@@ -487,46 +487,19 @@ async function enrichCandidateIdentity(candidateId: string, dealerId: string) {
       (plateProv.source === "OCR" || plateProv.source === "VISION") &&
       (plateProv.confidence ?? 1) < 0.55;
 
-    if (gov.state === "FOUND") {
-      await prisma.vehicleCandidate.update({
-        where: { id: candidate.id },
-        data: {
-          govState: gov.state,
-          govIdentityJson: gov.identity ? toPrismaJson(gov.identity) : undefined,
-          govLookedUpAt: new Date(),
-          status: "READY",
-          reviewStatus: "NONE",
-          missingFields: toPrismaJson([]),
-          confidenceBand: "HIGH",
-          fieldProvenance: toPrismaJson({
-            ...provenance,
-            govIdentity: { source: "GOV", confidence: 1 },
-          }),
-        },
-      });
-    } else {
-      await prisma.vehicleCandidate.update({
-        where: { id: candidate.id },
-        data: {
-          govState: gov.state,
-          govLookedUpAt: new Date(),
-          status: "NEEDS_INFO",
-          reviewStatus: "PENDING",
-          missingFields: toPrismaJson(["detectedPlate"]),
-          confidenceBand: lowOcr ? "LOW" : "MEDIUM",
-          conflictsJson:
-            gov.state === "NOT_FOUND" || gov.state === "UNAVAILABLE"
-              ? toPrismaJson([
-                  {
-                    type: "gov_plate_unverified",
-                    plate: candidate.plateNormalized,
-                    govState: gov.state,
-                  },
-                ])
-              : undefined,
-        },
-      });
-    }
+    const { govLookupUpdateForKnownPlate } = await import(
+      "@/services/intake/plate-identity"
+    );
+    await prisma.vehicleCandidate.update({
+      where: { id: candidate.id },
+      data: govLookupUpdateForKnownPlate({
+        govState: gov.state,
+        plateNormalized: candidate.plateNormalized,
+        govIdentity: gov.identity,
+        provenance,
+        lowOcr: Boolean(lowOcr),
+      }),
+    });
 
     await emitExchangeEvent({
       eventType: "intake.candidate.gov_lookup",

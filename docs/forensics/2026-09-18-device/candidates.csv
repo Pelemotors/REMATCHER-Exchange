@@ -1,0 +1,5 @@
+id,batchId,status,reviewStatus,detectedPlate,plateNormalized,confidenceBand,dealerIntent,govState,govLookedUpAt,missingFields,conflictsJson,committedVehicleId
+cmu7b2eyr003zjkyesqluiohd,cmu7b1wpg000sjkyezsy37b12,COMMITTED,RESOLVED,7697737,7697737,HIGH,TRADE_IN_CANDIDATE,FOUND,2026-09-18 18:46:07.661,[],,cmu7b7qw8008ajkyev36r3bvz
+cmu7b2ewe003ejkyedktbo0cr,cmu7b1wpg000sjkyezsy37b12,COMMITTED,RESOLVED,1666667,1666667,HIGH,OWNED,FOUND,2026-09-18 18:42:12.705,[],,cmu7b36hq005djkye9ra8aobj
+cmu7b2ey5003tjkye1le0j88p,cmu7b1wpg000sjkyezsy37b12,READY,NONE,4656581,4656581,MEDIUM,OWNED,NOT_FOUND,2026-09-18 18:46:10.131,[],"[{""type"": ""gov_plate_unverified"", ""plate"": ""4656581"", ""govState"": ""NOT_FOUND""}]",
+cmu7b2ezx004ajkyeocxra46l,cmu7b1wpg000sjkyezsy37b12,COMMITTED,RESOLVED,83089302,83089302,HIGH,OFFERED_TO_ME,FOUND,2026-09-18 18:42:16.578,[],,cmu7b456n006rjkyep6kx35dk

@@ -26,13 +26,19 @@ export function isNetworkSupplyEligible(vehicle: {
 }
 
 /** Prisma where clause for network matching supply. */
-export function networkSupplyWhere(excludeDealerId: string) {
+export function networkSupplyWhere(
+  excludeDealerId: string,
+  allowSyntheticMarket = false
+) {
   return {
     status: "ACTIVE" as const,
     mediaReady: true,
     visibility: "ANONYMOUS_NETWORK" as const,
     dealerRelationship: { in: NETWORK_ELIGIBLE_RELATIONSHIPS },
     dealerId: { not: excludeDealerId },
+    ...(allowSyntheticMarket
+      ? {}
+      : { dealer: { marketMode: { not: "SYNTHETIC" as const } } }),
   };
 }
 

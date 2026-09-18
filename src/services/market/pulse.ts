@@ -70,7 +70,5 @@ export async function getMarketPulse(
     insufficientNetworkData: network?.ok
       ? Boolean(network.insufficientData)
       : !make || !model,
-    privacyNote:
-      "Pulse combines dealer-scoped counts with anonymous network aggregates only.",
   };
 }

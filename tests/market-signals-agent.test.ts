@@ -41,6 +41,6 @@ describe("market pulse / tape API", () => {
     const tape = read("src/services/market/tape.ts");
     expect(tape).toContain("cloakCount");
     expect(tape).toContain("suppressedSmallCohorts");
-    expect(tape).toContain("No dealer identity");
+    expect(tape).not.toContain("privacyNote:");
   });
 });

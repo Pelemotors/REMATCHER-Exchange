@@ -87,6 +87,11 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+enum DealerMarketMode {
+  REAL
+  SYNTHETIC
+}
+
 model Dealer {
   id              String           @id @default(cuid())
   businessName    String
@@ -101,6 +106,10 @@ model Dealer {
   isActive        Boolean          @default(true)
   /** Analytics cohort only (e.g. PILOT) — never authorization/readiness. */
   cohort          String?
+  /** REAL = production network; SYNTHETIC = seeded beta market (isolated by default). */
+  marketMode      DealerMarketMode @default(REAL)
+  /** When true, matching/intelligence may include SYNTHETIC dealer supply/demand. */
+  canAccessSyntheticMarket Boolean @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 

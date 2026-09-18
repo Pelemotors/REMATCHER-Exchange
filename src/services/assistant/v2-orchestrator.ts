@@ -29,6 +29,10 @@ import type {
   AssistantContext,
   AssistantResponse,
 } from "@/services/assistant/orchestrator";
+import {
+  logPendingConfirmationInconsistency,
+  sanitizeUserFacingAssistantMessage,
+} from "@/services/assistant/action-truth";
 
 export interface AssistantV2Response extends AssistantResponse {
   cards?: AssistantCard[];
@@ -294,12 +298,29 @@ export async function runExchangeAssistantV2(params: {
       },
     });
 
+    const mergedConversation = gated.conversation ?? loopConversation;
+    const gatedMessage = sanitizeUserFacingAssistantMessage(
+      gated.message,
+      mergedConversation
+    );
+    if (
+      !mergedConversation?.pendingConfirmation &&
+      gated.requiresConfirmation
+    ) {
+      await logPendingConfirmationInconsistency({
+        dealerId: params.dealerId,
+        userMessage: params.message,
+        conversation: mergedConversation,
+        reason: "assistant_claim_without_pending",
+      });
+    }
     return {
       ...gated,
+      message: gatedMessage,
       conversation: withHistory(
-        gated.conversation ?? loopConversation,
+        mergedConversation,
         params.message,
-        gated.message
+        gatedMessage
       ),
       meta,
     };
@@ -321,7 +342,18 @@ export async function runExchangeAssistantV2(params: {
   meta.executor = "agent_loop";
   meta.finalResponseSource = "agent_loop";
   meta.responseType = "agent_answer";
-  const message = loop.message;
+  const message = sanitizeUserFacingAssistantMessage(
+    loop.message,
+    loopConversation
+  );
+  if (!loopConversation?.pendingConfirmation && loop.message !== message) {
+    await logPendingConfirmationInconsistency({
+      dealerId: params.dealerId,
+      userMessage: params.message,
+      conversation: loopConversation,
+      reason: "assistant_claim_without_pending",
+    });
+  }
   return {
     intent: "PENDING_ACTIONS",
     message,

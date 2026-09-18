@@ -11,6 +11,7 @@ import {
 } from "@/lib/media/storage";
 import type { IntakeSource, Prisma } from "@prisma/client";
 import { emitExchangeEvent } from "@/services/exchange/events";
+import { derivePlateIdentityState } from "@/services/intake/plate-identity";
 
 /** Empirical: WhatsApp multi-share batches commonly stay under this; raise after device telemetry. */
 export const INTAKE_MAX_FILES_PER_BATCH = 40;
@@ -311,6 +312,10 @@ export async function getIntakeBatchForDealer(input: {
             dealerIntent: c.dealerIntent,
             confidenceBand: c.confidenceBand,
             missingFields: c.missingFields,
+            plateIdentityState: derivePlateIdentityState({
+              plateNormalized: c.plateNormalized,
+              govState: c.govState,
+            }),
             committedVehicleId: c.committedVehicleId,
             existingVehicleId: c.existingVehicleId,
             govState: c.govState,

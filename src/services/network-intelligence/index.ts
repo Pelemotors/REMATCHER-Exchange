@@ -2,6 +2,10 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
+import {
+  dealerAllowsSyntheticMarket,
+  networkDemandWhere,
+} from "@/services/dealer/market-scope";
 
 /**
  * Network Intelligence — privacy-safe aggregates only.
@@ -88,19 +92,16 @@ export async function getNetworkIntelligenceSnapshot(
   query: NetworkIntelQuery
 ): Promise<NetworkIntelSnapshot> {
   const min = minCohort();
+  const allowSynthetic = await dealerAllowsSyntheticMarket(query.dealerId);
 
   const [demands, supplies, myDemands, myVehicles] = await Promise.all([
     prisma.demand.findMany({
-      where: {
-        status: "ACTIVE",
-        networkVisibility: "ANONYMOUS_NETWORK",
-        dealerId: { not: query.dealerId },
-      },
+      where: networkDemandWhere(query.dealerId, allowSynthetic),
       select: { id: true, confirmedJson: true, constraints: true },
       take: 800,
     }),
     prisma.vehicle.findMany({
-      where: networkSupplyWhere(query.dealerId),
+      where: networkSupplyWhere(query.dealerId, allowSynthetic),
       select: { id: true, make: true, model: true, year: true },
       take: 800,
     }),

@@ -15,6 +15,7 @@ import {
 } from "@/services/matching/search-intent-types";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
+import { dealerAllowsSyntheticMarket } from "@/services/dealer/market-scope";
 
 export type NearMatchSummary = {
   failField: string;
@@ -79,8 +80,9 @@ export async function diagnoseDemandMatches(
     intent = intentForDemand(demand.confirmedJson);
   }
 
+  const allowSynthetic = await dealerAllowsSyntheticMarket(dealerId);
   const vehicles = await prisma.vehicle.findMany({
-    where: networkSupplyWhere(dealerId),
+    where: networkSupplyWhere(dealerId, allowSynthetic),
     take: 400,
   });
 

@@ -139,8 +139,6 @@ export async function getMarketTape() {
     generatedAt: new Date().toISOString(),
     windowDays: TAPE_WINDOW_DAYS,
     segments,
-    privacyNote:
-      "Aggregated counts only. No dealer identity, phone, or individual transaction prices.",
     suppressedSmallCohorts: true,
   };
 }

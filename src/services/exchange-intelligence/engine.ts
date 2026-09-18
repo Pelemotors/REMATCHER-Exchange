@@ -31,6 +31,10 @@ import { prisma } from "@/lib/prisma";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
 import {
+  dealerAllowsSyntheticMarket,
+  networkDemandWhere,
+} from "@/services/dealer/market-scope";
+import {
   canonicalizeFuelType,
   canonicalizeMake,
   canonicalizeModel,
@@ -532,9 +536,10 @@ async function loadNetworkRows(
   dealerId: string,
   subject: ResolvedIntelSubject
 ): Promise<CohortRow[]> {
+  const allowSynthetic = await dealerAllowsSyntheticMarket(dealerId);
   const [supplies, demands] = await Promise.all([
     prisma.vehicle.findMany({
-      where: networkSupplyWhere(dealerId),
+      where: networkSupplyWhere(dealerId, allowSynthetic),
       select: {
         dealerId: true,
         make: true,
@@ -550,11 +555,7 @@ async function loadNetworkRows(
       take: 1200,
     }),
     prisma.demand.findMany({
-      where: {
-        status: "ACTIVE",
-        networkVisibility: "ANONYMOUS_NETWORK",
-        dealerId: { not: dealerId },
-      },
+      where: networkDemandWhere(dealerId, allowSynthetic),
       select: { dealerId: true, confirmedJson: true, constraints: true },
       take: 1200,
     }),
@@ -704,8 +705,6 @@ export async function runExchangeIntelligenceEngine(input: {
     insufficientData: picked.insufficientData,
     supplyDistinctDealers: supplyPrivacyOk ? supplyDealers : null,
     demandDistinctDealers: demandPrivacyOk ? demandDealers : null,
-    privacyNote:
-      "Anonymous aggregates only. Raw cross-dealer rows are never returned.",
   };
 
   const sc = supplyCloak.insufficientData ? 0 : supplyRows.length;

@@ -6,7 +6,6 @@
     "deltaYears": 1,
     "level": 1
   },
-  "privacyNote": "Anonymous aggregates only. Raw cross-dealer rows are never returned.",
   "overview": {
     "cohortLevel": 1,
     "yearWidening": {

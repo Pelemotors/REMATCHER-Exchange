@@ -9,6 +9,10 @@ import { lookupVehicleByPlate } from "@/services/identity/gov-vehicle";
 import { commitOneCandidate } from "@/services/intake/commit";
 import { emitExchangeEvent } from "@/services/exchange/events";
 import type { VehicleMediaCategory } from "@prisma/client";
+import {
+  derivePlateIdentityState,
+  govLookupUpdateForKnownPlate,
+} from "@/services/intake/plate-identity";
 
 export async function listOpenIntakeReviews(dealerId: string) {
   const candidates = await prisma.vehicleCandidate.findMany({
@@ -38,6 +42,10 @@ export async function listOpenIntakeReviews(dealerId: string) {
     govIdentity: c.govIdentityJson,
     commercial: c.commercialJson,
     missingFields: c.missingFields,
+    plateIdentityState: derivePlateIdentityState({
+      plateNormalized: c.plateNormalized,
+      govState: c.govState,
+    }),
     existingVehicleId: c.existingVehicleId,
     confidenceBand: c.confidenceBand,
     batch: c.batch,
@@ -135,24 +143,26 @@ export async function resolveIntakeCandidate(input: {
 
   if (plateNormalized) {
     const gov = await lookupVehicleByPlate(plateNormalized);
+    const provenance =
+      (c.fieldProvenance as Record<string, unknown> | null) ?? {};
+    const plateProv = provenance.detectedPlate as
+      | { source?: string; confidence?: number }
+      | undefined;
+    const lowOcr =
+      plateProv &&
+      (plateProv.source === "OCR" || plateProv.source === "VISION") &&
+      (plateProv.confidence ?? 1) < 0.55;
+
     await prisma.vehicleCandidate.update({
       where: { id: c.id },
-      data: {
+      data: govLookupUpdateForKnownPlate({
         govState: gov.state,
-        govIdentityJson: gov.identity ? toPrismaJson(gov.identity) : undefined,
-        govLookedUpAt: new Date(),
-        status: gov.state === "FOUND" ? "READY" : "NEEDS_INFO",
-        reviewStatus: gov.state === "FOUND" ? "NONE" : "PENDING",
-        missingFields: toPrismaJson(
-          gov.state === "FOUND" ? [] : ["govIdentity"]
-        ),
-        confidenceBand: gov.state === "FOUND" ? "HIGH" : "MEDIUM",
-      },
+        plateNormalized,
+        govIdentity: gov.identity,
+        provenance,
+        lowOcr: Boolean(lowOcr),
+      }),
     });
-    if (gov.state !== "FOUND") {
-      await refreshBatchStatus(c.batchId);
-      return { ok: false as const, error: "gov_not_found" as const, govState: gov.state };
-    }
   } else {
     return { ok: false as const, error: "plate_required" as const };
   }
