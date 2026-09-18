@@ -226,6 +226,15 @@ export async function recordIntentApplied(input: {
     },
     intakeBatchId: input.batchId,
   });
+
+  const { autoTitleFromVehicleIntent } = await import(
+    "@/services/conversation/titles"
+  );
+  await autoTitleFromVehicleIntent({
+    threadId: batch.conversationThreadId,
+    candidateId: input.candidateId,
+    intent: input.intent,
+  }).catch(() => undefined);
 }
 
 /** Resolve dealer principal for system/async intake hooks (first dealer user). */
