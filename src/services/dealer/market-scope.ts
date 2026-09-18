@@ -7,32 +7,37 @@ export type MarketSide = {
   canAccessSyntheticMarket: boolean;
 };
 
-function requesterAllowsCounterpart(
-  requester: MarketSide,
-  counterpart: MarketSide
+/**
+ * Canonical bilateral market policy (consumer × producer).
+ *
+ * - SYNTHETIC consumer → SYNTHETIC producer only (never REAL)
+ * - REAL ordinary consumer → REAL producer only
+ * - REAL beta consumer (canAccessSyntheticMarket) → REAL or SYNTHETIC producer
+ *
+ * Pair helpers for rematch use this oriented check (demand consumes supply).
+ */
+export function canConsumeMarketCounterpart(
+  consumer: MarketSide,
+  producer: MarketSide
 ): boolean {
-  if (requester.marketMode === "SYNTHETIC") {
-    if (counterpart.marketMode === "SYNTHETIC") return true;
-    // Synthetic market pairs with beta REAL only — never ordinary REAL.
-    return (
-      counterpart.marketMode === "REAL" && counterpart.canAccessSyntheticMarket
-    );
+  if (consumer.marketMode === "SYNTHETIC") {
+    return producer.marketMode === "SYNTHETIC";
   }
-  if (requester.canAccessSyntheticMarket) {
+  if (consumer.canAccessSyntheticMarket) {
     return true;
   }
-  return counterpart.marketMode === "REAL";
+  return producer.marketMode === "REAL";
 }
 
-/** Both sides must be compatible (bidirectional). */
+/**
+ * Oriented compatibility for demand↔supply:
+ * demandDealer is always the consumer; vehicleDealer is the producer.
+ */
 export function marketsCompatible(
-  requester: MarketSide,
-  counterpart: MarketSide
+  demandSide: MarketSide,
+  vehicleSide: MarketSide
 ): boolean {
-  return (
-    requesterAllowsCounterpart(requester, counterpart) &&
-    requesterAllowsCounterpart(counterpart, requester)
-  );
+  return canConsumeMarketCounterpart(demandSide, vehicleSide);
 }
 
 export async function loadDealerMarketSide(
@@ -58,7 +63,10 @@ export async function dealerAllowsSyntheticMarket(
   return side.canAccessSyntheticMarket;
 }
 
-/** Prisma filter on related `dealer` for network counterparts visible to requester. */
+/**
+ * Prisma filter on related `dealer` for network counterparts a requester may consume.
+ * Requester is always the consumer.
+ */
 export function counterpartMarketWhere(
   requester: MarketSide
 ): Prisma.DealerWhereInput {
@@ -94,9 +102,7 @@ export function networkDemandWhere(
     status: "ACTIVE" as const,
     networkVisibility: "ANONYMOUS_NETWORK" as const,
     dealerId: { not: excludeDealerId },
-    ...(Object.keys(dealerFilter).length
-      ? { dealer: dealerFilter }
-      : {}),
+    ...(Object.keys(dealerFilter).length ? { dealer: dealerFilter } : {}),
   };
 }
 

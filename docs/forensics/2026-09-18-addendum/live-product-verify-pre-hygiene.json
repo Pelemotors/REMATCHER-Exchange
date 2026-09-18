@@ -1,0 +1,653 @@
+{
+  "health": {
+    "status": "ok",
+    "commit": "a4c29dfd533fe6a189c9626082881e6eecc937ca",
+    "migrationsApplied": 26,
+    "db": "ok"
+  },
+  "dealers": {
+    "beta": {
+      "dealerId": "cmu4haqxy0000jkfm0onmj86h",
+      "canAccessSyntheticMarket": true
+    },
+    "real": {
+      "dealerId": "cmu4mts8j0000jkfubz7jyh7s",
+      "canAccessSyntheticMarket": false
+    },
+    "apple": {
+      "dealerId": "cmu794rtg0001jkn3pbv5a0w8",
+      "canAccessSyntheticMarket": true
+    }
+  },
+  "intel": {
+    "beta": {
+      "MARKET_OVERVIEW": {
+        "action": "MARKET_OVERVIEW",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "overview"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_DEMAND": {
+        "action": "CHECK_DEMAND",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "demand",
+          "buyerBudget"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_SUPPLY": {
+        "action": "CHECK_SUPPLY",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "supply",
+          "askingB2B",
+          "askingRetail",
+          "mileage",
+          "fuelDistribution",
+          "handDistribution",
+          "engineDistribution",
+          "ownershipDistribution"
+        ],
+        "resultKeys": []
+      },
+      "COMPARE_SIMILAR": {
+        "action": "COMPARE_SIMILAR",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "comparison"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_BUY_PRICE": {
+        "action": "CHECK_BUY_PRICE",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "offeredPrice",
+          "askingB2B",
+          "verdict"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_LIQUIDITY": {
+        "action": "CHECK_LIQUIDITY",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "evidence",
+          "label"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_TRADE_RISK": {
+        "action": "CHECK_TRADE_RISK",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "evidence",
+          "label"
+        ],
+        "resultKeys": []
+      },
+      "MATCH_MY_CUSTOMERS": {
+        "action": "MATCH_MY_CUSTOMERS",
+        "http": 404,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "הפריט לא נמצא.",
+        "topKeys": [
+          "error"
+        ],
+        "resultKeys": []
+      }
+    },
+    "real": {
+      "MARKET_OVERVIEW": {
+        "action": "MARKET_OVERVIEW",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "overview"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_DEMAND": {
+        "action": "CHECK_DEMAND",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "demand",
+          "buyerBudget"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_SUPPLY": {
+        "action": "CHECK_SUPPLY",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "supply",
+          "askingB2B",
+          "askingRetail",
+          "mileage",
+          "fuelDistribution",
+          "handDistribution",
+          "engineDistribution",
+          "ownershipDistribution"
+        ],
+        "resultKeys": []
+      },
+      "COMPARE_SIMILAR": {
+        "action": "COMPARE_SIMILAR",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "comparison"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_BUY_PRICE": {
+        "action": "CHECK_BUY_PRICE",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "offeredPrice",
+          "askingB2B",
+          "verdict"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_LIQUIDITY": {
+        "action": "CHECK_LIQUIDITY",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "evidence",
+          "label"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_TRADE_RISK": {
+        "action": "CHECK_TRADE_RISK",
+        "http": 200,
+        "insufficientData": true,
+        "cohortLevel": 2,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "evidence",
+          "label"
+        ],
+        "resultKeys": []
+      },
+      "MATCH_MY_CUSTOMERS": {
+        "action": "MATCH_MY_CUSTOMERS",
+        "http": 404,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "הפריט לא נמצא.",
+        "topKeys": [
+          "error"
+        ],
+        "resultKeys": []
+      }
+    },
+    "apple": {
+      "MARKET_OVERVIEW": {
+        "action": "MARKET_OVERVIEW",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "overview"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_DEMAND": {
+        "action": "CHECK_DEMAND",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "demand",
+          "buyerBudget"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_SUPPLY": {
+        "action": "CHECK_SUPPLY",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "supply",
+          "askingB2B",
+          "askingRetail",
+          "mileage",
+          "fuelDistribution",
+          "handDistribution",
+          "engineDistribution",
+          "ownershipDistribution"
+        ],
+        "resultKeys": []
+      },
+      "COMPARE_SIMILAR": {
+        "action": "COMPARE_SIMILAR",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "comparison"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_BUY_PRICE": {
+        "action": "CHECK_BUY_PRICE",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "offeredPrice",
+          "askingB2B",
+          "verdict"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_LIQUIDITY": {
+        "action": "CHECK_LIQUIDITY",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "evidence",
+          "label"
+        ],
+        "resultKeys": []
+      },
+      "CHECK_TRADE_RISK": {
+        "action": "CHECK_TRADE_RISK",
+        "http": 200,
+        "insufficientData": false,
+        "cohortLevel": 0,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "",
+        "topKeys": [
+          "ok",
+          "action",
+          "subject",
+          "cohortLevel",
+          "yearWidening",
+          "insufficientData",
+          "supplyDistinctDealers",
+          "demandDistinctDealers",
+          "evidence",
+          "label"
+        ],
+        "resultKeys": []
+      },
+      "MATCH_MY_CUSTOMERS": {
+        "action": "MATCH_MY_CUSTOMERS",
+        "http": 404,
+        "hasPrivacyNote": false,
+        "leaksInternalNote": false,
+        "leaksNullNull": false,
+        "mentionsSynthetic": false,
+        "userFacingSnippet": "הפריט לא נמצא.",
+        "topKeys": [
+          "error"
+        ],
+        "resultKeys": []
+      }
+    }
+  },
+  "notifications": {
+    "beta": {
+      "/api/v1/notifications?limit=5": {
+        "http": 200,
+        "keys": [
+          "notifications",
+          "unreadCount"
+        ],
+        "itemCount": 2,
+        "firstTitle": "הרכב סומן כנמכר",
+        "nullLabel": true
+      },
+      "/api/v1/activity?limit=5": {
+        "http": 404,
+        "keys": [
+          "raw"
+        ],
+        "itemCount": null,
+        "firstTitle": null,
+        "nullLabel": false
+      }
+    },
+    "real": {
+      "/api/v1/notifications?limit=5": {
+        "http": 200,
+        "keys": [
+          "notifications",
+          "unreadCount"
+        ],
+        "itemCount": 12,
+        "firstTitle": "נמצאה התאמה רלוונטית לחיפוש שלך",
+        "nullLabel": false
+      },
+      "/api/v1/activity?limit=5": {
+        "http": 404,
+        "keys": [
+          "raw"
+        ],
+        "itemCount": null,
+        "firstTitle": null,
+        "nullLabel": false
+      }
+    },
+    "apple": {
+      "/api/v1/notifications?limit=5": {
+        "http": 200,
+        "keys": [
+          "notifications",
+          "unreadCount"
+        ],
+        "itemCount": 0,
+        "firstTitle": null,
+        "nullLabel": false
+      },
+      "/api/v1/activity?limit=5": {
+        "http": 404,
+        "keys": [
+          "raw"
+        ],
+        "itemCount": null,
+        "firstTitle": null,
+        "nullLabel": false
+      }
+    }
+  }
+}

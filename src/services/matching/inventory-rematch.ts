@@ -57,8 +57,9 @@ export async function rematchInventoryBatch(params: {
       },
     },
   });
+  // Demand consumes supply: demandSide × sellerSide
   const compatibleDemands = demands.filter((d) =>
-    marketsCompatible(sellerSide, marketSideFromDealerRow(d.dealer))
+    marketsCompatible(marketSideFromDealerRow(d.dealer), sellerSide)
   );
   if (compatibleDemands.length === 0) return [] as string[];
 

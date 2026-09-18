@@ -35,9 +35,9 @@ describe("marketsCompatible matrix", () => {
     expect(marketsCompatible(realOrdinary, synth)).toBe(false);
   });
 
-  it("real beta × synth → compatible", () => {
+  it("real beta × synth → compatible; synth × real beta → incompatible", () => {
     expect(marketsCompatible(realBeta, synth)).toBe(true);
-    expect(marketsCompatible(synth, realBeta)).toBe(true);
+    expect(marketsCompatible(synth, realBeta)).toBe(false);
   });
 
   it("real ordinary × real ordinary → compatible", () => {
