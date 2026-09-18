@@ -1,22 +1,31 @@
 /**
  * Exchange Intelligence Engine V2 — privacy-safe network aggregates.
  *
- * Cohort widening (never cross models):
- *   LEVEL 0 — make + model + year window + exact fuel (when known)
- *   LEVEL 1 — make + model + year window + fuel family (when fuel known)
- *   LEVEL 2 — make + model + year window (fuel ignored)
+ * Year widening (never cross models):
+ *   LEVEL 0 — exact subject year span (scalar or demand yearMin..yearMax)
+ *   LEVEL 1 — span ± 1 year (disclosed via yearWidening.deltaYears)
+ *   LEVEL 2 — span ± 2 years
  *
- * Liquidity labels (CHECK_LIQUIDITY):
- *   HIGH  — supplyCount >= 8 and demandCount >= 5
- *   MODERATE — supplyCount >= minCohort and demandCount >= minCohort
- *   THIN — otherwise but cohort met at some level
- *   UNKNOWN — insufficientData at all levels
+ * Fuel cohort (within year level):
+ *   LEVEL 0 — exact fuel when known
+ *   LEVEL 1 — fuel family
+ *   LEVEL 2 — fuel ignored
  *
- * Trade risk (CHECK_TRADE_RISK):
- *   ELEVATED — demand/supply ratio > 2.5 with thin supply (< 5)
- *   MODERATE — demand/supply ratio > 1.5
- *   LOW — balanced or supply-heavy
- *   UNKNOWN — insufficientData
+ * Privacy: supplyDistinctDealers and demandDistinctDealers evaluated separately.
+ * Price/mileage/hand/fuel/engine distributions use contributor-side rows only.
+ * Liquidity, tradeRisk, marketBalance require BOTH sides to pass privacy else UNKNOWN.
+ *
+ * Market balance (MARKET_OVERVIEW):
+ *   DEMAND_HEAVY — demand/supply >= 1.5 (both sides pass privacy)
+ *   SUPPLY_HEAVY — supply/demand >= 1.5
+ *   BALANCED — otherwise
+ *   INSUFFICIENT_DATA — either side fails privacy or zero observations
+ *
+ * Trade risk (CHECK_TRADE_RISK) — evidence-based, not tied to market balance:
+ *   ELEVATED — zero supply with demand, or ratio > 2.5 with supplyCount < 5
+ *   MODERATE — ratio > 1.5 with adequate supply (>= 5)
+ *   LOW — otherwise when both sides pass privacy
+ *   UNKNOWN — either side fails privacy
  */
 import "server-only";
 import { prisma } from "@/lib/prisma";
@@ -63,6 +72,12 @@ export type ResolvedIntelSubject = {
   vehicleId?: string;
   demandId?: string;
 };
+
+export type MarketBalanceLabel =
+  | "DEMAND_HEAVY"
+  | "BALANCED"
+  | "SUPPLY_HEAVY"
+  | "INSUFFICIENT_DATA";
 
 function minCohort(): number {
   const raw = process.env.NETWORK_INTEL_MIN_COHORT;
@@ -113,11 +128,27 @@ function readVehicleFuel(v: MatchVehicleInput): CanonicalFuelType | null {
   return canonicalizeFuelType(raw);
 }
 
-function yearInRange(year: number | null, min: number | null, max: number | null): boolean {
-  if (year == null) return min == null && max == null;
-  if (min != null && year < min) return false;
-  if (max != null && year > max) return false;
-  return true;
+function subjectYearSpan(subject: ResolvedIntelSubject): { min: number; max: number } | null {
+  let min = subject.yearMin;
+  let max = subject.yearMax ?? subject.yearMin;
+  if (min == null && max == null) return null;
+  if (min == null) min = max;
+  if (max == null) max = min;
+  return { min: min!, max: max! };
+}
+
+export function yearWindowForCohortLevel(
+  subject: ResolvedIntelSubject,
+  level: 0 | 1 | 2
+): { min: number; max: number; deltaYears: number } | null {
+  const span = subjectYearSpan(subject);
+  if (!span) return null;
+  const delta = level === 0 ? 0 : level === 1 ? 1 : 2;
+  return {
+    min: span.min - delta,
+    max: span.max + delta,
+    deltaYears: delta,
+  };
 }
 
 function modelsMatch(model: string | null, target: string): boolean {
@@ -128,16 +159,43 @@ function modelsMatch(model: string | null, target: string): boolean {
 type CohortRow = {
   dealerId: string;
   year: number | null;
+  yearMin: number | null;
+  yearMax: number | null;
   fuel: CanonicalFuelType | null;
+  engine: string | null;
+  mileage: number | null;
+  ownershipHand: number | null;
   b2bPrice: number | null;
   retailPrice: number | null;
   budget: number | null;
   kind: "supply" | "demand";
 };
 
-function cohortAtLevel(rows: CohortRow[], level: 0 | 1 | 2, subject: ResolvedIntelSubject): CohortRow[] {
+function rowOverlapsYearWindow(
+  row: CohortRow,
+  window: { min: number; max: number } | null
+): boolean {
+  if (!window) return true;
+  if (row.kind === "demand") {
+    const rMin = row.yearMin ?? row.yearMax ?? row.year;
+    const rMax = row.yearMax ?? row.yearMin ?? row.year;
+    if (rMin == null && rMax == null) return false;
+    const aMin = rMin ?? rMax!;
+    const aMax = rMax ?? rMin!;
+    return aMax >= window.min && aMin <= window.max;
+  }
+  if (row.year == null) return false;
+  return row.year >= window.min && row.year <= window.max;
+}
+
+function cohortAtLevel(
+  rows: CohortRow[],
+  level: 0 | 1 | 2,
+  subject: ResolvedIntelSubject,
+  yearWindow: { min: number; max: number } | null
+): CohortRow[] {
   return rows.filter((r) => {
-    if (!yearInRange(r.year, subject.yearMin, subject.yearMax)) return false;
+    if (!rowOverlapsYearWindow(r, yearWindow)) return false;
     if (subject.fuel == null) return true;
     if (r.fuel == null) return level >= 2;
     if (level === 0) return r.fuel === subject.fuel;
@@ -148,6 +206,18 @@ function cohortAtLevel(rows: CohortRow[], level: 0 | 1 | 2, subject: ResolvedInt
 
 function distinctDealers(rows: CohortRow[]): number {
   return new Set(rows.map((r) => r.dealerId)).size;
+}
+
+export function supplyDistinctDealers(rows: CohortRow[]): number {
+  return distinctDealers(rows.filter((r) => r.kind === "supply"));
+}
+
+export function demandDistinctDealers(rows: CohortRow[]): number {
+  return distinctDealers(rows.filter((r) => r.kind === "demand"));
+}
+
+function sidePassesPrivacy(rows: CohortRow[], min: number, minDealers: number): boolean {
+  return rows.length >= min && distinctDealers(rows) >= minDealers;
 }
 
 function median(nums: number[]): number | null {
@@ -182,17 +252,83 @@ function cloakDistribution(values: number[], rows: CohortRow[]) {
   };
 }
 
+function cloakCategoricalDistribution(
+  rows: CohortRow[],
+  pick: (r: CohortRow) => string | null
+) {
+  const dealers = distinctDealers(rows);
+  if (rows.length < minDistributionObs() || dealers < minDistinctDealers()) {
+    return { insufficientData: true as const, buckets: null as Record<string, number> | null };
+  }
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const k = pick(r);
+    if (!k) continue;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return {
+    insufficientData: false as const,
+    buckets: Object.fromEntries(counts) as Record<string, number>,
+  };
+}
+
 function pickCohort(rows: CohortRow[], subject: ResolvedIntelSubject) {
   const min = minCohort();
   const minDealers = minDistinctDealers();
   for (const level of [0, 1, 2] as const) {
-    const cohort = cohortAtLevel(rows, level, subject);
+    const yearWindow = yearWindowForCohortLevel(subject, level);
+    const cohort = cohortAtLevel(rows, level, subject, yearWindow);
     const dealers = distinctDealers(cohort);
     if (cohort.length >= min && dealers >= minDealers) {
-      return { cohort, level, insufficientData: false as const };
+      return {
+        cohort,
+        level,
+        yearWidening: {
+          deltaYears: yearWindow?.deltaYears ?? 0,
+          level,
+        },
+        insufficientData: false as const,
+      };
     }
   }
-  return { cohort: [] as CohortRow[], level: 2 as const, insufficientData: true as const };
+  return {
+    cohort: [] as CohortRow[],
+    level: 2 as const,
+    yearWidening: { deltaYears: 2, level: 2 as const },
+    insufficientData: true as const,
+  };
+}
+
+export function marketBalanceLabel(
+  supplyCount: number,
+  demandCount: number,
+  supplyPrivacyOk: boolean,
+  demandPrivacyOk: boolean
+): MarketBalanceLabel {
+  if (!supplyPrivacyOk || !demandPrivacyOk) return "INSUFFICIENT_DATA";
+  if (supplyCount === 0 && demandCount === 0) return "INSUFFICIENT_DATA";
+  if (supplyCount === 0) return "DEMAND_HEAVY";
+  if (demandCount === 0) return "SUPPLY_HEAVY";
+  const ratio = demandCount / supplyCount;
+  if (ratio >= 1.5) return "DEMAND_HEAVY";
+  if (supplyCount / demandCount >= 1.5) return "SUPPLY_HEAVY";
+  return "BALANCED";
+}
+
+function liquidityLabel(supplyCount: number, demandCount: number): string {
+  if (supplyCount >= 8 && demandCount >= 5) return "HIGH";
+  if (supplyCount >= minCohort() && demandCount >= minCohort()) return "MODERATE";
+  if (supplyCount > 0 || demandCount > 0) return "THIN";
+  return "UNKNOWN";
+}
+
+function tradeRiskLabel(supplyCount: number, demandCount: number): string {
+  if (supplyCount === 0 && demandCount === 0) return "UNKNOWN";
+  if (supplyCount === 0 && demandCount > 0) return "ELEVATED";
+  const ratio = demandCount / supplyCount;
+  if (ratio > 2.5 && supplyCount < 5) return "ELEVATED";
+  if (ratio > 1.5 && supplyCount >= 5) return "MODERATE";
+  return "LOW";
 }
 
 function budgetFromConfirmed(confirmedJson: unknown): number | null {
@@ -210,6 +346,19 @@ function budgetFromConfirmed(confirmedJson: unknown): number | null {
     }
   }
   return null;
+}
+
+function priceDistributionBlock(
+  dist: ReturnType<typeof cloakDistribution>,
+  priceFamily: string
+) {
+  return {
+    p25: dist.p25,
+    median: dist.median,
+    p75: dist.p75,
+    insufficientData: dist.insufficientData,
+    priceFamily,
+  };
 }
 
 export async function resolveExchangeIntelSubject(
@@ -299,6 +448,8 @@ async function loadNetworkRows(
         make: true,
         model: true,
         year: true,
+        mileage: true,
+        ownershipHand: true,
         b2bPrice: true,
         retailPrice: true,
         fieldProvenance: true,
@@ -321,10 +472,16 @@ async function loadNetworkRows(
     const mk = canonicalizeMake(v.make);
     const md = canonicalizeModel(v.model);
     if (!mk || !md || mk !== subject.make || !modelsMatch(md, subject.model)) continue;
+    const fuel = readVehicleFuel(v as MatchVehicleInput);
     rows.push({
       dealerId: v.dealerId,
       year: v.year,
-      fuel: readVehicleFuel(v as MatchVehicleInput),
+      yearMin: v.year,
+      yearMax: v.year,
+      fuel,
+      engine: subject.engineHint,
+      mileage: v.mileage,
+      ownershipHand: v.ownershipHand,
       b2bPrice: v.b2bPrice,
       retailPrice: v.retailPrice,
       budget: null,
@@ -356,7 +513,12 @@ async function loadNetworkRows(
     rows.push({
       dealerId: d.dealerId,
       year: yearMax ?? yearMin,
+      yearMin,
+      yearMax,
       fuel: canonicalizeFuelType(typeof j.fuel === "string" ? j.fuel : null),
+      engine: typeof j.engine === "string" ? j.engine : null,
+      mileage: null,
+      ownershipHand: null,
       b2bPrice: null,
       retailPrice: null,
       budget: budgetFromConfirmed(d.confirmedJson),
@@ -364,22 +526,6 @@ async function loadNetworkRows(
     });
   }
   return rows;
-}
-
-function liquidityLabel(supplyCount: number, demandCount: number): string {
-  if (supplyCount >= 8 && demandCount >= 5) return "HIGH";
-  if (supplyCount >= minCohort() && demandCount >= minCohort()) return "MODERATE";
-  if (supplyCount > 0 || demandCount > 0) return "THIN";
-  return "UNKNOWN";
-}
-
-function tradeRiskLabel(supplyCount: number, demandCount: number): string {
-  if (supplyCount === 0 && demandCount === 0) return "UNKNOWN";
-  if (supplyCount === 0) return "ELEVATED";
-  const ratio = demandCount / supplyCount;
-  if (ratio > 2.5 && supplyCount < 5) return "ELEVATED";
-  if (ratio > 1.5) return "MODERATE";
-  return "LOW";
 }
 
 export async function runExchangeIntelligenceEngine(input: {
@@ -401,30 +547,65 @@ export async function runExchangeIntelligenceEngine(input: {
   const demandRows = picked.cohort.filter((r) => r.kind === "demand");
   const min = minCohort();
   const minDealers = minDistinctDealers();
-  const dealers = distinctDealers(picked.cohort);
 
-  const supplyCloak = cloakCount(supplyRows.length, min, dealers, minDealers);
-  const demandCloak = cloakCount(demandRows.length, min, dealers, minDealers);
+  const supplyDealers = supplyDistinctDealers(supplyRows);
+  const demandDealers = demandDistinctDealers(demandRows);
+  const supplyPrivacyOk = sidePassesPrivacy(supplyRows, min, minDealers);
+  const demandPrivacyOk = sidePassesPrivacy(demandRows, min, minDealers);
+  const bothSidesPrivacyOk = supplyPrivacyOk && demandPrivacyOk;
 
-  const b2bPrices = supplyRows.map((r) => r.b2bPrice).filter((p): p is number => p != null && p > 0);
+  const supplyCloak = cloakCount(
+    supplyRows.length,
+    min,
+    supplyDealers,
+    minDealers
+  );
+  const demandCloak = cloakCount(
+    demandRows.length,
+    min,
+    demandDealers,
+    minDealers
+  );
+
+  const b2bPrices = supplyRows
+    .map((r) => r.b2bPrice)
+    .filter((p): p is number => p != null && p > 0);
   const retailPrices = supplyRows
     .map((r) => r.retailPrice)
     .filter((p): p is number => p != null && p > 0);
-  const buyerBudgets = demandRows.map((r) => r.budget).filter((p): p is number => p != null && p > 0);
+  const mileages = supplyRows
+    .map((r) => r.mileage)
+    .filter((m): m is number => m != null && m >= 0);
+  const buyerBudgets = demandRows
+    .map((r) => r.budget)
+    .filter((p): p is number => p != null && p > 0);
 
   const supplyB2B = cloakDistribution(b2bPrices, supplyRows);
   const supplyRetail = cloakDistribution(retailPrices, supplyRows);
+  const supplyMileage = cloakDistribution(mileages, supplyRows);
   const buyerBudget = cloakDistribution(buyerBudgets, demandRows);
+
+  const supplyFuelDist = cloakCategoricalDistribution(supplyRows, (r) => r.fuel);
+  const supplyHandDist = cloakCategoricalDistribution(supplyRows, (r) =>
+    r.ownershipHand != null ? String(r.ownershipHand) : null
+  );
+  const supplyEngineDist = cloakCategoricalDistribution(supplyRows, (r) => r.engine);
 
   const base = {
     ok: true as const,
     action: input.action,
     subject: resolved,
     cohortLevel: picked.level,
+    yearWidening: picked.yearWidening,
     insufficientData: picked.insufficientData,
+    supplyDistinctDealers: supplyPrivacyOk ? supplyDealers : null,
+    demandDistinctDealers: demandPrivacyOk ? demandDealers : null,
     privacyNote:
       "Anonymous aggregates only. Raw cross-dealer rows are never returned.",
   };
+
+  const sc = supplyCloak.insufficientData ? 0 : supplyRows.length;
+  const dc = demandCloak.insufficientData ? 0 : demandRows.length;
 
   if (input.action === "MATCH_MY_CUSTOMERS") {
     if (!resolved.vehicleId) {
@@ -448,13 +629,15 @@ export async function runExchangeIntelligenceEngine(input: {
   }
 
   if (input.action === "CHECK_BUY_PRICE") {
+    const askingB2B = priceDistributionBlock(
+      supplyB2B,
+      "SUPPLY_ASKING_PRICE_B2B"
+    );
     if (input.offeredPrice == null || input.offeredPrice <= 0) {
       return {
         ...base,
-        priceFamily: "SUPPLY_ASKING_PRICE_B2B",
         needsOfferedPrice: true,
-        supplyMedianB2B: supplyB2B.median,
-        insufficientDistribution: supplyB2B.insufficientData,
+        askingB2B,
       };
     }
     const med = supplyB2B.median;
@@ -467,40 +650,37 @@ export async function runExchangeIntelligenceEngine(input: {
     }
     return {
       ...base,
-      priceFamily: "SUPPLY_ASKING_PRICE_B2B",
       offeredPrice: input.offeredPrice,
-      supplyMedianB2B: supplyB2B.median,
-      insufficientDistribution: supplyB2B.insufficientData,
+      askingB2B,
       verdict,
     };
   }
 
   if (input.action === "CHECK_LIQUIDITY") {
-    const label = picked.insufficientData
+    const label = !bothSidesPrivacyOk
       ? "UNKNOWN"
-      : liquidityLabel(supplyRows.length, demandRows.length);
+      : liquidityLabel(sc, dc);
     return {
       ...base,
       evidence: {
-        supplyObservations: supplyCloak.insufficientData ? null : supplyRows.length,
-        demandObservations: demandCloak.insufficientData ? null : demandRows.length,
-        distinctDealers: picked.insufficientData ? null : dealers,
+        supplyObservations: supplyCloak.insufficientData ? null : sc,
+        demandObservations: demandCloak.insufficientData ? null : dc,
+        supplyDistinctDealers: supplyPrivacyOk ? supplyDealers : null,
+        demandDistinctDealers: demandPrivacyOk ? demandDealers : null,
       },
       label,
     };
   }
 
   if (input.action === "CHECK_TRADE_RISK") {
-    const sc = supplyCloak.insufficientData ? 0 : supplyRows.length;
-    const dc = demandCloak.insufficientData ? 0 : demandRows.length;
-    const label = picked.insufficientData ? "UNKNOWN" : tradeRiskLabel(sc, dc);
+    const label = !bothSidesPrivacyOk ? "UNKNOWN" : tradeRiskLabel(sc, dc);
     return {
       ...base,
       evidence: {
         supplyObservations: supplyCloak.insufficientData ? null : sc,
         demandObservations: demandCloak.insufficientData ? null : dc,
         demandSupplyRatio:
-          sc > 0 && !demandCloak.insufficientData && !supplyCloak.insufficientData
+          sc > 0 && bothSidesPrivacyOk
             ? Math.round((dc / sc) * 100) / 100
             : null,
       },
@@ -515,11 +695,7 @@ export async function runExchangeIntelligenceEngine(input: {
         activeCount: demandCloak.value,
         insufficientData: demandCloak.insufficientData,
       },
-      buyerBudget: {
-        median: buyerBudget.median,
-        insufficientData: buyerBudget.insufficientData,
-        priceFamily: "BUYER_BUDGET",
-      },
+      buyerBudget: priceDistributionBlock(buyerBudget, "BUYER_BUDGET"),
     };
   }
 
@@ -530,16 +706,15 @@ export async function runExchangeIntelligenceEngine(input: {
         activeCount: supplyCloak.value,
         insufficientData: supplyCloak.insufficientData,
       },
-      askingB2B: {
-        median: supplyB2B.median,
-        insufficientData: supplyB2B.insufficientData,
-        priceFamily: "SUPPLY_ASKING_PRICE_B2B",
-      },
-      askingRetail: {
-        median: supplyRetail.median,
-        insufficientData: supplyRetail.insufficientData,
-        priceFamily: "SUPPLY_ASKING_PRICE_RETAIL",
-      },
+      askingB2B: priceDistributionBlock(supplyB2B, "SUPPLY_ASKING_PRICE_B2B"),
+      askingRetail: priceDistributionBlock(
+        supplyRetail,
+        "SUPPLY_ASKING_PRICE_RETAIL"
+      ),
+      mileage: priceDistributionBlock(supplyMileage, "SUPPLY_MILEAGE"),
+      fuelDistribution: supplyFuelDist,
+      handDistribution: supplyHandDist,
+      engineDistribution: supplyEngineDist,
     };
   }
 
@@ -549,19 +724,29 @@ export async function runExchangeIntelligenceEngine(input: {
       comparison: {
         supplyCount: supplyCloak.value,
         demandCount: demandCloak.value,
-        supplyMedianB2B: supplyB2B.median,
-        supplyMedianRetail: supplyRetail.median,
-        buyerBudgetMedian: buyerBudget.median,
+        askingB2B: priceDistributionBlock(supplyB2B, "SUPPLY_ASKING_PRICE_B2B"),
+        askingRetail: priceDistributionBlock(
+          supplyRetail,
+          "SUPPLY_ASKING_PRICE_RETAIL"
+        ),
+        buyerBudget: priceDistributionBlock(buyerBudget, "BUYER_BUDGET"),
         insufficientData: picked.insufficientData,
       },
     };
   }
 
-  // MARKET_OVERVIEW (default combined snapshot)
+  const marketBalance = marketBalanceLabel(
+    sc,
+    dc,
+    supplyPrivacyOk,
+    demandPrivacyOk
+  );
+
   return {
     ...base,
     overview: {
       cohortLevel: picked.level,
+      yearWidening: picked.yearWidening,
       demand: {
         activeCount: demandCloak.value,
         insufficientData: demandCloak.insufficientData,
@@ -570,29 +755,21 @@ export async function runExchangeIntelligenceEngine(input: {
         activeCount: supplyCloak.value,
         insufficientData: supplyCloak.insufficientData,
       },
-      buyerBudget: {
-        median: buyerBudget.median,
-        insufficientData: buyerBudget.insufficientData,
-        priceFamily: "BUYER_BUDGET",
-      },
-      askingB2B: {
-        median: supplyB2B.median,
-        insufficientData: supplyB2B.insufficientData,
-        priceFamily: "SUPPLY_ASKING_PRICE_B2B",
-      },
-      askingRetail: {
-        median: supplyRetail.median,
-        insufficientData: supplyRetail.insufficientData,
-        priceFamily: "SUPPLY_ASKING_PRICE_RETAIL",
-      },
-      liquidity: picked.insufficientData
-        ? "UNKNOWN"
-        : liquidityLabel(supplyRows.length, demandRows.length),
-      tradeRisk: picked.insufficientData
-        ? "UNKNOWN"
-        : tradeRiskLabel(supplyRows.length, demandRows.length),
+      buyerBudget: priceDistributionBlock(buyerBudget, "BUYER_BUDGET"),
+      askingB2B: priceDistributionBlock(supplyB2B, "SUPPLY_ASKING_PRICE_B2B"),
+      askingRetail: priceDistributionBlock(
+        supplyRetail,
+        "SUPPLY_ASKING_PRICE_RETAIL"
+      ),
+      mileage: priceDistributionBlock(supplyMileage, "SUPPLY_MILEAGE"),
+      fuelDistribution: supplyFuelDist,
+      handDistribution: supplyHandDist,
+      engineDistribution: supplyEngineDist,
+      marketBalance,
+      liquidity: !bothSidesPrivacyOk ? "UNKNOWN" : liquidityLabel(sc, dc),
+      tradeRisk: !bothSidesPrivacyOk ? "UNKNOWN" : tradeRiskLabel(sc, dc),
     },
   };
 }
 
-export { minCohort, minDistinctDealers, cloakCount };
+export { minCohort, minDistinctDealers, cloakCount, tradeRiskLabel, liquidityLabel };

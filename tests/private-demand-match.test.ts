@@ -6,9 +6,11 @@ const root = join(__dirname, "..");
 const read = (rel: string) => readFileSync(join(root, rel), "utf8");
 
 describe("matchDemandToMyInventory", () => {
-  it("matches dealer demand against all ACTIVE dealer vehicles including PRIVATE", () => {
+  it("matchDemandToMyInventory splits OWNED/INVENTORY inventoryMatches", () => {
     const src = read("src/services/matching/private-matching.ts");
     expect(src).toContain("export async function matchDemandToMyInventory");
+    expect(src).toContain("inventoryMatches");
+    expect(src).toContain("otherWorkspaceMatches");
     expect(src).toMatch(/status:\s*"ACTIVE"/);
     expect(src).not.toMatch(/visibility:\s*"ANONYMOUS_NETWORK"/);
     expect(src).toContain("evaluateMatchV2");

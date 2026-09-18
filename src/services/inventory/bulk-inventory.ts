@@ -2,6 +2,10 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { removeVehicleFromInventoryForDealer } from "@/services/inventory/remove-from-inventory";
 import { markVehicleSoldForDealer } from "@/services/inventory/mark-sold";
+import {
+  fetchAllMatchingVehicleIds,
+  type InventoryFilter,
+} from "@/services/inventory/dealer-inventory-filter";
 
 export type BulkInventoryAction = "archive" | "sold";
 
@@ -9,61 +13,83 @@ export type BulkInventoryInput = {
   dealerId: string;
   action: BulkInventoryAction;
   vehicleIds?: string[];
-  filter?: { status?: "ACTIVE" | "SOLD"; q?: string };
+  filter?: InventoryFilter;
+  q?: string;
   selectAllMatching?: boolean;
   source?: string;
 };
 
-export type BulkInventoryResult = {
-  ok: true;
-  action: BulkInventoryAction;
-  requestedCount: number;
-  affectedCount: number;
-  alreadyInTargetStateCount: number;
-  failures: Array<{ vehicleId: string; error: string }>;
-};
-
-async function resolveVehicleIds(input: BulkInventoryInput): Promise<string[]> {
-  if (input.selectAllMatching || (!input.vehicleIds?.length && input.filter)) {
-    const where: Record<string, unknown> = {
-      dealerId: input.dealerId,
-      status: { not: "ARCHIVED" },
-    };
-    if (input.filter?.status) where.status = input.filter.status;
-    else if (input.action === "archive") where.status = "ACTIVE";
-    else if (input.action === "sold") where.status = "ACTIVE";
-
-    if (input.filter?.q?.trim()) {
-      const term = input.filter.q.trim();
-      where.AND = [
-        {
-          OR: [
-            { make: { contains: term, mode: "insensitive" } },
-            { model: { contains: term, mode: "insensitive" } },
-            { color: { contains: term, mode: "insensitive" } },
-          ],
-        },
-      ];
+export type BulkInventoryResult =
+  | {
+      ok: false;
+      error: "bulk_ops_limit_exceeded";
+      totalMatchingCount: number;
     }
-    const rows = await prisma.vehicle.findMany({
-      where: where as never,
-      select: { id: true },
-      take: 500,
-    });
-    return rows.map((r) => r.id);
+  | {
+      ok: true;
+      action: BulkInventoryAction;
+      totalMatchingCount: number;
+      requestedCount: number;
+      processedCount: number;
+      affectedCount: number;
+      alreadyInTargetStateCount: number;
+      failureCount: number;
+      failures: Array<{ vehicleId: string; error: string }>;
+    };
+
+async function resolveVehicleIds(
+  input: BulkInventoryInput
+): Promise<
+  | { ok: true; ids: string[]; totalMatchingCount: number }
+  | { ok: false; error: "bulk_ops_limit_exceeded"; totalMatchingCount: number }
+> {
+  if (input.selectAllMatching || (!input.vehicleIds?.length && input.filter)) {
+    try {
+      const { ids, totalMatchingCount } = await fetchAllMatchingVehicleIds({
+        dealerId: input.dealerId,
+        filter: input.filter ?? (input.action === "sold" ? "active" : "active"),
+        q: input.q,
+      });
+      return { ok: true, ids, totalMatchingCount };
+    } catch (e) {
+      if (e instanceof Error && e.message === "bulk_ops_limit_exceeded") {
+        const { countDealerInventoryMatching } = await import(
+          "@/services/inventory/dealer-inventory-filter"
+        );
+        const totalMatchingCount = await countDealerInventoryMatching({
+          dealerId: input.dealerId,
+          filter: input.filter ?? "active",
+          q: input.q,
+        });
+        return { ok: false, error: "bulk_ops_limit_exceeded", totalMatchingCount };
+      }
+      throw e;
+    }
   }
-  return [...new Set(input.vehicleIds ?? [])];
+  const ids = [...new Set(input.vehicleIds ?? [])];
+  return { ok: true, ids, totalMatchingCount: ids.length };
 }
 
 export async function runBulkInventoryMutation(
   input: BulkInventoryInput
 ): Promise<BulkInventoryResult> {
-  const ids = await resolveVehicleIds(input);
-  const failures: BulkInventoryResult["failures"] = [];
+  const resolved = await resolveVehicleIds(input);
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      error: resolved.error,
+      totalMatchingCount: resolved.totalMatchingCount,
+    };
+  }
+
+  const ids = resolved.ids;
+  const failures: Array<{ vehicleId: string; error: string }> = [];
   let affectedCount = 0;
   let alreadyInTargetStateCount = 0;
+  let processedCount = 0;
 
   for (const vehicleId of ids) {
+    processedCount += 1;
     const vehicle = await prisma.vehicle.findFirst({
       where: { id: vehicleId, dealerId: input.dealerId },
       select: { id: true, status: true },
@@ -119,9 +145,12 @@ export async function runBulkInventoryMutation(
   return {
     ok: true,
     action: input.action,
+    totalMatchingCount: resolved.totalMatchingCount,
     requestedCount: ids.length,
+    processedCount,
     affectedCount,
     alreadyInTargetStateCount,
+    failureCount: failures.length,
     failures,
   };
 }

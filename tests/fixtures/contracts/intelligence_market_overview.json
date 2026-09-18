@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "action": "MARKET_OVERVIEW",
+  "cohortLevel": 1,
+  "yearWidening": { "deltaYears": 1, "level": 1 },
+  "overview": {
+    "marketBalance": "BALANCED",
+    "liquidity": "MODERATE",
+    "tradeRisk": "LOW",
+    "askingB2B": {
+      "p25": 95000,
+      "median": 102000,
+      "p75": 110000,
+      "insufficientData": false,
+      "priceFamily": "SUPPLY_ASKING_PRICE_B2B"
+    },
+    "buyerBudget": {
+      "p25": null,
+      "median": null,
+      "p75": null,
+      "insufficientData": true,
+      "priceFamily": "BUYER_BUDGET"
+    }
+  }
+}

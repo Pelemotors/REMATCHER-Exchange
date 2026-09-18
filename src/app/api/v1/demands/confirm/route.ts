@@ -11,7 +11,7 @@ import {
 } from "@/services/domain/matching-flow";
 import { recordActivationMilestone } from "@/services/activation/milestones";
 import { upsertCustomerForDealer } from "@/services/customers";
-import { extractCustomerHintsFromText } from "@/services/capture/customer-extract";
+import { extractCustomerHintsFromText, isSafePhoneForPersist } from "@/services/capture/customer-extract";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +55,7 @@ export async function POST(req: Request) {
     customerOverride?.name?.trim() || hints.name || null;
   const customerPhone =
     customerOverride?.phone?.trim() ||
-    hints.phone ||
-    hints.normalizedPhone ||
+    (isSafePhoneForPersist(hints) ? hints.normalizedPhone : null) ||
     null;
 
   let customerId = demand.customerId;

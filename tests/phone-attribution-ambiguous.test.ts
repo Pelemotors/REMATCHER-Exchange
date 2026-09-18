@@ -2,18 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   extractCustomerHintsFromText,
   extractPhoneCandidates,
+  isSafePhoneForPersist,
 } from "@/services/capture/customer-extract";
 
 describe("phone attribution", () => {
-  it("prefers high-confidence message body phone", () => {
+  it("ownership-confirmed message phone is safe to persist", () => {
+    const text = "הטלפון שלי 052-765-4321";
+    const hints = extractCustomerHintsFromText(text);
+    expect(hints.normalizedPhone).toBeTruthy();
+    expect(isSafePhoneForPersist(hints)).toBe(true);
+  });
+
+  it("message body alone is not high confidence", () => {
     const text = [
-      "[16.9.2026, 17:45:05] סוכן: שלום",
       "[16.9.2026, 17:46:12] לקוח: התקשרו אלי 052-765-4321 בבקשה",
     ].join("\n");
     const hints = extractCustomerHintsFromText(text);
-    expect(hints.phone).toMatch(/052/);
-    expect(hints.normalizedPhone).toBeTruthy();
-    expect(hints.phoneCandidates.length).toBeGreaterThanOrEqual(1);
+    const inMessage = hints.phoneCandidates.find((c) => c.raw.includes("4321"));
+    expect(inMessage?.attribution).toBe("MESSAGE");
+    expect(inMessage?.confidence).not.toBe("high");
   });
 
   it("leaves phone null when multiple high-confidence candidates", () => {

@@ -6,17 +6,21 @@ import { runBulkInventoryMutation } from "@/services/inventory/bulk-inventory";
 
 export const dynamic = "force-dynamic";
 
+const inventoryFilterSchema = z.enum([
+  "all",
+  "active",
+  "sold",
+  "attention",
+  "interest",
+  "missing_price",
+]);
+
 const bodySchema = z
   .object({
     action: z.enum(["archive", "sold"]),
     vehicleIds: z.array(z.string().min(1).max(80)).optional(),
-    filter: z
-      .object({
-        status: z.enum(["ACTIVE", "SOLD"]).optional(),
-        q: z.string().max(120).optional(),
-      })
-      .strict()
-      .optional(),
+    filter: inventoryFilterSchema.optional(),
+    q: z.string().max(120).optional(),
     selectAllMatching: z.boolean().optional(),
   })
   .strict();
@@ -47,9 +51,18 @@ export async function POST(req: Request) {
     action: data.action,
     vehicleIds: data.vehicleIds,
     filter: data.filter,
+    q: data.q,
     selectAllMatching: data.selectAllMatching,
     source: "v1_inventory_bulk",
   });
+
+  if (!result.ok) {
+    return v1Error(
+      ctx,
+      "VALIDATION_INVALID_REQUEST",
+      `${result.error}:${result.totalMatchingCount}`
+    );
+  }
 
   return v1Json(ctx, result);
 }

@@ -6,6 +6,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { forgetAllMemoryForDealer } from "@/services/assistant/dealer-memory";
 import { revokeAllMobileSessionsForUser } from "@/services/identity/mobile-session";
+import { deactivateAllMarketWatchesForDealer } from "@/services/market-watch/watches";
 
 export async function deleteAllDealerMemoryForOwner(params: {
   dealerId: string;
@@ -137,7 +138,8 @@ export async function confirmAccountDeletion(params: {
       },
     });
 
-    // MarketWatch rows cascade on dealer hard-delete only; disabled dealer keeps watches (see inventory doc).
+    await deactivateAllMarketWatchesForDealer(params.dealerId);
+
     // ExchangeEvent / Vehicle / Demand / Reveal rows: RETAIN_FOR_EXPLICIT_LEGAL_REASON — not wiped in this pass.
 
     // SIWA token revocation requires Apple client secret — EXTERNAL APPLE ACTION when unavailable.

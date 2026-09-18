@@ -1,0 +1,12 @@
+{
+  "watches": [
+    {
+      "id": "watch_example",
+      "queryMake": "Hyundai",
+      "queryModel": "Tucson",
+      "yearMin": 2020,
+      "yearMax": 2022,
+      "active": true
+    }
+  ]
+}

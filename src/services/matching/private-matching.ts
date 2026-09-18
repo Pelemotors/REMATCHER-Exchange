@@ -134,7 +134,7 @@ export async function matchDemandToMyInventory(params: {
 
   const { publicThumbUrlForDisplayKey } = await import("@/lib/media/storage");
 
-  const hits: Array<{
+  type MatchHit = {
     vehicleId: string;
     make: string | null;
     model: string | null;
@@ -143,7 +143,18 @@ export async function matchDemandToMyInventory(params: {
     band: string | null;
     score: number;
     hardPassed: boolean;
-  }> = [];
+    dealerRelationship?: string;
+  };
+
+  const inventoryMatches: MatchHit[] = [];
+  const otherWorkspaceMatches: MatchHit[] = [];
+
+  const inventoryRelationships = new Set(["OWNED", "INVENTORY"]);
+  const workspaceRelationships = new Set([
+    "OFFERED_TO_ME",
+    "TRADE_IN_CANDIDATE",
+    "EXTERNAL",
+  ]);
 
   for (const vehicle of vehicles) {
     try {
@@ -155,7 +166,7 @@ export async function matchDemandToMyInventory(params: {
         continue;
       }
       const primaryKey = vehicle.media[0]?.storageKey ?? null;
-      hits.push({
+      const hit: MatchHit = {
         vehicleId: vehicle.id,
         make: vehicle.make,
         model: vehicle.model,
@@ -164,18 +175,27 @@ export async function matchDemandToMyInventory(params: {
         band: ev.band,
         score: ev.score,
         hardPassed: ev.hardPassed,
-      });
+        dealerRelationship: vehicle.dealerRelationship,
+      };
+      if (inventoryRelationships.has(vehicle.dealerRelationship)) {
+        inventoryMatches.push(hit);
+      } else if (workspaceRelationships.has(vehicle.dealerRelationship)) {
+        otherWorkspaceMatches.push(hit);
+      }
     } catch {
       continue;
     }
   }
 
-  hits.sort((a, b) => b.score - a.score);
+  inventoryMatches.sort((a, b) => b.score - a.score);
+  otherWorkspaceMatches.sort((a, b) => b.score - a.score);
 
   return {
     ok: true as const,
     demandId: demand.id,
-    matchCount: hits.length,
-    matches: hits,
+    matchCount: inventoryMatches.length,
+    inventoryMatches,
+    otherWorkspaceMatches,
+    matches: inventoryMatches,
   };
 }

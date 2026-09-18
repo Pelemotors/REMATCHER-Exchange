@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "action": "archive",
+  "totalMatchingCount": 2,
+  "requestedCount": 2,
+  "processedCount": 2,
+  "affectedCount": 2,
+  "alreadyInTargetStateCount": 0,
+  "failureCount": 0,
+  "failures": []
+}

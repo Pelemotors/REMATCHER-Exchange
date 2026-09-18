@@ -1,12 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import {
+  buildDealerInventoryWhere,
+  loadInventoryFilterAux,
+  type InventoryFilter,
+} from "@/services/inventory/dealer-inventory-filter";
 
-export type InventoryFilter =
-  | "all"
-  | "active"
-  | "sold"
-  | "attention"
-  | "interest"
-  | "missing_price";
+export type { InventoryFilter } from "@/services/inventory/dealer-inventory-filter";
+export {
+  buildDealerInventoryWhere,
+  loadInventoryFilterAux,
+} from "@/services/inventory/dealer-inventory-filter";
 
 export interface InventoryListInput {
   dealerId: string;
@@ -23,7 +26,7 @@ export async function getInventoryList({
   filter = "active",
   q,
 }: InventoryListInput) {
-  const [statusCounts, missingPriceCount, attentionBase, openOpps, pendingValidations] =
+  const [statusCounts, missingPriceCount, aux, pendingValidations, openOpps] =
     await Promise.all([
       prisma.vehicle.groupBy({
         by: ["status"],
@@ -33,25 +36,15 @@ export async function getInventoryList({
       prisma.vehicle.count({
         where: { dealerId, status: "ACTIVE", b2bPrice: null, retailPrice: null },
       }),
-      prisma.vehicle.findMany({
-        where: {
-          dealerId,
-          status: "ACTIVE",
-          OR: [
-            { freshnessState: { in: ["STALE", "VALIDATION_REQUIRED", "UNKNOWN"] } },
-            { b2bPrice: null, retailPrice: null },
-          ],
-        },
-        select: { id: true },
+      loadInventoryFilterAux(dealerId),
+      prisma.validationEvent.groupBy({
+        by: ["vehicleId"],
+        where: { dealerId, status: "PENDING" },
+        _count: { _all: true },
       }),
       prisma.sellerOpportunity.groupBy({
         by: ["vehicleId"],
         where: { vehicle: { dealerId }, status: "OPEN" },
-        _count: { _all: true },
-      }),
-      prisma.validationEvent.groupBy({
-        by: ["vehicleId"],
-        where: { dealerId, status: "PENDING" },
         _count: { _all: true },
       }),
     ]);
@@ -63,41 +56,8 @@ export async function getInventoryList({
 
   const oppByVehicle = new Map(openOpps.map((o) => [o.vehicleId, o._count._all]));
   const valByVehicle = new Map(pendingValidations.map((v) => [v.vehicleId, v._count._all]));
-  const attentionIds = new Set([
-    ...attentionBase.map((v) => v.id),
-    ...pendingValidations.map((v) => v.vehicleId),
-  ]);
 
-  const where: Record<string, unknown> = {
-    dealerId,
-    status: { not: "ARCHIVED" },
-  };
-
-  if (filter === "active") where.status = "ACTIVE";
-  else if (filter === "sold") where.status = "SOLD";
-  else if (filter === "all") where.status = { in: ["ACTIVE", "SOLD"] };
-  else if (filter === "missing_price") {
-    where.status = "ACTIVE";
-    where.b2bPrice = null;
-    where.retailPrice = null;
-  } else if (filter === "attention") {
-    where.id = { in: [...attentionIds] };
-  } else if (filter === "interest") {
-    where.id = { in: openOpps.map((o) => o.vehicleId) };
-  }
-
-  if (q?.trim()) {
-    const term = q.trim();
-    where.AND = [
-      {
-        OR: [
-          { make: { contains: term, mode: "insensitive" } },
-          { model: { contains: term, mode: "insensitive" } },
-          { color: { contains: term, mode: "insensitive" } },
-        ],
-      },
-    ];
-  }
+  const where = buildDealerInventoryWhere({ dealerId, filter, q, aux });
 
   const [totalMatching, vehicles] = await Promise.all([
     prisma.vehicle.count({ where: where as never }),
@@ -154,7 +114,7 @@ export async function getInventoryList({
       total: activeCount,
       sold: soldCount,
       all: allCount,
-      needsAttention: attentionIds.size,
+      needsAttention: aux.attentionIds.size,
       withInterest: openOpps.length,
       pendingValidation: pendingValidations.reduce((n, v) => n + v._count._all, 0),
       missingPrivatePrice: missingPriceCount,

@@ -10,7 +10,10 @@ vi.mock("@/lib/prisma", () => ({
     vehicle: {
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
       findMany: (...args: unknown[]) => mockFindMany(...args),
+      count: vi.fn().mockResolvedValue(1),
     },
+    sellerOpportunity: { groupBy: vi.fn().mockResolvedValue([]) },
+    validationEvent: { groupBy: vi.fn().mockResolvedValue([]) },
   },
 }));
 
@@ -41,6 +44,10 @@ describe("bulk inventory archive idempotent", () => {
 
     expect(result.alreadyInTargetStateCount).toBe(1);
     expect(result.affectedCount).toBe(0);
+    if (result.ok) {
+      expect(result.processedCount).toBe(1);
+      expect(result.failureCount).toBe(0);
+    }
     expect(mockRemove).not.toHaveBeenCalled();
   });
 

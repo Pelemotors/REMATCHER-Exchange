@@ -47,11 +47,28 @@ function lineAttribution(line: string, matchIndex: number): PhoneAttribution {
   return "HEADER";
 }
 
-function confidenceFor(attribution: PhoneAttribution, normalized: string | null): PhoneConfidence {
+const OWNERSHIP_PHONE_RE =
+  /(?:הטלפון שלי|מספר שלי|זה הנייד שלי|my number is|call me at)/i;
+
+const CUSTOMER_SPEAKER_RE =
+  /(?:^|\])[\s]*(?:לקוח|customer|buyer|קונה)\s*[:\-]/i;
+
+function confidenceFor(
+  attribution: PhoneAttribution,
+  normalized: string | null,
+  line: string,
+  fullText: string
+): PhoneConfidence {
   if (!normalized) return "low";
-  if (attribution === "MESSAGE") return "high";
+  if (OWNERSHIP_PHONE_RE.test(line) || OWNERSHIP_PHONE_RE.test(fullText)) {
+    return "high";
+  }
+  if (attribution === "MESSAGE") {
+    if (CUSTOMER_SPEAKER_RE.test(line)) return "medium";
+    return "low";
+  }
   if (attribution === "HEADER") return "medium";
-  return "medium";
+  return "low";
 }
 
 export function extractPhoneCandidates(text: string): PhoneCandidate[] {
@@ -72,7 +89,7 @@ export function extractPhoneCandidates(text: string): PhoneCandidate[] {
         raw,
         normalized,
         attribution,
-        confidence: confidenceFor(attribution, normalized),
+        confidence: confidenceFor(attribution, normalized, line, text),
       });
     }
   }
@@ -95,6 +112,14 @@ function pickPreferredPhone(candidates: PhoneCandidate[]): {
     return { phone: medium[0]!.raw, normalizedPhone: medium[0]!.normalized };
   }
   return { phone: null, normalizedPhone: null };
+}
+
+/** Persist only when a single high-confidence ownership-attributed phone is found. */
+export function isSafePhoneForPersist(hints: CaptureCustomerHints): boolean {
+  const high = hints.phoneCandidates.filter(
+    (c) => c.confidence === "high" && c.normalized
+  );
+  return high.length === 1 && hints.normalizedPhone != null;
 }
 
 export function extractCustomerHintsFromText(text: string): CaptureCustomerHints {

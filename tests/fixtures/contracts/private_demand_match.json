@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "demandId": "demand_example",
+  "matchCount": 1,
+  "inventoryMatches": [
+    {
+      "vehicleId": "veh_owned",
+      "band": "STRONG",
+      "score": 0.92,
+      "hardPassed": true,
+      "dealerRelationship": "OWNED"
+    }
+  ],
+  "otherWorkspaceMatches": []
+}

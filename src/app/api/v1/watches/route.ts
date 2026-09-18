@@ -4,6 +4,7 @@ import { parseV1Json } from "@/lib/api-v1/parse-json";
 import { v1Error, v1Json } from "@/lib/api-v1/respond";
 import {
   createMarketWatch,
+  deactivateMarketWatch,
   listMarketWatches,
 } from "@/services/market-watch/watches";
 
@@ -67,4 +68,23 @@ export async function POST(req: Request) {
       createdAt: watch.createdAt.toISOString(),
     },
   });
+}
+
+export async function DELETE(req: Request) {
+  const auth = await requireV1VerifiedDealer(req);
+  if (!auth.ok) return auth.response;
+  const { ctx, principal } = auth.auth;
+  const url = new URL(req.url);
+  const watchId = url.searchParams.get("watchId")?.trim();
+  if (!watchId) {
+    return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
+  }
+  const result = await deactivateMarketWatch({
+    dealerId: principal.dealerId,
+    watchId,
+  });
+  if (!result.ok) {
+    return v1Error(ctx, "RESOURCE_NOT_FOUND");
+  }
+  return v1Json(ctx, { ok: true });
 }
