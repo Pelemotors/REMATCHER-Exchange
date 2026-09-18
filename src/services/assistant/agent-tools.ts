@@ -56,10 +56,15 @@ export const INTAKE_AGENT_TOOL_NAMES = [
   "get_my_attention_opportunities",
   "get_my_customers",
   "find_my_customer",
-  "private_match_vehicle_to_my_demands",
   "get_network_intelligence",
   "get_my_dealer_opportunities",
 ] as const;
+
+export {
+  EXCHANGE_AGENT_TOOL_NAMES,
+  isExchangeAgentTool,
+  type ExchangeAgentToolName,
+} from "@/services/assistant/exchange-agent-tools";
 
 export type ControlToolName = (typeof CONTROL_TOOL_NAMES)[number];
 export type ConversationStateToolName =
@@ -483,18 +488,6 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
     }
   ),
   tool(
-    "private_match_vehicle_to_my_demands",
-    "Match a vehicle in THIS dealer's workspace (offer/trade-in/owned) against THIS dealer's active Demands. Private matching — does NOT publish to network and does not expose other dealers.",
-    {
-      type: "object",
-      properties: {
-        vehicleId: { type: "string" },
-      },
-      required: ["vehicleId"],
-      additionalProperties: false,
-    }
-  ),
-  tool(
     "get_network_intelligence",
     "Anonymous network demand/supply aggregates for a make/model/year query + THIS dealer's private counts. Never returns identities. If insufficientData, say safely that there is not enough network data.",
     {
@@ -511,6 +504,102 @@ export const AGENT_OPENAI_TOOLS: ChatCompletionTool[] = [
   tool(
     "get_my_dealer_opportunities",
     "List proactive DealerOpportunity rows for THIS dealer (deduped). Separate from bilateral SellerOpportunity after BuyerInterest."
+  ),
+  tool(
+    "run_exchange_intelligence",
+    "Privacy-safe Exchange Intelligence Engine: MARKET_OVERVIEW, CHECK_DEMAND, CHECK_SUPPLY, CHECK_LIQUIDITY, CHECK_TRADE_RISK, CHECK_BUY_PRICE, COMPARE_SIMILAR, MATCH_MY_CUSTOMERS. Subject via vehicleId, demandId, or make+model (+ optional year/fuel). Never returns other-dealer identities or raw cross-dealer rows. Customer phone is never returned.",
+    {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: [
+            "MARKET_OVERVIEW",
+            "CHECK_DEMAND",
+            "CHECK_SUPPLY",
+            "COMPARE_SIMILAR",
+            "CHECK_BUY_PRICE",
+            "CHECK_LIQUIDITY",
+            "CHECK_TRADE_RISK",
+            "MATCH_MY_CUSTOMERS",
+          ],
+        },
+        vehicleId: nullableString,
+        demandId: nullableString,
+        make: nullableString,
+        model: nullableString,
+        yearMin: nullableNumber,
+        yearMax: nullableNumber,
+        fuel: nullableString,
+        engine: nullableString,
+        offeredPrice: nullableNumber,
+      },
+      required: [
+        "action",
+        "vehicleId",
+        "demandId",
+        "make",
+        "model",
+        "yearMin",
+        "yearMax",
+        "fuel",
+        "engine",
+        "offeredPrice",
+      ],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "private_match_vehicle_to_my_demands",
+    "Match a vehicle in THIS dealer's workspace against THIS dealer's active Demands (private-matching). Does NOT publish to network. Customer phone never returned.",
+    {
+      type: "object",
+      properties: {
+        vehicleId: { type: "string" },
+      },
+      required: ["vehicleId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "private_match_demand_to_my_inventory",
+    "Match THIS dealer's active Demand against own ACTIVE inventory (incl. PRIVATE visibility). Private-matching only — no network publish.",
+    {
+      type: "object",
+      properties: {
+        demandId: { type: "string" },
+      },
+      required: ["demandId"],
+      additionalProperties: false,
+    }
+  ),
+  tool(
+    "list_my_market_watches",
+    "List THIS dealer's active market watches (make/model/year window). Own watches only."
+  ),
+  tool(
+    "create_market_watch",
+    "Create a market watch for anonymous network movement on make/model (+ optional year range). Does not expose other dealers.",
+    {
+      type: "object",
+      properties: {
+        queryMake: nullableString,
+        queryModel: nullableString,
+        make: nullableString,
+        model: nullableString,
+        yearMin: nullableNumber,
+        yearMax: nullableNumber,
+      },
+      required: [
+        "queryMake",
+        "queryModel",
+        "make",
+        "model",
+        "yearMin",
+        "yearMax",
+      ],
+      additionalProperties: false,
+    }
   ),
   tool(
     "propose_mutation",

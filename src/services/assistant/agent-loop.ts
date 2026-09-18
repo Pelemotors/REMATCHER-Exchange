@@ -28,11 +28,13 @@ import {
   isControlTool,
   isConversationStateTool,
   isDealerMemoryTool,
+  isExchangeAgentTool,
   isIntakeAgentTool,
   isReadOpenAiTool,
   isSearchIntentTool,
   OPENAI_READ_TOOL_MAP,
 } from "@/services/assistant/agent-tools";
+import { executeExchangeAgentTool } from "@/services/assistant/exchange-agent-tools";
 import {
   formatMemoryPromptBlock,
   retrieveRelevantMemories,
@@ -482,6 +484,31 @@ export async function runAgentToolLoop(params: {
             role: "tool",
             tool_call_id: call.id,
             content: JSON.stringify(result),
+          });
+          continue;
+        }
+
+        if (isExchangeAgentTool(name)) {
+          if (
+            name === "run_exchange_intelligence" ||
+            name === "private_match_vehicle_to_my_demands" ||
+            name === "private_match_demand_to_my_inventory"
+          ) {
+            mode = "deep";
+          }
+          const args = parseToolArgs(call.function.arguments);
+          const t0 = Date.now();
+          const result = await executeExchangeAgentTool(
+            name,
+            params.dealerId,
+            args
+          );
+          toolDurations[name] = (toolDurations[name] ?? 0) + (Date.now() - t0);
+          toolResults[name] = result;
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: truncateToolResult(result),
           });
           continue;
         }

@@ -16,7 +16,6 @@ export const INTAKE_AGENT_TOOL_NAMES = [
   "get_my_attention_opportunities",
   "get_my_customers",
   "find_my_customer",
-  "private_match_vehicle_to_my_demands",
   "get_network_intelligence",
   "get_my_dealer_opportunities",
 ] as const;
@@ -171,29 +170,6 @@ export async function executeIntakeTool(
         })),
       })),
       note: "Never invent customer facts. Closing a demand does not delete the customer.",
-    };
-  }
-
-  if (name === "private_match_vehicle_to_my_demands") {
-    const vehicleId = String(args.vehicleId ?? "");
-    if (!vehicleId) return { ok: false, error: "vehicleId_required" };
-    const { matchPrivateVehicleToMyDemands } = await import(
-      "@/services/matching/private-matching"
-    );
-    const result = await matchPrivateVehicleToMyDemands({ dealerId, vehicleId });
-    if (!result.ok) return { ok: false, error: result.error };
-    return {
-      ...result,
-      // Strip phones from agent-facing payload (privacy even private-side for LLM)
-      matches: result.matches.map((m) => ({
-        demandId: m.demandId,
-        customerId: m.customerId,
-        customerName: m.customerName,
-        band: m.band,
-        score: m.score,
-        summary: m.summary,
-      })),
-      note: "Private match within THIS dealer only. Does not publish vehicle to network.",
     };
   }
 

@@ -137,6 +137,9 @@ export async function confirmAccountDeletion(params: {
       },
     });
 
+    // MarketWatch rows cascade on dealer hard-delete only; disabled dealer keeps watches (see inventory doc).
+    // ExchangeEvent / Vehicle / Demand / Reveal rows: RETAIN_FOR_EXPLICIT_LEGAL_REASON — not wiped in this pass.
+
     // SIWA token revocation requires Apple client secret — EXTERNAL APPLE ACTION when unavailable.
     // See docs/release/EXTERNAL_ACTIONS.md
 

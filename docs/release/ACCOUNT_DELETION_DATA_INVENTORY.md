@@ -9,6 +9,8 @@
 | NotificationPreference / EventPreference | DELETE | by userId |
 | IdentityLinkChallenge | DELETE | by userId |
 | DealerMemoryItem | DELETE | forgetAllMemoryForDealer |
+| MarketWatch | RETAIN (inactive) | dealer row retained (FK); watches remain on disabled dealer — no PII beyond query make/model |
+| ExchangeEvent (DEALER_SCOPED) | RETAIN_FOR_EXPLICIT_LEGAL_REASON | append-only operational/learning log; no phone in eventData when sanitized |
 | User PII (name/email/phone/password) | ANONYMIZE | tombstone email, SUSPENDED |
 | Dealer contact fields | ANONYMIZE | disabled dealer |
 | Vehicle / Demand / Match / Reveal / Outcome | RETAIN_FOR_EXPLICIT_LEGAL_REASON | unresolved product/legal — do not invent |

@@ -188,7 +188,7 @@ describe("Product VNext acceptance — source wiring evidence", () => {
     expect(read("src/services/intake/intake-agent-tools.ts")).toContain(
       "get_network_intelligence"
     );
-    expect(read("src/services/intake/intake-agent-tools.ts")).toContain(
+    expect(read("src/services/assistant/exchange-agent-tools.ts")).toContain(
       "private_match_vehicle_to_my_demands"
     );
   });
