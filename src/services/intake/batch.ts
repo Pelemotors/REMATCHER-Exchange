@@ -310,7 +310,6 @@ export async function getIntakeBatchForDealer(input: {
             plateNormalized: c.plateNormalized,
             dealerIntent: c.dealerIntent,
             confidenceBand: c.confidenceBand,
-            confidence: c.confidenceBand,
             missingFields: c.missingFields,
             committedVehicleId: c.committedVehicleId,
             existingVehicleId: c.existingVehicleId,

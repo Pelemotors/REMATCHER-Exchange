@@ -51,6 +51,7 @@ export const INTAKE_CANDIDATE_SUBJECT_KEYS = [
   "trim",
   "offeredPrice",
   "askingPrice",
+  "confidenceBand",
   "govIdentity",
 ] as const;
 
@@ -159,6 +160,7 @@ export function buildIntakeCandidateSubjectFixture() {
     trim: "Luxury",
     offeredPrice: 125000,
     askingPrice: 125000,
+    confidenceBand: "HIGH",
     govIdentity: {
       make: "Hyundai",
       model: "Tucson",

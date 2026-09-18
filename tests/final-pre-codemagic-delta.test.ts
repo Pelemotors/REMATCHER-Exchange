@@ -57,6 +57,29 @@ describe("contributor privacy for distributions", () => {
     expect(dist.median).not.toBeNull();
   });
 
+  it("serializes median as integer when mathematical median is x.5 (even sample)", () => {
+    // 6 values → raw median (110+111)/2 = 110.5 → API must emit integer
+    const contributors = [
+      { dealerId: "d1" },
+      { dealerId: "d1" },
+      { dealerId: "d2" },
+      { dealerId: "d2" },
+      { dealerId: "d3" },
+      { dealerId: "d3" },
+    ];
+    const values = [100, 105, 110, 111, 120, 130];
+    const dist = cloakDistribution(values, contributors);
+    expect(dist.insufficientData).toBe(false);
+    expect(dist.median).toBe(111);
+    expect(Number.isInteger(dist.median)).toBe(true);
+    expect(Number.isInteger(dist.p25)).toBe(true);
+    expect(Number.isInteger(dist.p75)).toBe(true);
+    // JSON must not carry a fractional token
+    const json = JSON.stringify(dist);
+    expect(json).toContain('"median":111');
+    expect(json).not.toMatch(/"median":110\.5/);
+  });
+
   it("suppresses categorical dist when category contributors span only 2 dealers", () => {
     const rows = [
       { dealerId: "d1", fuel: "GASOLINE" },

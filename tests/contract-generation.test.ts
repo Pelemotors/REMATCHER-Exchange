@@ -89,5 +89,8 @@ describe("Backend↔Swift contract generation", () => {
     expect(typeof fixture.fuel).toBe("string");
     expect(typeof fixture.engine).toBe("string");
     expect(typeof fixture.offeredPrice).toBe("number");
+    expect(fixture.confidenceBand).toBe("HIGH");
+    expect(typeof fixture.confidenceBand).toBe("string");
+    expect("confidence" in fixture).toBe(false);
   });
 });

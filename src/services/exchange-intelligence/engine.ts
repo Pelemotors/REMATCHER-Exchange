@@ -268,6 +268,12 @@ function median(nums: number[]): number | null {
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 }
 
+/** API contract: p25/median/p75 are always JSON integers or null (no fractional ₪/km). */
+export function asDistributionInt(n: number | null): number | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  return Math.round(n);
+}
+
 function cloakCount(count: number, min: number, dealers: number, minDealers: number) {
   if (count < min || dealers < minDealers) {
     return { value: null as number | null, insufficientData: true };
@@ -290,9 +296,9 @@ export function cloakDistribution(
   const p25 = s[Math.floor(s.length * 0.25)] ?? null;
   const p75 = s[Math.floor(s.length * 0.75)] ?? null;
   return {
-    median: median(values),
-    p25,
-    p75,
+    median: asDistributionInt(median(values)),
+    p25: asDistributionInt(p25),
+    p75: asDistributionInt(p75),
     insufficientData: false as const,
   };
 }
