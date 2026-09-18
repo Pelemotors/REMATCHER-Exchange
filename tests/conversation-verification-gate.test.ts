@@ -215,6 +215,22 @@ describe("persistent confirmation + conversationActionId", () => {
     });
     expect(denied.ok).toBe(false);
   });
+
+  it("assertPendingActionOnThread mismatch when thread pending differs", async () => {
+    mockActionFindUnique.mockResolvedValue({
+      id: "act-a",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    const denied = await assertPendingActionOnThread({
+      principal,
+      threadId: "t1",
+      actionId: "act-a",
+      threadPendingActionId: "act-b",
+    });
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.reason).toBe("mismatch");
+  });
 });
 
 describe("Action Truth + repeated action", () => {
@@ -256,6 +272,82 @@ describe("Action Truth + repeated action", () => {
       (c) => (c[0] as { data?: { kind?: string } })?.data?.kind === "ACTION_RESULT"
     );
     expect(resultKinds).toHaveLength(0);
+  });
+
+  it("FAILED clearance marks ConversationAction FAILED", async () => {
+    mockActionFindFirst.mockResolvedValue({
+      id: "act-fail",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    mockActionFindUnique.mockResolvedValue({
+      id: "act-fail",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    mockActionUpdate.mockResolvedValue({
+      id: "act-fail",
+      status: "FAILED",
+    });
+    await syncGatewayPendingProjection({
+      principal,
+      threadId: "t1",
+      previous: {
+        pendingConfirmation: {
+          action: "mark_sold",
+          label: "y",
+          payload: {},
+          conversationActionId: "act-fail",
+        },
+      },
+      next: {},
+      clearance: "failed",
+    });
+    expect(mockActionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      })
+    );
+  });
+
+  it("NO_EXECUTION clearance never SUCCEEDS", async () => {
+    mockActionFindFirst.mockResolvedValue({
+      id: "act-ne",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    mockActionFindUnique.mockResolvedValue({
+      id: "act-ne",
+      threadId: "t1",
+      status: "PENDING_CONFIRMATION",
+    });
+    mockActionUpdate.mockResolvedValue({
+      id: "act-ne",
+      status: "CANCELLED",
+    });
+    await syncGatewayPendingProjection({
+      principal,
+      threadId: "t1",
+      previous: {
+        pendingConfirmation: {
+          action: "create_inventory",
+          label: "y",
+          payload: {},
+          conversationActionId: "act-ne",
+        },
+      },
+      next: {},
+      clearance: "no_execution",
+    });
+    expect(mockActionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "CANCELLED" }),
+      })
+    );
+    const statuses = mockActionUpdate.mock.calls.map(
+      (c) => (c[0] as { data?: { status?: string } })?.data?.status
+    );
+    expect(statuses).not.toContain("SUCCEEDED");
   });
 
   it("SUCCEEDED only with clearance=succeeded", async () => {
@@ -385,8 +477,8 @@ describe("legacy isolation", () => {
     const { state } = await loadThreadAgentState(principal, "new");
     expect(state?.pendingConfirmation).toBeUndefined();
     expect(state?.pendingInventoryMutation).toBeUndefined();
-    expect(state?.recentTurns?.[0]?.text).toBe("legacy");
-    expect(state?.focusedObject?.id).toBe("v-old");
+    expect(state?.recentTurns).toBeUndefined();
+    expect(state?.focusedObject).toBeUndefined();
   });
 
   it("split still keeps pending in operational for live threads", () => {

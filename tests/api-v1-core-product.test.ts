@@ -103,6 +103,22 @@ vi.mock("@/services/conversation/gateway-projection", () => ({
   syncGatewayPendingProjection: vi.fn(async () => undefined),
 }));
 
+vi.mock("@/services/assistant/conversation-persistence", () => ({
+  loadThreadAgentState: vi.fn(async () => ({
+    threadId: "thread-a",
+    state: {
+      pendingConfirmation: {
+        action: "confirm_inventory_import",
+        label: "אשר",
+        payload: {},
+        conversationActionId: "act-confirm-1",
+      },
+    },
+  })),
+  saveThreadAgentState: vi.fn(async () => undefined),
+  resolveActiveConversationState: vi.fn((s: unknown) => s),
+}));
+
 vi.mock("@/services/intake/batch", () => ({
   listIntakeBatchesForDealer: vi.fn(async () => []),
   getIntakeBatchForDealer: vi.fn(),
@@ -249,7 +265,7 @@ describe("assistant requires verified + privacy", () => {
     expect(runAssistantChatTurn).not.toHaveBeenCalled();
   });
 
-  it("POST confirm maps to chat turn with אשר/בטל", async () => {
+  it("POST confirm requires conversationActionId and binds to turn", async () => {
     const { POST: v1AssistantConfirm } = await import(
       "@/app/api/v1/assistant/confirm/route"
     );
@@ -257,7 +273,7 @@ describe("assistant requires verified + privacy", () => {
       ok: true,
       body: { message: "בוצע", conversation: {} },
     });
-    const res = await v1AssistantConfirm(
+    const missing = await v1AssistantConfirm(
       authReq("/api/v1/assistant/confirm", "token-a", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -268,6 +284,22 @@ describe("assistant requires verified + privacy", () => {
         }),
       })
     );
+    expect(missing.status).toBe(400);
+    expect(runAssistantChatTurn).not.toHaveBeenCalled();
+
+    const res = await v1AssistantConfirm(
+      authReq("/api/v1/assistant/confirm", "token-a", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmed: true,
+          action: "confirm_inventory_import",
+          threadId: "thread-a",
+          conversationActionId: "act-confirm-1",
+          clientTurnId: "turn-uuid-1",
+        }),
+      })
+    );
     expect(res.status).toBe(200);
     expect(runAssistantChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -275,6 +307,8 @@ describe("assistant requires verified + privacy", () => {
         userId: "user-a",
         threadId: "thread-a",
         message: "אשר",
+        conversationActionId: "act-confirm-1",
+        clientTurnId: "turn-uuid-1",
       })
     );
   });

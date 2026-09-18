@@ -111,6 +111,8 @@ describe("thread-scoped agent state", () => {
             payload: {},
           },
           recentTurns: [{ role: "user", text: "legacy" }],
+          focusedObject: { type: "vehicle", id: "legacy-v" },
+          compactSummary: "safe summary only",
           preferredClarificationWording: { year: "שנה?" },
         },
       },
@@ -123,12 +125,16 @@ describe("thread-scoped agent state", () => {
       "thread-new"
     );
     expect(state?.pendingConfirmation).toBeUndefined();
-    expect(state?.recentTurns?.[0]?.text).toBe("legacy");
+    expect(state?.recentTurns).toBeUndefined();
+    expect(state?.focusedObject).toBeUndefined();
+    expect(state?.compactSummary).toBe("safe summary only");
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           agentStateJson: expect.not.objectContaining({
             pendingConfirmation: expect.anything(),
+            focusedObject: expect.anything(),
+            recentTurns: expect.anything(),
           }),
         }),
       })

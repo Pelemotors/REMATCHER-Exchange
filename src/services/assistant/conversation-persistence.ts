@@ -169,12 +169,16 @@ async function maybeMigrateLegacyStateIntoThread(
   if (!legacy || Object.keys(legacy).length === 0) return undefined;
 
   const { operational, preferences } = splitStateForPersistence(legacy);
-  // Never import stale mutation authority into a new thread.
+  // Never import stale mutation authority / intel subject into a new thread.
   const {
     pendingConfirmation: _p,
     pendingInventoryDraft: _d,
     pendingInventoryMutation: _m,
     pendingSearchDraft: _s,
+    focusedObject: _f,
+    recentTurns: _r,
+    lastInterpretation: _li,
+    lastAgentQuestion: _lq,
     ...safeOperational
   } = operational;
 

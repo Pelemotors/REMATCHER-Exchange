@@ -62,12 +62,16 @@ export async function POST(req: Request) {
     threadId?: unknown;
     context?: AssistantChatUiContext;
     conversation?: ConversationState;
+    clientTurnId?: unknown;
   };
 
   const threadId = threadIdFromRequest(req, body);
   if (!threadId) {
     return v1Error(ctx, "VALIDATION_INVALID_REQUEST", "threadId required");
   }
+
+  const clientTurnId =
+    typeof body.clientTurnId === "string" ? body.clientTurnId.trim() : undefined;
 
   const result = await runAssistantChatTurn({
     dealerId: principal.dealerId,
@@ -76,6 +80,7 @@ export async function POST(req: Request) {
     message: typeof body.message === "string" ? body.message : undefined,
     context: body.context,
     clientConversation: body.conversation,
+    clientTurnId,
   });
 
   if (!result.ok) {
@@ -84,6 +89,13 @@ export async function POST(req: Request) {
     }
     if (result.error === "thread_forbidden") {
       return v1Error(ctx, "PERMISSION_FORBIDDEN");
+    }
+    if (result.error === "action_mismatch") {
+      return v1Error(
+        ctx,
+        "VALIDATION_INVALID_REQUEST",
+        result.message ?? "conversationActionId mismatch"
+      );
     }
     return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
   }

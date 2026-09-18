@@ -214,6 +214,7 @@ export async function handleInventoryManageTurn(params: {
       return executePendingMutation(params.dealerId, pending, meta);
     }
     if (turn?.cancels || turn?.relation === "CANCEL" || isRejection(params.message)) {
+      meta.executionOutcome = "CANCELLED";
       return {
         intent: "UPDATE_INVENTORY",
         message: "בוטל. שום דבר לא השתנה.",
@@ -251,6 +252,7 @@ export async function handleInventoryManageTurn(params: {
       return executePendingMutation(params.dealerId, mutation, meta);
     }
     if (isRejection(params.message)) {
+      meta.executionOutcome = "CANCELLED";
       return {
         intent: "UPDATE_INVENTORY",
         message: "בוטל. שום דבר לא השתנה.",
@@ -396,12 +398,14 @@ async function executePendingMutation(
     });
     meta.responseType = "mutation_sold";
     if (!result.ok) {
+      meta.executionOutcome = "FAILED";
       return {
         intent: "UPDATE_INVENTORY",
         message: "לא הצלחתי לעדכן כרגע. שום דבר לא השתנה.",
         meta,
       };
     }
+    meta.executionOutcome = "SUCCEEDED";
     return {
       intent: "UPDATE_INVENTORY",
       message: "הרכב הוסר מהמלאי הפעיל.",
@@ -423,12 +427,14 @@ async function executePendingMutation(
     });
     meta.responseType = "mutation_unavailable";
     if (!result.ok) {
+      meta.executionOutcome = "FAILED";
       return {
         intent: "UPDATE_INVENTORY",
         message: "לא הצלחתי לעדכן כרגע. שום דבר לא השתנה.",
         meta,
       };
     }
+    meta.executionOutcome = "SUCCEEDED";
     return {
       intent: "UPDATE_INVENTORY",
       message: "עודכן — הרכב לא במלאי הפעיל.",
@@ -459,12 +465,14 @@ async function executePendingMutation(
   });
   meta.responseType = "mutation_inventory_update";
   if (!result.ok) {
+    meta.executionOutcome = "FAILED";
     return {
       intent: "UPDATE_INVENTORY",
       message: "לא הצלחתי לעדכן כרגע. שום דבר לא השתנה.",
       meta,
     };
   }
+  meta.executionOutcome = "SUCCEEDED";
   return {
     intent: "UPDATE_INVENTORY",
     message: "עודכן.",

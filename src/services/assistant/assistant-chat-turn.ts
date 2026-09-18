@@ -13,7 +13,10 @@ import {
   saveThreadAgentState,
 } from "@/services/assistant/conversation-persistence";
 import { runExchangeAssistantV2 } from "@/services/assistant/v2-orchestrator";
-import { AGENT_VERSION } from "@/services/assistant/tools/registry";
+import {
+  AGENT_VERSION,
+  type AgentMeta,
+} from "@/services/assistant/tools/registry";
 import { appendMessage } from "@/services/conversation/messages";
 import {
   syncGatewayPendingProjection,
@@ -41,12 +44,74 @@ export type AssistantChatTurnResult =
         | "message_required"
         | "thread_required"
         | "thread_forbidden"
-        | "thread_not_found";
+        | "thread_not_found"
+        | "action_mismatch";
+      message?: string;
     }
   | {
       ok: true;
       body: Record<string, unknown>;
+      /** True when an identical clientTurnId already completed. */
+      replayed?: boolean;
     };
+
+function clearanceFromExecutionOutcome(
+  outcome: AgentMeta["executionOutcome"] | undefined
+): ProjectionClearance | undefined {
+  if (!outcome) return undefined;
+  if (outcome === "SUCCEEDED") return "succeeded";
+  if (outcome === "FAILED") return "failed";
+  if (outcome === "CANCELLED") return "cancelled";
+  if (outcome === "NO_EXECUTION") return "no_execution";
+  return undefined;
+}
+
+function normalizeClientTurnId(raw: string | undefined): string | undefined {
+  const t = raw?.trim();
+  if (!t) return undefined;
+  // Stable client UUID / opaque id — reject empty / oversized.
+  if (t.length < 8 || t.length > 128) return undefined;
+  return t;
+}
+
+async function findCompletedTurnReplay(params: {
+  principal: ConversationPrincipal;
+  threadId: string;
+  turnKey: string;
+  stored: ConversationState | undefined;
+}): Promise<Record<string, unknown> | null> {
+  const userKey = `thread:${params.threadId}:user:${params.turnKey}`;
+  const assistantKey = `thread:${params.threadId}:assistant:${params.turnKey}`;
+  const [userMsg, assistantMsg] = await Promise.all([
+    prisma.conversationMessage.findUnique({
+      where: {
+        threadId_idempotencyKey: {
+          threadId: params.threadId,
+          idempotencyKey: userKey,
+        },
+      },
+    }),
+    prisma.conversationMessage.findUnique({
+      where: {
+        threadId_idempotencyKey: {
+          threadId: params.threadId,
+          idempotencyKey: assistantKey,
+        },
+      },
+    }),
+  ]);
+  if (!userMsg) return null;
+  return {
+    intent: "UNKNOWN",
+    message: assistantMsg?.text ?? "",
+    conversation: params.stored ?? {},
+    requiresConfirmation: params.stored?.pendingConfirmation ?? null,
+    threadId: params.threadId,
+    agentVersion: AGENT_VERSION,
+    clientTurnId: params.turnKey,
+    replayed: true,
+  };
+}
 
 export async function getAssistantConversationPayload(
   principal: ConversationPrincipal,
@@ -90,23 +155,13 @@ async function persistTurnMessages(params: {
   }
 }
 
-function clearanceForTurn(
-  message: string,
-  previous: ConversationState | undefined,
-  next: ConversationState | undefined
-): ProjectionClearance | undefined {
-  if (!previous?.pendingConfirmation || next?.pendingConfirmation) {
-    return undefined;
-  }
-  if (isConfirmation(message)) return "succeeded";
-  if (isRejection(message)) return "cancelled";
-  return undefined;
-}
-
 /**
  * Shared Web + Mobile assistant turn — THREAD-SCOPED operational state.
  * Client conversation never overrides stored thread state.
  * Persist USER+ASSISTANT here only (clients must not double-POST /messages).
+ *
+ * Action Truth: ConversationAction clearance comes only from
+ * meta.executionOutcome (or explicit save clearance) — never from "אשר" text.
  */
 export async function runAssistantChatTurn(params: {
   dealerId: string;
@@ -115,6 +170,13 @@ export async function runAssistantChatTurn(params: {
   message?: string;
   context?: AssistantChatUiContext;
   clientConversation?: ConversationState;
+  /** Stable client UUID for the send lifecycle (HTTP retries reuse it). */
+  clientTurnId?: string;
+  /**
+   * Mobile Conversation confirm path: must equal thread pending ConversationAction.id.
+   * When set, mismatch aborts with zero execution.
+   */
+  conversationActionId?: string;
 }): Promise<AssistantChatTurnResult> {
   const message = params.message?.trim();
   if (!message) return { ok: false, error: "message_required" };
@@ -146,7 +208,62 @@ export async function runAssistantChatTurn(params: {
     params.clientConversation
   );
 
-  const turnKey = `${Date.now()}_${Buffer.from(message).toString("base64url").slice(0, 32)}`;
+  // Exact ConversationAction binding (Mobile confirm path).
+  const expectedActionId = params.conversationActionId?.trim();
+  if (expectedActionId) {
+    const pendingId = active?.pendingConfirmation?.conversationActionId;
+    if (!pendingId || pendingId !== expectedActionId) {
+      return {
+        ok: false,
+        error: "action_mismatch",
+        message:
+          "stale or mismatched conversationActionId — no execution",
+      };
+    }
+    const row = await prisma.conversationAction.findUnique({
+      where: { id: expectedActionId },
+    });
+    if (
+      !row ||
+      row.threadId !== threadId ||
+      row.status !== "PENDING_CONFIRMATION"
+    ) {
+      return {
+        ok: false,
+        error: "action_mismatch",
+        message:
+          "conversationActionId not pending on this thread — no execution",
+      };
+    }
+    const thread = await prisma.conversationThread.findUnique({
+      where: { id: threadId },
+      select: { dealerId: true },
+    });
+    if (!thread || thread.dealerId !== dealerId) {
+      return {
+        ok: false,
+        error: "action_mismatch",
+        message: "conversationAction authority mismatch — no execution",
+      };
+    }
+  }
+
+  const turnKey =
+    normalizeClientTurnId(params.clientTurnId) ??
+    `${Date.now()}_${Buffer.from(message).toString("base64url").slice(0, 32)}`;
+
+  // Turn-level idempotency: identical clientTurnId replays without re-execution.
+  if (normalizeClientTurnId(params.clientTurnId)) {
+    const replay = await findCompletedTurnReplay({
+      principal,
+      threadId,
+      turnKey,
+      stored: active,
+    });
+    if (replay) {
+      return { ok: true, body: replay, replayed: true };
+    }
+  }
 
   await logAppEvent({
     eventType: "assistant_opened",
@@ -158,11 +275,12 @@ export async function runAssistantChatTurn(params: {
     next: ConversationState | undefined,
     previous: ConversationState | undefined,
     assistantMessage?: string,
-    clearance?: ProjectionClearance
+    clearance?: ProjectionClearance,
+    executionOutcome?: AgentMeta["executionOutcome"]
   ): Promise<ConversationState | undefined> => {
     await saveThreadAgentState(principal, threadId, next);
     const resolvedClearance =
-      clearance ?? clearanceForTurn(message, previous, next);
+      clearance ?? clearanceFromExecutionOutcome(executionOutcome);
     return syncGatewayPendingProjection({
       principal,
       threadId,
@@ -195,6 +313,7 @@ export async function runAssistantChatTurn(params: {
           conversation: active ?? {},
           threadId,
           agentVersion: AGENT_VERSION,
+          clientTurnId: turnKey,
         },
       };
     }
@@ -242,6 +361,7 @@ export async function runAssistantChatTurn(params: {
         conversation: saved ?? next,
         threadId,
         agentVersion: AGENT_VERSION,
+        clientTurnId: turnKey,
       },
     };
   }
@@ -270,6 +390,7 @@ export async function runAssistantChatTurn(params: {
           conversation: next,
           threadId,
           agentVersion: AGENT_VERSION,
+          clientTurnId: turnKey,
         },
       };
     }
@@ -277,40 +398,69 @@ export async function runAssistantChatTurn(params: {
       const importId = String(
         active.pendingConfirmation.payload.importId ?? ""
       );
-      const result = await confirmImport({
-        dealerId,
-        importId,
-        markMissingAsSold: false,
-      });
-      const text = `בוצע. ${result.created} רכבים חדשים נקלטו ו-${result.updated} עודכנו. המלאי כבר זמין ל-matching ולסוכן האישי.`;
-      const next: ConversationState = {
-        ...active,
-        pendingConfirmation: undefined,
-        goal: undefined,
-        recentTurns: [
-          ...(active.recentTurns ?? []),
-          { role: "user" as const, text: message },
-          { role: "assistant" as const, text },
-        ].slice(-12),
-      };
-      await save(next, active, text, "succeeded");
-      await persistTurnMessages({
-        principal,
-        threadId,
-        userText: message,
-        assistantText: text,
-        turnKey,
-      });
-      return {
-        ok: true,
-        body: {
-          intent: "UPDATE_INVENTORY",
-          message: text,
-          conversation: next,
+      try {
+        const result = await confirmImport({
+          dealerId,
+          importId,
+          markMissingAsSold: false,
+        });
+        const text = `בוצע. ${result.created} רכבים חדשים נקלטו ו-${result.updated} עודכנו. המלאי כבר זמין ל-matching ולסוכן האישי.`;
+        const next: ConversationState = {
+          ...active,
+          pendingConfirmation: undefined,
+          goal: undefined,
+          recentTurns: [
+            ...(active?.recentTurns ?? []),
+            { role: "user" as const, text: message },
+            { role: "assistant" as const, text },
+          ].slice(-12),
+        };
+        await save(next, active, text, "succeeded");
+        await persistTurnMessages({
+          principal,
           threadId,
-          agentVersion: AGENT_VERSION,
-        },
-      };
+          userText: message,
+          assistantText: text,
+          turnKey,
+        });
+        return {
+          ok: true,
+          body: {
+            intent: "UPDATE_INVENTORY",
+            message: text,
+            conversation: next,
+            threadId,
+            agentVersion: AGENT_VERSION,
+            clientTurnId: turnKey,
+          },
+        };
+      } catch {
+        const text = "לא הצלחתי לאשר את קליטת המלאי. נסה שוב.";
+        const next: ConversationState = {
+          ...active,
+          pendingConfirmation: undefined,
+          goal: undefined,
+        };
+        await save(next, active, text, "failed");
+        await persistTurnMessages({
+          principal,
+          threadId,
+          userText: message,
+          assistantText: text,
+          turnKey,
+        });
+        return {
+          ok: true,
+          body: {
+            intent: "UPDATE_INVENTORY",
+            message: text,
+            conversation: next,
+            threadId,
+            agentVersion: AGENT_VERSION,
+            clientTurnId: turnKey,
+          },
+        };
+      }
     }
   }
 
@@ -321,7 +471,13 @@ export async function runAssistantChatTurn(params: {
     context: params.context ?? { route: "/" },
     conversation: active,
   });
-  const saved = await save(response.conversation, active, response.message);
+  const saved = await save(
+    response.conversation,
+    active,
+    response.message,
+    undefined,
+    response.meta?.executionOutcome
+  );
   const assistantText =
     typeof response.message === "string" ? response.message : null;
   await persistTurnMessages({
@@ -341,6 +497,7 @@ export async function runAssistantChatTurn(params: {
         conversation?.pendingConfirmation ?? response.requiresConfirmation,
       threadId,
       agentVersion: response.meta?.agentVersion ?? AGENT_VERSION,
+      clientTurnId: turnKey,
     },
   };
 }

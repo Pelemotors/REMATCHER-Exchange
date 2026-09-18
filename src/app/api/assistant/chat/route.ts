@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     threadId?: string;
     context?: AssistantChatUiContext;
     conversation?: ConversationState;
+    clientTurnId?: string;
   };
   const principal = {
     dealerId: a.session.user.dealerId!,
@@ -50,8 +51,15 @@ export async function POST(req: Request) {
     message: body.message,
     context: body.context,
     clientConversation: body.conversation,
+    clientTurnId: body.clientTurnId,
   });
   if (!result.ok) {
+    if (result.error === "action_mismatch") {
+      return NextResponse.json(
+        { error: result.message ?? "Action mismatch" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: "Message required" }, { status: 400 });
   }
   return NextResponse.json(result.body);

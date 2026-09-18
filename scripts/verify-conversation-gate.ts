@@ -1,387 +1,513 @@
 /**
- * Live Production verification for Conversation P0 gates.
- * Mutates temp threads then soft-deletes them.
+ * Live VPS verification for Conversation hardening gates.
+ * Uses ONLY the dedicated dealer: "verification / conversation-gate".
+ * All created rows are tagged with runId provenance and cleaned up.
+ *
+ * Run:
+ *   node -r ./scripts/register-server-only.cjs --import tsx scripts/verify-conversation-gate.ts
  */
 import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-require("module").Module._load = ((orig) =>
-  function (request: string, parent: unknown, isMain: boolean) {
-    if (request === "server-only") return {};
-    return orig(request, parent, isMain);
-  })(require("module").Module._load);
 
-import { prisma } from "../src/lib/prisma";
-import { createThread } from "../src/services/conversation/threads";
-import { appendMessage, listMessages } from "../src/services/conversation/messages";
-import {
-  loadThreadAgentState,
-  saveThreadAgentState,
-} from "../src/services/assistant/conversation-persistence";
-import {
-  syncGatewayPendingProjection,
-  assertPendingActionOnThread,
-} from "../src/services/conversation/gateway-projection";
-import {
-  resolveThreadIntelSubject,
-  runThreadIntelligenceAction,
-} from "../src/services/conversation/thread-intelligence";
-import { AGENT_CONVERSATION_TOPIC } from "../src/services/assistant/conversation-persistence";
-import { toPrismaJson } from "../src/lib/prisma-json";
+// Patch server-only before any app imports (ESM-safe via dynamic import below).
+const require = createRequire(import.meta.url);
+const Module = require("module") as typeof import("module");
+const origLoad = Module._load;
+Module._load = function (
+  request: string,
+  parent: unknown,
+  isMain: boolean
+) {
+  if (request === "server-only") return {};
+  return origLoad(request, parent, isMain);
+};
+
+import { randomUUID } from "crypto";
+
+const VERIFY_DEALER_NAME = "verification / conversation-gate";
+const RUN_PREFIX = "verify-cg";
 
 type Report = Record<string, { ok: boolean; evidence: string }>;
 
-async function principal() {
-  const m = await prisma.dealerMembership.findFirst({
-    select: { dealerId: true, userId: true },
-  });
-  if (!m) throw new Error("no membership");
-  return { dealerId: m.dealerId, userId: m.userId };
-}
-
-async function cleanup(ids: string[]) {
-  if (!ids.length) return;
-  await prisma.conversationThread.updateMany({
-    where: { id: { in: ids } },
-    data: { status: "DELETED", deletedAt: new Date() },
-  });
+async function assertVpsDb(prismaUrl: string): Promise<string> {
+  const u = prismaUrl;
+  const host = (u.match(/@([^/:]+)/) || [])[1] ?? "";
+  const port = (u.match(/:(\d+)\//) || [])[1] ?? "";
+  const db = (u.match(/\/([^/?]+)(\?|$)/) || [])[1] ?? "";
+  if (!/127\.0\.0\.1|localhost/.test(host) || port !== "5436") {
+    throw new Error(
+      `DB authority mismatch — expected VPS localhost:5436, got host=${host} port=${port}`
+    );
+  }
+  if (!/rematcher_exchange/i.test(db)) {
+    throw new Error(`DB authority mismatch — unexpected db name=${db}`);
+  }
+  return `VPS PostgreSQL ${host}:${port}/${db}`;
 }
 
 async function main() {
+  // Dynamic imports after server-only stub
+  const { prisma } = await import("../src/lib/prisma");
+  const { createThread } = await import("../src/services/conversation/threads");
+  const { appendMessage, listMessages } = await import(
+    "../src/services/conversation/messages"
+  );
+  const {
+    AGENT_CONVERSATION_TOPIC,
+    loadThreadAgentState,
+    saveThreadAgentState,
+  } = await import("../src/services/assistant/conversation-persistence");
+  const {
+    syncGatewayPendingProjection,
+    assertPendingActionOnThread,
+  } = await import("../src/services/conversation/gateway-projection");
+  const {
+    resolveThreadIntelSubject,
+    runThreadIntelligenceAction,
+  } = await import("../src/services/conversation/thread-intelligence");
+  const { runAssistantChatTurn } = await import(
+    "../src/services/assistant/assistant-chat-turn"
+  );
+  const { toPrismaJson } = await import("../src/lib/prisma-json");
+
   const report: Report = {};
-  const p = await principal();
-  const trash: string[] = [];
+  const runId = randomUUID().slice(0, 8);
+  const dbEvidence = await assertVpsDb(process.env.DATABASE_URL ?? "");
+  report.dbAuthority = { ok: true, evidence: dbEvidence };
 
-  // A — exact-one-message
-  {
-    const t = await createThread({
-      principal: p,
-      title: "verify-exact-one",
-      source: "AGENT",
-      titleSource: "USER",
-    });
-    trash.push(t.id);
-    const turnKey = `verify_${Date.now()}`;
-    await appendMessage(p, {
-      threadId: t.id,
-      role: "USER",
-      kind: "TEXT",
-      text: "מה הביקוש לרכב?",
-      source: "USER_TEXT",
-      idempotencyKey: `thread:${t.id}:user:${turnKey}`,
-    });
-    await appendMessage(p, {
-      threadId: t.id,
-      role: "ASSISTANT",
-      kind: "TEXT",
-      text: "בדקתי…",
-      source: "AGENT",
-      idempotencyKey: `thread:${t.id}:assistant:${turnKey}`,
-    });
-    // retry identical keys
-    await appendMessage(p, {
-      threadId: t.id,
-      role: "USER",
-      kind: "TEXT",
-      text: "מה הביקוש לרכב?",
-      source: "USER_TEXT",
-      idempotencyKey: `thread:${t.id}:user:${turnKey}`,
-    });
-    await appendMessage(p, {
-      threadId: t.id,
-      role: "ASSISTANT",
-      kind: "TEXT",
-      text: "בדקתי…",
-      source: "AGENT",
-      idempotencyKey: `thread:${t.id}:assistant:${turnKey}`,
-    });
-    const rows = await prisma.conversationMessage.findMany({
-      where: { threadId: t.id, kind: "TEXT" },
-    });
-    const users = rows.filter((r) => r.role === "USER");
-    const asst = rows.filter((r) => r.role === "ASSISTANT");
-    report.exactOne = {
-      ok: users.length === 1 && asst.length === 1,
-      evidence: `USER=${users.length} ASSISTANT=${asst.length} after retry`,
-    };
-  }
-
-  // B/C/D — confirmation + action truth + repeated
-  {
-    const t = await createThread({
-      principal: p,
-      title: "verify-confirm",
-      source: "AGENT",
-      titleSource: "USER",
-    });
-    trash.push(t.id);
-
-    const pending1 = await syncGatewayPendingProjection({
-      principal: p,
-      threadId: t.id,
-      previous: undefined,
-      next: {
-        pendingConfirmation: {
-          action: "confirm_inventory_import",
-          label: "אשר קליטה",
-          payload: { importId: "smoke-1" },
-        },
-      },
-    });
-    const id1 = pending1?.pendingConfirmation?.conversationActionId;
-    const gate = id1
-      ? await assertPendingActionOnThread({
-          principal: p,
-          threadId: t.id,
-          actionId: id1,
-        })
-      : { ok: false as const, reason: "no_pending" as const };
-
-    // Simulate leave/reopen: reload state
-    await saveThreadAgentState(p, t.id, pending1);
-    const reloaded = await loadThreadAgentState(p, t.id);
-    const persistedId = reloaded.state?.pendingConfirmation?.conversationActionId;
-
-    // Wrong text must NOT succeed
-    await syncGatewayPendingProjection({
-      principal: p,
-      threadId: t.id,
-      previous: pending1,
-      next: { ...pending1, pendingConfirmation: undefined },
-      assistantMessage: "בוצע בהצלחה",
-      // no clearance
-    });
-    const stillPending = await prisma.conversationAction.findUnique({
-      where: { id: id1! },
-    });
-
-    // Real succeed
-    await syncGatewayPendingProjection({
-      principal: p,
-      threadId: t.id,
-      previous: {
-        pendingConfirmation: {
-          action: "confirm_inventory_import",
-          label: "אשר",
-          payload: {},
-          conversationActionId: id1,
-        },
-      },
-      next: {},
-      clearance: "succeeded",
-      assistantMessage: "ok",
-    });
-    const afterOk = await prisma.conversationAction.findUnique({
-      where: { id: id1! },
-    });
-
-    // Second identical action → new id
-    const pending2 = await syncGatewayPendingProjection({
-      principal: p,
-      threadId: t.id,
-      previous: undefined,
-      next: {
-        pendingConfirmation: {
-          action: "confirm_inventory_import",
-          label: "אשר שוב",
-          payload: { importId: "smoke-2" },
-        },
-      },
-    });
-    const id2 = pending2?.pendingConfirmation?.conversationActionId;
-
-    // Cancel path
-    await syncGatewayPendingProjection({
-      principal: p,
-      threadId: t.id,
-      previous: pending2,
-      next: {},
-      clearance: "cancelled",
-      assistantMessage: "בוטל",
-    });
-    const afterCancel = await prisma.conversationAction.findUnique({
-      where: { id: id2! },
-    });
-
-    report.conversationActionId = {
-      ok: !!id1 && id1.length >= 20 && gate.ok === true,
-      evidence: `id1=${id1} gate=${JSON.stringify(gate)}`,
-    };
-    report.confirmationPersistence = {
-      ok: persistedId === id1,
-      evidence: `reloaded conversationActionId=${persistedId}`,
-    };
-    report.actionTruth = {
-      ok:
-        stillPending?.status === "PENDING_CONFIRMATION" &&
-        afterOk?.status === "SUCCEEDED" &&
-        (afterCancel?.status === "FAILED" || afterCancel?.status === "CANCELLED"),
-      evidence: `noClearance=${stillPending?.status} success=${afterOk?.status} cancel=${afterCancel?.status}`,
-    };
-    report.repeatedAction = {
-      ok: !!id1 && !!id2 && id1 !== id2,
-      evidence: `id1=${id1} id2=${id2}`,
-    };
-  }
-
-  // E — thread intelligence
-  {
-    const t = await createThread({
-      principal: p,
-      title: "verify-intel",
-      source: "AGENT",
-      titleSource: "USER",
-    });
-    trash.push(t.id);
-    await saveThreadAgentState(p, t.id, {
-      focusedObject: { type: "vehicle", id: "nonexistent-vehicle" },
-    });
-    // no-subject when empty
-    const t2 = await createThread({
-      principal: p,
-      title: "verify-intel-empty",
-      source: "AGENT",
-      titleSource: "USER",
-    });
-    trash.push(t2.id);
-    // Isolate from legacy migrate so "empty" means empty.
-    await prisma.conversationThread.update({
-      where: { id: t2.id },
-      data: { agentStateJson: { recentTurns: [] } },
-    });
-    await prisma.dealerMemoryItem.updateMany({
-      where: {
-        dealerId: p.dealerId,
-        topicKey: AGENT_CONVERSATION_TOPIC,
-        status: "ACTIVE",
-      },
-      data: { status: "SUPERSEDED" },
-    });
-    const empty = await resolveThreadIntelSubject(p, t2.id);
-    const ask = await runThreadIntelligenceAction({
-      principal: p,
-      threadId: t2.id,
-      action: "CHECK_DEMAND",
-    });
-    const focused = await resolveThreadIntelSubject(p, t.id);
-    report.threadIntelligence = {
-      ok:
-        empty.ok === false &&
-        ask.ok === false &&
-        (!ask.ok ? ask.error === "no_subject" : false) &&
-        focused.ok === true,
-      evidence: `empty=${JSON.stringify(empty)} askErr=${!ask.ok ? ask.error : "ok"} focused=${JSON.stringify(focused)}`,
-    };
-  }
-
-  // F — legacy contamination
-  {
-    await prisma.dealerMemoryItem.updateMany({
-      where: {
-        dealerId: p.dealerId,
-        topicKey: AGENT_CONVERSATION_TOPIC,
-        status: "ACTIVE",
-      },
-      data: { status: "SUPERSEDED" },
-    });
-    await prisma.dealerMemoryItem.create({
+  // Dedicated verification dealer
+  let dealer = await prisma.dealer.findFirst({
+    where: { businessName: VERIFY_DEALER_NAME },
+    select: { id: true },
+  });
+  if (!dealer) {
+    dealer = await prisma.dealer.create({
       data: {
-        dealerId: p.dealerId,
-        topicKey: AGENT_CONVERSATION_TOPIC,
-        kind: "TEMPORARY",
-        status: "ACTIVE",
-        provenance: "SYSTEM_DERIVED",
-        summary: "verify legacy",
-        details: toPrismaJson({
-          state: {
-            pendingConfirmation: {
-              action: "stale",
-              label: "old",
-              payload: {},
-            },
-            pendingInventoryMutation: {
-              type: "UPDATE",
-              vehicleId: "v",
-              status: "WAITING_CONFIRMATION",
-              label: "x",
-            },
-            recentTurns: [{ role: "user", text: "legacy-hi" }],
-            focusedObject: { type: "vehicle", id: "legacy-v" },
-          },
-        }),
-        confidence: 1,
+        businessName: VERIFY_DEALER_NAME,
+        contactName: "Conversation Gate Verifier",
+        phone: "0500000099",
+        email: "conversation-gate-verify@rematcher.local",
+        verificationStatus: "VERIFIED",
+        isActive: true,
+        cohort: "VERIFICATION",
+        marketMode: "REAL",
       },
+      select: { id: true },
     });
-    const t = await createThread({
-      principal: p,
-      title: "verify-legacy",
-      source: "AGENT",
-      titleSource: "USER",
-    });
-    trash.push(t.id);
-    const { state } = await loadThreadAgentState(p, t.id);
-    report.legacyIsolation = {
-      ok:
-        state?.pendingConfirmation === undefined &&
-        state?.pendingInventoryMutation === undefined &&
-        state?.recentTurns?.[0]?.text === "legacy-hi",
-      evidence: `pending=${!!state?.pendingConfirmation} mutation=${!!state?.pendingInventoryMutation} turns=${state?.recentTurns?.[0]?.text}`,
-    };
   }
 
-  // G — pagination 110 messages
-  {
-    const t = await createThread({
-      principal: p,
-      title: "verify-paging",
-      source: "AGENT",
-      titleSource: "USER",
-    });
-    trash.push(t.id);
-    for (let i = 0; i < 110; i++) {
-      await prisma.conversationMessage.create({
+  let membership = await prisma.dealerMembership.findFirst({
+    where: { dealerId: dealer.id },
+    select: { userId: true },
+  });
+  if (!membership) {
+    const user =
+      (await prisma.user.findFirst({
+        where: { email: "conversation-gate-verify@rematcher.local" },
+        select: { id: true },
+      })) ??
+      (await prisma.user.create({
         data: {
-          threadId: t.id,
-          role: i % 2 === 0 ? "USER" : "ASSISTANT",
-          kind: "TEXT",
-          text: `m-${i}`,
-          idempotencyKey: `page:${t.id}:${i}`,
+          email: "conversation-gate-verify@rematcher.local",
+          name: "Conversation Gate Verifier",
+          role: "DEALER_USER",
+          accountStatus: "ACTIVE",
+          emailVerifiedAt: new Date(),
         },
+        select: { id: true },
+      }));
+    membership = await prisma.dealerMembership.create({
+      data: {
+        dealerId: dealer.id,
+        userId: user.id,
+        role: "OWNER",
+      },
+      select: { userId: true },
+    });
+  }
+  const p = { dealerId: dealer.id, userId: membership.userId };
+  report.verificationDealer = {
+    ok: true,
+    evidence: `DEDICATED name="${VERIFY_DEALER_NAME}" dealerId=${p.dealerId}`,
+  };
+
+  const trashThreads: string[] = [];
+  const trashMemory: string[] = [];
+
+  async function hardCleanup() {
+    if (trashThreads.length) {
+      await prisma.conversationMessage.deleteMany({
+        where: { threadId: { in: trashThreads } },
+      });
+      await prisma.conversationAction.deleteMany({
+        where: { threadId: { in: trashThreads } },
+      });
+      await prisma.conversationThread.deleteMany({
+        where: { id: { in: trashThreads } },
       });
     }
-    const page1 = await listMessages({ principal: p, threadId: t.id, limit: 50 });
-    const page2 = await listMessages({
-      principal: p,
-      threadId: t.id,
-      limit: 50,
-      cursor: page1.nextCursor ?? undefined,
-    });
-    const ids1 = new Set(page1.messages.map((m) => m.id));
-    const overlap = page2.messages.filter((m) => ids1.has(m.id));
-    const firstText = page1.messages[0]?.text;
-    const lastText = page1.messages[page1.messages.length - 1]?.text;
-    report.pagination = {
-      ok:
-        page1.messages.length === 50 &&
-        !!page1.nextCursor &&
-        page2.messages.length === 50 &&
-        overlap.length === 0 &&
-        firstText === "m-60" &&
-        lastText === "m-109",
-      evidence: `p1=${page1.messages.length} cursor=${page1.nextCursor} p2=${page2.messages.length} overlap=${overlap.length} range=${firstText}..${lastText}`,
-    };
+    if (trashMemory.length) {
+      await prisma.dealerMemoryItem.deleteMany({
+        where: { id: { in: trashMemory } },
+      });
+    }
   }
 
-  await cleanup(trash);
+  try {
+    // A — clientTurnId turn idempotency via runAssistantChatTurn
+    {
+      const t = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-exact-one`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(t.id);
+      const clientTurnId = `${RUN_PREFIX}-${runId}-turn-a`;
+      await appendMessage(p, {
+        threadId: t.id,
+        role: "USER",
+        kind: "TEXT",
+        text: "שלום בדיקת אימות",
+        source: "USER_TEXT",
+        idempotencyKey: `thread:${t.id}:user:${clientTurnId}`,
+      });
+      await appendMessage(p, {
+        threadId: t.id,
+        role: "ASSISTANT",
+        kind: "TEXT",
+        text: "היי",
+        source: "AGENT",
+        idempotencyKey: `thread:${t.id}:assistant:${clientTurnId}`,
+      });
+      const first = await runAssistantChatTurn({
+        dealerId: p.dealerId,
+        userId: p.userId,
+        threadId: t.id,
+        message: "שלום בדיקת אימות",
+        clientTurnId,
+        context: { route: "/verify" },
+      });
+      const second = await runAssistantChatTurn({
+        dealerId: p.dealerId,
+        userId: p.userId,
+        threadId: t.id,
+        message: "שלום בדיקת אימות",
+        clientTurnId,
+        context: { route: "/verify" },
+      });
+      const rows = await prisma.conversationMessage.findMany({
+        where: { threadId: t.id, kind: "TEXT" },
+      });
+      const users = rows.filter((r) => r.role === "USER");
+      const asst = rows.filter((r) => r.role === "ASSISTANT");
+      report.turnIdempotency = {
+        ok:
+          first.ok === true &&
+          first.replayed === true &&
+          second.ok === true &&
+          second.replayed === true &&
+          users.length === 1 &&
+          asst.length === 1,
+        evidence: `USER=${users.length} ASSISTANT=${asst.length} replay1=${first.ok && first.replayed} replay2=${second.ok && second.replayed}`,
+      };
+    }
+
+    // B — Action Truth: failed clearance → FAILED
+    {
+      const t = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-action-truth`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(t.id);
+      const pending = await syncGatewayPendingProjection({
+        principal: p,
+        threadId: t.id,
+        previous: undefined,
+        next: {
+          pendingConfirmation: {
+            action: "mark_sold",
+            label: "אשר מכירה",
+            payload: { vehicleId: "no-such-vehicle" },
+          },
+        },
+      });
+      const id = pending?.pendingConfirmation?.conversationActionId!;
+      await saveThreadAgentState(p, t.id, pending);
+
+      await syncGatewayPendingProjection({
+        principal: p,
+        threadId: t.id,
+        previous: pending,
+        next: { ...pending, pendingConfirmation: undefined },
+        assistantMessage: "בוצע בהצלחה",
+      });
+      const still = await prisma.conversationAction.findUnique({ where: { id } });
+
+      await syncGatewayPendingProjection({
+        principal: p,
+        threadId: t.id,
+        previous: {
+          pendingConfirmation: {
+            action: "mark_sold",
+            label: "אשר",
+            payload: {},
+            conversationActionId: id,
+          },
+        },
+        next: {},
+        clearance: "failed",
+        assistantMessage: "נכשל",
+      });
+      const afterFail = await prisma.conversationAction.findUnique({
+        where: { id },
+      });
+      const resultMsg = await prisma.conversationMessage.findFirst({
+        where: {
+          threadId: t.id,
+          kind: "ACTION_RESULT",
+          idempotencyKey: `action_result:${id}:failed`,
+        },
+      });
+      report.actionTruthFailed = {
+        ok:
+          still?.status === "PENDING_CONFIRMATION" &&
+          afterFail?.status === "FAILED" &&
+          !!resultMsg,
+        evidence: `noClearance=${still?.status} failed=${afterFail?.status} resultMsg=${!!resultMsg}`,
+      };
+    }
+
+    // C — exact ConversationAction binding mismatch → zero execution
+    {
+      const t = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-bind`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(t.id);
+      const pendingB = await syncGatewayPendingProjection({
+        principal: p,
+        threadId: t.id,
+        previous: undefined,
+        next: {
+          pendingConfirmation: {
+            action: "confirm_validation",
+            label: "B",
+            payload: { validationId: "b" },
+          },
+        },
+      });
+      const idB = pendingB?.pendingConfirmation?.conversationActionId!;
+      await saveThreadAgentState(p, t.id, pendingB);
+
+      const orphanA = await prisma.conversationAction.create({
+        data: {
+          threadId: t.id,
+          actionType: "mark_sold",
+          status: "PENDING_CONFIRMATION",
+          gatewayActionId: "mark_sold",
+          idempotencyKey: `${RUN_PREFIX}-${runId}-orphan-a`,
+          payloadJson: toPrismaJson({ vehicleId: "x" }),
+        },
+      });
+
+      const mismatch = await runAssistantChatTurn({
+        dealerId: p.dealerId,
+        userId: p.userId,
+        threadId: t.id,
+        message: "אשר",
+        conversationActionId: orphanA.id,
+        clientTurnId: `${RUN_PREFIX}-${runId}-mismatch`,
+        context: { route: "/verify" },
+      });
+      const aAfter = await prisma.conversationAction.findUnique({
+        where: { id: orphanA.id },
+      });
+      const bAfter = await prisma.conversationAction.findUnique({
+        where: { id: idB },
+      });
+      const gateOk = await assertPendingActionOnThread({
+        principal: p,
+        threadId: t.id,
+        actionId: idB,
+        threadPendingActionId: idB,
+      });
+      const gateMismatch = await assertPendingActionOnThread({
+        principal: p,
+        threadId: t.id,
+        actionId: orphanA.id,
+        threadPendingActionId: idB,
+      });
+      report.exactBinding = {
+        ok:
+          mismatch.ok === false &&
+          mismatch.error === "action_mismatch" &&
+          aAfter?.status === "PENDING_CONFIRMATION" &&
+          bAfter?.status === "PENDING_CONFIRMATION" &&
+          gateOk.ok === true &&
+          gateMismatch.ok === false,
+        evidence: `turn=${mismatch.ok ? "ok" : mismatch.error} A=${aAfter?.status} B=${bAfter?.status} gateMismatch=${!gateMismatch.ok && "reason" in gateMismatch ? gateMismatch.reason : "ok"}`,
+      };
+    }
+
+    // D — legacy focusedObject NOT imported
+    {
+      const mem = await prisma.dealerMemoryItem.create({
+        data: {
+          dealerId: p.dealerId,
+          topicKey: AGENT_CONVERSATION_TOPIC,
+          kind: "TEMPORARY",
+          status: "ACTIVE",
+          provenance: "SYSTEM_DERIVED",
+          summary: `${RUN_PREFIX}-${runId} legacy fixture`,
+          details: toPrismaJson({
+            state: {
+              pendingConfirmation: {
+                action: "stale",
+                label: "old",
+                payload: {},
+              },
+              focusedObject: { type: "vehicle", id: "legacy-vehicle-A" },
+              recentTurns: [{ role: "user", text: "legacy-hi" }],
+            },
+          }),
+          confidence: 1,
+        },
+      });
+      trashMemory.push(mem.id);
+      const t = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-legacy`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(t.id);
+      const { state } = await loadThreadAgentState(p, t.id);
+      const subject = await resolveThreadIntelSubject(p, t.id);
+      const ask = await runThreadIntelligenceAction({
+        principal: p,
+        threadId: t.id,
+        action: "CHECK_DEMAND",
+      });
+      report.legacyIsolation = {
+        ok:
+          state?.pendingConfirmation === undefined &&
+          state?.focusedObject === undefined &&
+          state?.recentTurns === undefined &&
+          subject.ok === false &&
+          ask.ok === false &&
+          (!ask.ok ? ask.error === "no_subject" : false),
+        evidence: `focused=${!!state?.focusedObject} turns=${!!state?.recentTurns} subject=${subject.ok} ask=${!ask.ok ? ask.error : "ok"}`,
+      };
+    }
+
+    // E — pagination latest 50
+    {
+      const t = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-paging`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(t.id);
+      for (let i = 0; i < 110; i++) {
+        await prisma.conversationMessage.create({
+          data: {
+            threadId: t.id,
+            role: i % 2 === 0 ? "USER" : "ASSISTANT",
+            kind: "TEXT",
+            text: `m-${i}`,
+            idempotencyKey: `${RUN_PREFIX}-${runId}:page:${i}`,
+          },
+        });
+      }
+      const page1 = await listMessages({
+        principal: p,
+        threadId: t.id,
+        limit: 50,
+      });
+      const page2 = await listMessages({
+        principal: p,
+        threadId: t.id,
+        limit: 50,
+        cursor: page1.nextCursor ?? undefined,
+      });
+      const ids1 = new Set(page1.messages.map((m) => m.id));
+      const overlap = page2.messages.filter((m) => ids1.has(m.id));
+      report.pagination = {
+        ok:
+          page1.messages.length === 50 &&
+          !!page1.nextCursor &&
+          page2.messages.length === 50 &&
+          overlap.length === 0 &&
+          page1.messages[0]?.text === "m-60" &&
+          page1.messages[49]?.text === "m-109",
+        evidence: `p1=${page1.messages.length} p2=${page2.messages.length} overlap=${overlap.length}`,
+      };
+    }
+
+    // F — reopen pending id stability
+    {
+      const t = await createThread({
+        principal: p,
+        title: `${RUN_PREFIX}-${runId}-reopen`,
+        source: "AGENT",
+        titleSource: "USER",
+      });
+      trashThreads.push(t.id);
+      const pending = await syncGatewayPendingProjection({
+        principal: p,
+        threadId: t.id,
+        previous: undefined,
+        next: {
+          pendingConfirmation: {
+            action: "confirm_inventory_import",
+            label: "אשר",
+            payload: { importId: `${RUN_PREFIX}-${runId}` },
+          },
+        },
+      });
+      const id1 = pending?.pendingConfirmation?.conversationActionId;
+      await saveThreadAgentState(p, t.id, pending);
+      const reloaded = await loadThreadAgentState(p, t.id);
+      report.reopen = {
+        ok:
+          !!id1 &&
+          reloaded.state?.pendingConfirmation?.conversationActionId === id1,
+        evidence: `id=${id1} reloaded=${reloaded.state?.pendingConfirmation?.conversationActionId}`,
+      };
+    }
+  } finally {
+    await hardCleanup();
+  }
+
+  const leftoverThreads = await prisma.conversationThread.count({
+    where: {
+      dealerId: p.dealerId,
+      title: { startsWith: `${RUN_PREFIX}-${runId}` },
+    },
+  });
+  const leftoverMem = await prisma.dealerMemoryItem.count({
+    where: {
+      dealerId: p.dealerId,
+      summary: { contains: `${RUN_PREFIX}-${runId}` },
+    },
+  });
+  report.cleanup = {
+    ok: leftoverThreads === 0 && leftoverMem === 0,
+    evidence: `threadsLeft=${leftoverThreads} memLeft=${leftoverMem}`,
+  };
 
   const allOk = Object.values(report).every((r) => r.ok);
-  console.log(JSON.stringify({ ok: allOk, report }, null, 2));
+  console.log(JSON.stringify({ ok: allOk, runId, report }, null, 2));
+  await prisma.$disconnect();
   if (!allOk) process.exit(1);
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+main().catch(async (e) => {
+  console.error(e);
+  process.exit(1);
+});

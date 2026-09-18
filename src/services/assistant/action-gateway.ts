@@ -128,6 +128,7 @@ export async function runActionGateway(params: {
   if (proposal.kind === "CANCEL_PENDING") {
     meta.policyResult = "ALLOW";
     meta.responseType = "cancelled";
+    meta.executionOutcome = "CANCELLED";
     return {
       intent: "UNKNOWN",
       message: "בוטל. לא בוצעה פעולה.",
@@ -165,6 +166,7 @@ export async function runActionGateway(params: {
         reason: "confirm_without_pending",
       });
       meta.policyResult = "REQUIRE_CLARIFICATION";
+      meta.executionOutcome = "NO_EXECUTION";
       return {
         intent: "UNKNOWN",
         message: "אין פעולה ממתינה לאישור.",
@@ -188,16 +190,21 @@ export async function runActionGateway(params: {
       const draft = conversation?.pendingInventoryDraft;
       if (!draft) {
         meta.policyResult = "REQUIRE_CLARIFICATION";
+        meta.executionOutcome = "NO_EXECUTION";
         return {
           intent: "UPDATE_INVENTORY",
           message: "אין כרגע טיוטת רכב לשמירה.",
-          conversation,
+          conversation: {
+            ...conversation,
+            pendingConfirmation: undefined,
+          },
           meta,
         };
       }
       const snapshot = inventoryDraftSnapshot(draft);
       if (!snapshot.canSave) {
         meta.policyResult = "REQUIRE_CLARIFICATION";
+        meta.executionOutcome = "NO_EXECUTION";
         return {
           intent: "UPDATE_INVENTORY",
           message: "עדיין חסרים פרטי הזיהוי הבסיסיים של הרכב לפני שמירה.",
@@ -213,6 +220,7 @@ export async function runActionGateway(params: {
       const result = await executeConfirmInventoryCreate(params.dealerId, draft);
       if (!result.ok) {
         meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
         return {
           intent: "UPDATE_INVENTORY",
           message: result.message ?? "לא הצלחתי לשמור את הרכב.",
@@ -222,6 +230,7 @@ export async function runActionGateway(params: {
       }
 
       meta.policyResult = "ALLOW";
+      meta.executionOutcome = "SUCCEEDED";
       meta.responseType = "mutation_inventory_create";
       return {
         intent: "UPDATE_INVENTORY",
@@ -241,21 +250,34 @@ export async function runActionGateway(params: {
 
     if (pending.action === "confirm_validation") {
       const validationId = pending.payload.validationId as string;
-      await executeConfirmValidation(params.dealerId, validationId, true);
-      meta.policyResult = "ALLOW";
-      meta.responseType = "mutation_validation";
-      return {
-        intent: "VALIDATION",
-        message: "אישרת זמינות. Exchange ממשיך לבדוק התאמות.",
-        conversation: { ...conversation, pendingConfirmation: undefined },
-        meta,
-      };
+      try {
+        await executeConfirmValidation(params.dealerId, validationId, true);
+        meta.policyResult = "ALLOW";
+        meta.executionOutcome = "SUCCEEDED";
+        meta.responseType = "mutation_validation";
+        return {
+          intent: "VALIDATION",
+          message: "אישרת זמינות. Exchange ממשיך לבדוק התאמות.",
+          conversation: { ...conversation, pendingConfirmation: undefined },
+          meta,
+        };
+      } catch {
+        meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
+        return {
+          intent: "VALIDATION",
+          message: "לא הצלחתי לאשר את הזמינות.",
+          conversation,
+          meta,
+        };
+      }
     }
 
     if (pending.action === "mark_sold") {
       const vehicleId = pending.payload.vehicleId as string;
       if (!(await assertVehicleOwned(params.dealerId, vehicleId))) {
         meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
         return {
           intent: "UPDATE_INVENTORY",
           message: "אין הרשאה לרכב הזה.",
@@ -263,15 +285,27 @@ export async function runActionGateway(params: {
           meta,
         };
       }
-      await markMyVehicleSold(params.dealerId, vehicleId);
-      meta.policyResult = "ALLOW";
-      return {
-        intent: "UPDATE_INVENTORY",
-        message: "הרכב הוסר מהמלאי הפעיל.",
-        conversation: { ...conversation, pendingConfirmation: undefined },
-        inventoryMutationResult: { type: "sold", vehicleId },
-        meta,
-      };
+      try {
+        await markMyVehicleSold(params.dealerId, vehicleId);
+        meta.policyResult = "ALLOW";
+        meta.executionOutcome = "SUCCEEDED";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "הרכב הוסר מהמלאי הפעיל.",
+          conversation: { ...conversation, pendingConfirmation: undefined },
+          inventoryMutationResult: { type: "sold", vehicleId },
+          meta,
+        };
+      } catch {
+        meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
+        return {
+          intent: "UPDATE_INVENTORY",
+          message: "לא הצלחתי לסמן את הרכב כנמכר.",
+          conversation,
+          meta,
+        };
+      }
     }
 
     if (pending.action === "update_inventory") {
@@ -313,6 +347,7 @@ export async function runActionGateway(params: {
           !facts.createNewDespiteExisting,
       });
       meta.policyResult = result.ok ? "ALLOW" : "DENY";
+      meta.executionOutcome = result.ok ? "SUCCEEDED" : "FAILED";
       meta.responseType = "mutation_intake";
       const msg = !result.ok
         ? `לא הצלחתי להשלים את הקליטה (${"error" in result ? result.error : "שגיאה"}).`
@@ -324,7 +359,9 @@ export async function runActionGateway(params: {
       return {
         intent: "UPDATE_INVENTORY",
         message: msg,
-        conversation: { ...conversation, pendingConfirmation: undefined },
+        conversation: result.ok
+          ? { ...conversation, pendingConfirmation: undefined }
+          : conversation,
         meta,
         ...(result.ok &&
         "vehicleId" in result &&
@@ -347,6 +384,7 @@ export async function runActionGateway(params: {
       try {
         await processIntakeBatch(params.dealerId, batchId);
         meta.policyResult = "ALLOW";
+        meta.executionOutcome = "SUCCEEDED";
         meta.responseType = "mutation_intake_retry";
         return {
           intent: "UPDATE_INVENTORY",
@@ -358,6 +396,7 @@ export async function runActionGateway(params: {
         };
       } catch {
         meta.policyResult = "DENY";
+        meta.executionOutcome = "FAILED";
         return {
           intent: "UPDATE_INVENTORY",
           message: "לא הצלחתי להריץ מחדש את האצווה.",
@@ -367,6 +406,7 @@ export async function runActionGateway(params: {
       }
     }
 
+    meta.executionOutcome = "NO_EXECUTION";
     return {
       intent: "UNKNOWN",
       message: "לא הצלחתי לאשר את הפעולה הממתינה.",

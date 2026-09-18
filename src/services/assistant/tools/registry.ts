@@ -59,6 +59,15 @@ export interface AgentMeta {
   operation?: string | null;
   scope?: string | null;
   policyResult?: string;
+  /**
+   * Deterministic executor outcome for ConversationAction projection.
+   * Never infer from user wording ("אשר") or assistant prose.
+   */
+  executionOutcome?:
+    | "SUCCEEDED"
+    | "FAILED"
+    | "CANCELLED"
+    | "NO_EXECUTION";
   executor?: string;
   /** Agent 4.0 loop metrics */
   modelCallCount?: number;
