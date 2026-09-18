@@ -65,8 +65,11 @@ export async function getMarketPulse(
       make && model
         ? { make, model, yearMin, yearMax }
         : null,
-    networkOverview: network?.ok ? network.overview ?? null : null,
-    insufficientNetworkData: network?.ok ? network.insufficientData : !make || !model,
+    networkOverview:
+      network?.ok && "overview" in network ? network.overview ?? null : null,
+    insufficientNetworkData: network?.ok
+      ? Boolean(network.insufficientData)
+      : !make || !model,
     privacyNote:
       "Pulse combines dealer-scoped counts with anonymous network aggregates only.",
   };

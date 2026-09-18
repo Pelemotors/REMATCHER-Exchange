@@ -273,6 +273,7 @@ export async function resolveExchangeIntelSubject(
       demandId: d.id,
     };
   }
+  if (!("make" in subject) || !("model" in subject)) return null;
   const make = canonicalizeMake(subject.make);
   const model = canonicalizeModel(subject.model);
   if (!make || !model) return null;
