@@ -77,12 +77,13 @@ describe("vehicle media schema + API surface", () => {
     expect(route).toContain("reorderVehicleMediaForDealer");
   });
 
-  it("media serve uses BUYER_VISIBLE_MATCH_WHERE for buyers", () => {
+  it("media serve uses dual auth and BUYER_VISIBLE_MATCH_WHERE for buyers", () => {
     const route = readFileSync(
       join(root, "src/app/api/media/[...key]/route.ts"),
       "utf8"
     );
     expect(route).toContain("BUYER_VISIBLE_MATCH_WHERE");
+    expect(route).toContain("resolveMediaPrincipal");
     expect(route).toContain("dealerId");
   });
 

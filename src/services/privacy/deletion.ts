@@ -1,9 +1,11 @@
 /**
- * Real deletion backends for Privacy Center / account lifecycle.
+ * Real account-deletion lifecycle.
+ * Inventory: docs/release/ACCOUNT_DELETION_DATA_INVENTORY.md
  */
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { forgetAllMemoryForDealer } from "@/services/assistant/dealer-memory";
+import { revokeAllMobileSessionsForUser } from "@/services/identity/mobile-session";
 
 export async function deleteAllDealerMemoryForOwner(params: {
   dealerId: string;
@@ -50,6 +52,10 @@ export async function requestAccountDeletion(params: {
   return { ok: true as const, request: row };
 }
 
+/**
+ * Completes deletion only after revoke/anonymize steps succeed.
+ * Does not invent legal retention — see inventory for RETAIN_FOR_EXPLICIT_LEGAL_REASON rows.
+ */
 export async function confirmAccountDeletion(params: {
   userId: string;
   dealerId: string;
@@ -81,19 +87,70 @@ export async function confirmAccountDeletion(params: {
     data: { status: "PROCESSING", confirmedAt: new Date() },
   });
 
-  await forgetAllMemoryForDealer(params.dealerId);
-  await prisma.pushSubscription.deleteMany({
-    where: { user: { memberships: { some: { dealerId: params.dealerId } } } },
-  });
-  await prisma.dealer.update({
-    where: { id: params.dealerId },
-    data: { isActive: false, verificationStatus: "DISABLED" },
-  });
+  try {
+    await forgetAllMemoryForDealer(params.dealerId);
 
-  await prisma.accountDeletionRequest.update({
-    where: { id: req.id },
-    data: { status: "COMPLETED", completedAt: new Date() },
-  });
+    await revokeAllMobileSessionsForUser(params.userId);
 
-  return { ok: true as const };
+    await prisma.deviceInstallation.deleteMany({
+      where: { userId: params.userId },
+    });
+    await prisma.pushSubscription.deleteMany({
+      where: { userId: params.userId },
+    });
+    await prisma.externalIdentity.deleteMany({
+      where: { userId: params.userId },
+    });
+    await prisma.notificationPreference.deleteMany({
+      where: { userId: params.userId },
+    });
+    await prisma.notificationEventPreference.deleteMany({
+      where: { userId: params.userId },
+    });
+    await prisma.identityLinkChallenge.deleteMany({
+      where: { userId: params.userId },
+    });
+
+    // Anonymize personal profile fields on User (retain row id for FK integrity / audit).
+    const tombstoneEmail = `deleted+${params.userId}@invalid.rematcher.local`;
+    await prisma.user.update({
+      where: { id: params.userId },
+      data: {
+        email: tombstoneEmail,
+        name: "Deleted User",
+        phone: null,
+        accountStatus: "SUSPENDED",
+        emailVerifiedAt: null,
+        passwordHash: null,
+      },
+    });
+
+    await prisma.dealer.update({
+      where: { id: params.dealerId },
+      data: {
+        isActive: false,
+        verificationStatus: "DISABLED",
+        contactName: null,
+        phone: null,
+        city: null,
+        region: null,
+      },
+    });
+
+    // SIWA token revocation requires Apple client secret — EXTERNAL APPLE ACTION when unavailable.
+    // See docs/release/EXTERNAL_ACTIONS.md
+
+    await prisma.accountDeletionRequest.update({
+      where: { id: req.id },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
+
+    return { ok: true as const };
+  } catch (error) {
+    await prisma.accountDeletionRequest.update({
+      where: { id: req.id },
+      data: { status: "PENDING", confirmedAt: null },
+    });
+    throw error;
+  }
 }

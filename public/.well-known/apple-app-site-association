@@ -3,13 +3,10 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAMID.co.rematcher.exchange",
+        "appID": "629JS257F5.co.rematcher.exchange",
         "paths": [
-          "/intake/*",
           "/home",
           "/home/*",
-          "/demand",
-          "/demand/*",
           "/inventory",
           "/inventory/*",
           "/matches",
@@ -18,13 +15,17 @@
           "/opportunities/*",
           "/activity",
           "/activity/*",
-          "/login",
-          "/signup"
+          "/demand",
+          "/demand/*",
+          "/intake",
+          "/intake/*",
+          "/reveals",
+          "/reveals/*"
         ]
       }
     ]
   },
   "webcredentials": {
-    "apps": ["TEAMID.co.rematcher.exchange"]
+    "apps": ["629JS257F5.co.rematcher.exchange"]
   }
 }

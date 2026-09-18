@@ -2,23 +2,43 @@ import { NextResponse } from "next/server";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveMediaAbsolutePath } from "@/lib/media/storage";
+import { resolveMediaPrincipal } from "@/lib/media/media-auth";
 import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
+import { v1ErrorBody, V1_STATUS_BY_CODE, type V1ErrorCode } from "@/lib/api-v1/errors";
 
 type Params = { params: Promise<{ key: string[] }> };
 
+function authFailureResponse(
+  failure: { status: 401 | 403; code: string },
+  requestId: string | null
+) {
+  const code = failure.code as V1ErrorCode;
+  if (code in V1_STATUS_BY_CODE) {
+    return NextResponse.json(v1ErrorBody(code, requestId ?? "media"), {
+      status: V1_STATUS_BY_CODE[code],
+    });
+  }
+  return NextResponse.json(
+    { error: failure.status === 401 ? "Unauthorized" : "Forbidden", code: failure.code },
+    { status: failure.status }
+  );
+}
+
 /**
- * Authenticated media serve.
+ * Authenticated media serve (Web cookie OR Mobile Bearer).
  * Buyers may only see media for vehicles that appear in their buyer-visible matches
  * OR dealers may see their own inventory media.
+ * Intake media: owning dealer only.
  */
-export async function GET(_req: Request, { params }: Params) {
-  const session = await auth();
-  if (!session?.user?.dealerId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: Request, { params }: Params) {
+  const requestId = req.headers.get("x-request-id");
+  const authResult = await resolveMediaPrincipal(req);
+  if (!authResult.ok) {
+    return authFailureResponse(authResult, requestId);
   }
+  const dealerId = authResult.principal.dealerId;
 
   const parts = (await params).key ?? [];
   const storageKey = parts.map((p) => decodeURIComponent(p)).join("/");
@@ -26,11 +46,18 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Path traversal / invalid key — deny without exposing filesystem paths.
+  try {
+    resolveMediaAbsolutePath(storageKey);
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   // Intake media: owner-only (not buyer-visible until committed to VehicleMedia)
   if (storageKey.startsWith("intake/")) {
-    const parts = storageKey.split("/");
-    const ownerDealerId = parts[1];
-    if (!ownerDealerId || ownerDealerId !== session.user.dealerId) {
+    const keyParts = storageKey.split("/");
+    const ownerDealerId = keyParts[1];
+    if (!ownerDealerId || ownerDealerId !== dealerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     try {
@@ -54,7 +81,6 @@ export async function GET(_req: Request, { params }: Params) {
     where: {
       OR: [
         { storageKey },
-        // allow thumb path to resolve to same ownership as display
         {
           storageKey: storageKey.replace(/\/thumb-/, "/display-"),
         },
@@ -66,7 +92,6 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const dealerId = session.user.dealerId;
   const owns = media.vehicle.dealerId === dealerId;
   let buyerVisible = false;
   if (!owns) {
