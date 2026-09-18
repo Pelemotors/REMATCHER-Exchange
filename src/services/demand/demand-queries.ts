@@ -68,7 +68,11 @@ export async function getEnrichedDemandsForDealer(
   const results: EnrichedDemand[] = [];
 
   for (const d of demands) {
-    const confirmed = confirmedFromJson(d.confirmedJson);
+    const fromConfirmed = confirmedFromJson(d.confirmedJson);
+    const confirmed =
+      fromConfirmed.make || fromConfirmed.model || fromConfirmed.yearMin != null
+        ? fromConfirmed
+        : confirmedFromJson(d.parsedJson);
     const uxStatus = computeDemandUxStatus(d.status, d.expiresAt);
     const daysLeft = daysUntilExpiry(d.expiresAt);
 
