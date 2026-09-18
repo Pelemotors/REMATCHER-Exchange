@@ -128,6 +128,21 @@ describe("shared domain mutation path guards", () => {
     expect(src).toContain("createVehicleForDealer");
   });
 
+  it("v1 inventory PATCH schema accepts conditionNotes for Native edit", () => {
+    const src = readFileSync(
+      join(root, "src/app/api/v1/inventory/route.ts"),
+      "utf8"
+    );
+    expect(src).toContain("conditionNotes");
+    expect(src).toContain("vehicleId");
+    const service = readFileSync(
+      join(root, "src/services/inventory/update-vehicle.ts"),
+      "utf8"
+    );
+    expect(service).toMatch(/conditionNotes\?:/);
+    expect(service).toContain('if ("conditionNotes" in f)');
+  });
+
   it("inventory manage uses domain update/sold", () => {
     const src = readFileSync(
       join(root, "src/services/assistant/inventory-manage.ts"),
