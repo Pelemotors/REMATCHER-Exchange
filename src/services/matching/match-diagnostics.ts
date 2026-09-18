@@ -15,7 +15,11 @@ import {
 } from "@/services/matching/search-intent-types";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
-import { dealerAllowsSyntheticMarket } from "@/services/dealer/market-scope";
+import {
+  loadDealerMarketSide,
+  marketSideFromDealerRow,
+  marketsCompatible,
+} from "@/services/dealer/market-scope";
 
 export type NearMatchSummary = {
   failField: string;
@@ -80,11 +84,19 @@ export async function diagnoseDemandMatches(
     intent = intentForDemand(demand.confirmedJson);
   }
 
-  const allowSynthetic = await dealerAllowsSyntheticMarket(dealerId);
-  const vehicles = await prisma.vehicle.findMany({
-    where: networkSupplyWhere(dealerId, allowSynthetic),
+  const requesterSide = await loadDealerMarketSide(dealerId);
+  const vehiclesRaw = await prisma.vehicle.findMany({
+    where: networkSupplyWhere(dealerId, requesterSide),
+    include: {
+      dealer: {
+        select: { marketMode: true, canAccessSyntheticMarket: true },
+      },
+    },
     take: 400,
   });
+  const vehicles = vehiclesRaw.filter((v) =>
+    marketsCompatible(requesterSide, marketSideFromDealerRow(v.dealer))
+  );
 
   let bandMatches = 0;
   const hardFailMap = new Map<string, { count: number; details: string[] }>();

@@ -1,5 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import {
+  loadDealerMarketSide,
+  marketSideFromDealerRow,
+  marketsCompatible,
+} from "@/services/dealer/market-scope";
 
 /**
  * Canonical inventory-side discovery trigger.
@@ -38,21 +43,31 @@ export async function rematchInventoryBatch(params: {
   });
   if (activeTouchedVehicles === 0) return [] as string[];
 
+  const sellerSide = await loadDealerMarketSide(params.sellerDealerId);
+
   const demands = await prisma.demand.findMany({
     where: {
       status: "ACTIVE",
       dealerId: { not: params.sellerDealerId },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      dealer: {
+        select: { marketMode: true, canAccessSyntheticMarket: true },
+      },
+    },
   });
-  if (demands.length === 0) return [] as string[];
+  const compatibleDemands = demands.filter((d) =>
+    marketsCompatible(sellerSide, marketSideFromDealerRow(d.dealer))
+  );
+  if (compatibleDemands.length === 0) return [] as string[];
 
   const { runMatchingForDemand } = await import(
     "@/services/domain/matching-flow"
   );
 
   const rematched: string[] = [];
-  for (const demand of demands) {
+  for (const demand of compatibleDemands) {
     await runMatchingForDemand(demand.id);
     rematched.push(demand.id);
   }

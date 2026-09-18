@@ -41,12 +41,12 @@ export async function POST(req: Request) {
   if (!result.ok) {
     return v1Error(
       ctx,
-      result.error === "not_found"
+      "error" in result && result.error === "not_found"
         ? "RESOURCE_NOT_FOUND"
         : "VALIDATION_INVALID_REQUEST"
     );
   }
-  const failed = result.results.find((r) => !r.ok);
+  const failed = result.results?.find((r) => r.outcome === "failed");
   if (failed?.error === "identity_incomplete") {
     return v1Error(
       ctx,

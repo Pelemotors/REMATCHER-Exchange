@@ -29,7 +29,11 @@ import {
 } from "@/lib/privacy-views";
 import { computeFreshnessState } from "@/services/inventory/freshness";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
-import { dealerAllowsSyntheticMarket } from "@/services/dealer/market-scope";
+import {
+  loadDealerMarketSide,
+  marketSideFromDealerRow,
+  marketsCompatible,
+} from "@/services/dealer/market-scope";
 import { maybeOpportunityFromNetworkMatch } from "@/services/opportunities/dealer-opportunity";
 import { COPY, BRAND } from "@/config/brand";
 
@@ -55,10 +59,18 @@ export async function runMatchingForDemand(demandId: string) {
     intentVersion?.structuredIntent
   );
 
-  const allowSynthetic = await dealerAllowsSyntheticMarket(demand.dealerId);
-  const vehicles = await prisma.vehicle.findMany({
-    where: networkSupplyWhere(demand.dealerId, allowSynthetic),
+  const requesterSide = await loadDealerMarketSide(demand.dealerId);
+  const vehiclesRaw = await prisma.vehicle.findMany({
+    where: networkSupplyWhere(demand.dealerId, requesterSide),
+    include: {
+      dealer: {
+        select: { marketMode: true, canAccessSyntheticMarket: true },
+      },
+    },
   });
+  const vehicles = vehiclesRaw.filter((v) =>
+    marketsCompatible(requesterSide, marketSideFromDealerRow(v.dealer))
+  );
 
   const results = [];
 

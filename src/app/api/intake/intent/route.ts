@@ -35,7 +35,8 @@ export async function POST(req: Request) {
     message: body.message,
   });
   if (!result.ok) {
-    const status = result.error === "not_found" ? 404 : 400;
+    const status =
+      "error" in result && result.error === "not_found" ? 404 : 400;
     return NextResponse.json(result, { status });
   }
   return NextResponse.json(result);

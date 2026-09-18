@@ -37,12 +37,15 @@ export async function POST(req: Request) {
   const body = parsed.body as {
     candidateId?: string;
     detectedPlate?: string | null;
+    plate?: string | null;
     mediaCategories?: Array<{
       mediaId: string;
       category: VehicleMediaCategory;
     }>;
     confirmExistingVehicleId?: string | null;
     createNewDespiteExisting?: boolean;
+    /** Explicit Review resolve+commit only — plate confirm must NOT set this */
+    commitAfterResolve?: boolean;
     reject?: boolean;
   };
 
@@ -53,10 +56,11 @@ export async function POST(req: Request) {
   const result = await resolveIntakeCandidate({
     dealerId: principal.dealerId,
     candidateId: body.candidateId,
-    detectedPlate: body.detectedPlate,
+    detectedPlate: body.detectedPlate ?? body.plate,
     mediaCategories: body.mediaCategories,
     confirmExistingVehicleId: body.confirmExistingVehicleId,
     createNewDespiteExisting: body.createNewDespiteExisting,
+    commitAfterResolve: body.commitAfterResolve === true,
     reject: body.reject,
   });
 

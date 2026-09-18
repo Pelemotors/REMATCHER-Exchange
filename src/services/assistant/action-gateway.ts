@@ -307,6 +307,10 @@ export async function runActionGateway(params: {
             ? facts.confirmExistingVehicleId
             : undefined,
         createNewDespiteExisting: Boolean(facts.createNewDespiteExisting),
+        commitAfterResolve:
+          op !== "REJECT_CANDIDATE" &&
+          !facts.confirmExistingVehicleId &&
+          !facts.createNewDespiteExisting,
       });
       meta.policyResult = result.ok ? "ALLOW" : "DENY";
       meta.responseType = "mutation_intake";
@@ -346,7 +350,9 @@ export async function runActionGateway(params: {
         meta.responseType = "mutation_intake_retry";
         return {
           intent: "UPDATE_INVENTORY",
-          message: "הפעלתי מחדש את עיבוד האצווה. אפשר לבדוק ב־/intake/review.",
+          message:
+            "הפעלתי מחדש את עיבוד האצווה. אפשר לפתוח את מסך סקירת הקליטה.",
+          suggestions: [{ label: "סקירת קליטה", href: "/intake/review" }],
           conversation: { ...conversation, pendingConfirmation: undefined },
           meta,
         };
@@ -542,7 +548,7 @@ export async function runActionGateway(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message:
-            "כדי לטפל במועמד קליטה צריך לזהות איזה מועמד — אפשר לעבור ל־/intake/review.",
+            "כדי לטפל במועמד קליטה צריך לזהות איזה מועמד — אפשר לפתוח את מסך סקירת הקליטה.",
           suggestions: [{ label: "סקירת קליטה", href: "/intake/review" }],
           conversation,
           meta,
@@ -600,7 +606,7 @@ export async function runActionGateway(params: {
         return {
           intent: "UPDATE_INVENTORY",
           message:
-            "כדי לנסות שוב קליטה צריך מזהה אצווה. אפשר לעבור ל־/intake/handoff.",
+            "כדי לנסות שוב קליטה צריך מזהה אצווה. אפשר לפתוח את מסך הקליטה.",
           suggestions: [{ label: "קליטה", href: "/intake/handoff" }],
           conversation,
           meta,

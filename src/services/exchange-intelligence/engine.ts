@@ -32,7 +32,9 @@ import { logEvent } from "@/services/events/log-event";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
 import {
-  dealerAllowsSyntheticMarket,
+  loadDealerMarketSide,
+  marketSideFromDealerRow,
+  marketsCompatible,
   networkDemandWhere,
 } from "@/services/dealer/market-scope";
 import {
@@ -572,10 +574,10 @@ async function loadNetworkRows(
   dealerId: string,
   subject: ResolvedIntelSubject
 ): Promise<CohortRow[]> {
-  const allowSynthetic = await dealerAllowsSyntheticMarket(dealerId);
-  const [supplies, demands] = await Promise.all([
+  const requesterSide = await loadDealerMarketSide(dealerId);
+  const [suppliesRaw, demandsRaw] = await Promise.all([
     prisma.vehicle.findMany({
-      where: networkSupplyWhere(dealerId, allowSynthetic),
+      where: networkSupplyWhere(dealerId, requesterSide),
       select: {
         dealerId: true,
         make: true,
@@ -587,29 +589,47 @@ async function loadNetworkRows(
         b2bPrice: true,
         retailPrice: true,
         fieldProvenance: true,
+        dealer: {
+          select: { marketMode: true, canAccessSyntheticMarket: true },
+        },
       },
       take: 1200,
     }),
     prisma.demand.findMany({
-      where: networkDemandWhere(dealerId, allowSynthetic),
-      select: { dealerId: true, confirmedJson: true, constraints: true },
+      where: networkDemandWhere(dealerId, requesterSide),
+      select: {
+        dealerId: true,
+        confirmedJson: true,
+        constraints: true,
+        dealer: {
+          select: { marketMode: true, canAccessSyntheticMarket: true },
+        },
+      },
       take: 1200,
     }),
   ]);
+
+  const supplies = suppliesRaw.filter((v) =>
+    marketsCompatible(requesterSide, marketSideFromDealerRow(v.dealer))
+  );
+  const demands = demandsRaw.filter((d) =>
+    marketsCompatible(requesterSide, marketSideFromDealerRow(d.dealer))
+  );
 
   const rows: CohortRow[] = [];
   for (const v of supplies) {
     const mk = canonicalizeMake(v.make);
     const md = canonicalizeModel(v.model);
     if (!mk || !md || mk !== subject.make || !modelsMatch(md, subject.model)) continue;
-    const fuel = readVehicleFuel(v as MatchVehicleInput);
+    const vehicleInput = v as unknown as MatchVehicleInput;
+    const fuel = readVehicleFuel(vehicleInput);
     rows.push({
       dealerId: v.dealerId,
       year: v.year,
       yearMin: v.year,
       yearMax: v.year,
       fuel,
-      engine: readVehicleEngine(v),
+      engine: readVehicleEngine(vehicleInput),
       mileage: v.mileage,
       ownershipHand: v.ownershipHand,
       ownershipType: readVehicleOwnershipType(v),

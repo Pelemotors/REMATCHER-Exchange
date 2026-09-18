@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
 import {
-  dealerAllowsSyntheticMarket,
+  loadDealerMarketSide,
+  marketSideFromDealerRow,
+  marketsCompatible,
   networkDemandWhere,
 } from "@/services/dealer/market-scope";
 
@@ -92,17 +94,32 @@ export async function getNetworkIntelligenceSnapshot(
   query: NetworkIntelQuery
 ): Promise<NetworkIntelSnapshot> {
   const min = minCohort();
-  const allowSynthetic = await dealerAllowsSyntheticMarket(query.dealerId);
+  const requesterSide = await loadDealerMarketSide(query.dealerId);
 
-  const [demands, supplies, myDemands, myVehicles] = await Promise.all([
+  const [demandsRaw, suppliesRaw, myDemands, myVehicles] = await Promise.all([
     prisma.demand.findMany({
-      where: networkDemandWhere(query.dealerId, allowSynthetic),
-      select: { id: true, confirmedJson: true, constraints: true },
+      where: networkDemandWhere(query.dealerId, requesterSide),
+      select: {
+        id: true,
+        confirmedJson: true,
+        constraints: true,
+        dealer: {
+          select: { marketMode: true, canAccessSyntheticMarket: true },
+        },
+      },
       take: 800,
     }),
     prisma.vehicle.findMany({
-      where: networkSupplyWhere(query.dealerId, allowSynthetic),
-      select: { id: true, make: true, model: true, year: true },
+      where: networkSupplyWhere(query.dealerId, requesterSide),
+      select: {
+        id: true,
+        make: true,
+        model: true,
+        year: true,
+        dealer: {
+          select: { marketMode: true, canAccessSyntheticMarket: true },
+        },
+      },
       take: 800,
     }),
     prisma.demand.findMany({
@@ -117,6 +134,13 @@ export async function getNetworkIntelligenceSnapshot(
       select: { id: true, make: true, model: true, year: true },
     }),
   ]);
+
+  const demands = demandsRaw.filter((d) =>
+    marketsCompatible(requesterSide, marketSideFromDealerRow(d.dealer))
+  );
+  const supplies = suppliesRaw.filter((v) =>
+    marketsCompatible(requesterSide, marketSideFromDealerRow(v.dealer))
+  );
 
   const demandIds = new Set<string>();
   for (const d of demands) {

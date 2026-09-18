@@ -4,6 +4,10 @@ import type {
   DealerVehicleRelationship,
   VehicleVisibility,
 } from "@prisma/client";
+import {
+  counterpartMarketWhere,
+  type MarketSide,
+} from "@/services/dealer/market-scope";
 
 /** Relationships that may be published to ANONYMOUS_NETWORK when explicitly set. */
 export const NETWORK_ELIGIBLE_RELATIONSHIPS: DealerVehicleRelationship[] = [
@@ -25,20 +29,25 @@ export function isNetworkSupplyEligible(vehicle: {
   );
 }
 
-/** Prisma where clause for network matching supply. */
+/** Prisma where clause for network matching supply (requester market side). */
 export function networkSupplyWhere(
   excludeDealerId: string,
-  allowSyntheticMarket = false
+  requester: MarketSide | boolean = false
 ) {
+  const side: MarketSide =
+    typeof requester === "boolean"
+      ? { marketMode: "REAL", canAccessSyntheticMarket: requester }
+      : requester;
+  const dealerFilter = counterpartMarketWhere(side);
   return {
     status: "ACTIVE" as const,
     mediaReady: true,
     visibility: "ANONYMOUS_NETWORK" as const,
     dealerRelationship: { in: NETWORK_ELIGIBLE_RELATIONSHIPS },
     dealerId: { not: excludeDealerId },
-    ...(allowSyntheticMarket
-      ? {}
-      : { dealer: { marketMode: { not: "SYNTHETIC" as const } } }),
+    ...(Object.keys(dealerFilter).length
+      ? { dealer: dealerFilter }
+      : {}),
   };
 }
 

@@ -30,6 +30,63 @@ export function orderIntakeCandidates<T extends { id: string; createdAt?: Date }
   });
 }
 
+export type IntakeIntentApplyOutcome =
+  | "applied"
+  | "already_applied"
+  | "skipped"
+  | "needs_attention"
+  | "failed";
+
+export type IntakeIntentResultItem = {
+  candidateId: string;
+  intent: IntakeIntentKind;
+  outcome: IntakeIntentApplyOutcome;
+  ok: boolean;
+  vehicleId?: string;
+  error?: string;
+};
+
+function mapApplyErrorToOutcome(
+  error: string | undefined
+): IntakeIntentApplyOutcome {
+  if (error === "rejected") return "skipped";
+  if (error === "needs_confirmation") return "needs_attention";
+  return "failed";
+}
+
+export function summarizeIntentResults(results: IntakeIntentResultItem[]) {
+  const appliedCount = results.filter((r) => r.outcome === "applied").length;
+  const alreadyAppliedCount = results.filter(
+    (r) => r.outcome === "already_applied"
+  ).length;
+  const needsAttentionCount = results.filter(
+    (r) => r.outcome === "needs_attention"
+  ).length;
+  const failedCount = results.filter((r) => r.outcome === "failed").length;
+  const skippedCount = results.filter((r) => r.outcome === "skipped").length;
+  const requestedCount = results.length;
+
+  const ok =
+    appliedCount > 0 ||
+    (requestedCount > 0 &&
+      failedCount === 0 &&
+      appliedCount +
+        alreadyAppliedCount +
+        skippedCount +
+        needsAttentionCount ===
+        requestedCount);
+
+  return {
+    ok,
+    requestedCount,
+    appliedCount,
+    alreadyAppliedCount,
+    needsAttentionCount,
+    failedCount,
+    results,
+  };
+}
+
 export async function applyCandidateIntent(input: {
   dealerId: string;
   candidateId: string;
@@ -56,6 +113,55 @@ export async function applyCandidateIntent(input: {
     };
   }
 
+  // EXTERNAL is investigation-only: record intent, do not create inventory/workspace vehicle.
+  if (input.intent === "EXTERNAL") {
+    await prisma.vehicleCandidate.update({
+      where: { id: candidate.id },
+      data: { dealerIntent: input.intent },
+    });
+    await emitExchangeEvent({
+      eventType: "intake.candidate.intent",
+      dealerId: input.dealerId,
+      eventData: {
+        candidateId: candidate.id,
+        batchId: candidate.batchId,
+        intent: input.intent,
+        relationship: INTENT_TO_RELATIONSHIP[input.intent],
+      },
+      operational: true,
+    }).catch(() => undefined);
+    return {
+      ok: true as const,
+      vehicleId: null,
+      intent: input.intent,
+      deferredCommit: true as const,
+    };
+  }
+
+  if (candidate.status === "COMMITTED" && candidate.committedVehicleId) {
+    await prisma.vehicle.update({
+      where: { id: candidate.committedVehicleId },
+      data: { dealerRelationship: INTENT_TO_RELATIONSHIP[input.intent] },
+    });
+    await prisma.vehicleCandidate.update({
+      where: { id: candidate.id },
+      data: { dealerIntent: input.intent },
+    });
+    return {
+      ok: true as const,
+      vehicleId: candidate.committedVehicleId,
+      intent: input.intent,
+      idempotent: true as const,
+    };
+  }
+
+  const committed = await commitOneCandidate(input.dealerId, candidate.id, {
+    dealerRelationship: INTENT_TO_RELATIONSHIP[input.intent],
+  });
+  if (!committed.ok) {
+    return { ok: false as const, error: committed.error };
+  }
+
   await prisma.vehicleCandidate.update({
     where: { id: candidate.id },
     data: { dealerIntent: input.intent },
@@ -73,35 +179,6 @@ export async function applyCandidateIntent(input: {
     operational: true,
   }).catch(() => undefined);
 
-  if (candidate.status === "COMMITTED" && candidate.committedVehicleId) {
-    await prisma.vehicle.update({
-      where: { id: candidate.committedVehicleId },
-      data: { dealerRelationship: INTENT_TO_RELATIONSHIP[input.intent] },
-    });
-    return {
-      ok: true as const,
-      vehicleId: candidate.committedVehicleId,
-      intent: input.intent,
-      idempotent: true as const,
-    };
-  }
-
-  // EXTERNAL is investigation-only: record intent, do not create inventory/workspace vehicle.
-  if (input.intent === "EXTERNAL") {
-    return {
-      ok: true as const,
-      vehicleId: null,
-      intent: input.intent,
-      deferredCommit: true as const,
-    };
-  }
-
-  const committed = await commitOneCandidate(input.dealerId, candidate.id, {
-    dealerRelationship: INTENT_TO_RELATIONSHIP[input.intent],
-  });
-  if (!committed.ok) {
-    return { ok: false as const, error: committed.error };
-  }
   return {
     ok: true as const,
     vehicleId: committed.vehicleId,
@@ -137,53 +214,99 @@ export async function applyIntakeIntents(input: {
   );
   const pending = ordered.filter((c) => !c.dealerIntent || c.status !== "COMMITTED");
 
-  const results: Array<{
-    candidateId: string;
-    intent: IntakeIntentKind;
-    ok: boolean;
-    vehicleId?: string;
-    error?: string;
-  }> = [];
+  const results: IntakeIntentResultItem[] = [];
 
-  async function applyOne(candidateId: string, intent: IntakeIntentKind) {
-    const r = await applyCandidateIntent({
-      dealerId: input.dealerId,
-      candidateId,
-      intent,
-    });
+  function pushResult(
+    candidateId: string,
+    intent: IntakeIntentKind,
+    r:
+      | { ok: true; vehicleId?: string | null; idempotent?: boolean }
+      | { ok: false; error?: string }
+  ) {
+    if (r.ok) {
+      const outcome = r.idempotent ? "already_applied" : "applied";
+      results.push({
+        candidateId,
+        intent,
+        outcome,
+        ok: true,
+        vehicleId: r.vehicleId ?? undefined,
+      });
+      return;
+    }
+    const outcome = mapApplyErrorToOutcome(r.error);
     results.push({
       candidateId,
       intent,
-      ok: r.ok,
-      vehicleId: r.ok ? r.vehicleId ?? undefined : undefined,
-      error: r.ok ? undefined : r.error,
+      outcome,
+      ok: false,
+      error: r.error,
     });
   }
 
+  async function applyOne(candidateId: string, intent: IntakeIntentKind) {
+    try {
+      const r = await applyCandidateIntent({
+        dealerId: input.dealerId,
+        candidateId,
+        intent,
+      });
+      pushResult(candidateId, intent, r);
+    } catch (err) {
+      results.push({
+        candidateId,
+        intent,
+        outcome: "failed",
+        ok: false,
+        error: err instanceof Error ? err.message : "unexpected",
+      });
+    }
+  }
+
   async function discardOne(candidateId: string) {
-    const r = await resolveIntakeCandidate({
-      dealerId: input.dealerId,
-      candidateId,
-      reject: true,
-    });
-    results.push({
-      candidateId,
-      intent: "EXTERNAL",
-      ok: r.ok,
-      error: r.ok ? undefined : "reject_failed",
-    });
+    try {
+      const r = await resolveIntakeCandidate({
+        dealerId: input.dealerId,
+        candidateId,
+        reject: true,
+      });
+      if (r.ok) {
+        results.push({
+          candidateId,
+          intent: "EXTERNAL",
+          outcome: "skipped",
+          ok: true,
+        });
+      } else {
+        results.push({
+          candidateId,
+          intent: "EXTERNAL",
+          outcome: "failed",
+          ok: false,
+          error: "reject_failed",
+        });
+      }
+    } catch (err) {
+      results.push({
+        candidateId,
+        intent: "EXTERNAL",
+        outcome: "failed",
+        ok: false,
+        error: err instanceof Error ? err.message : "unexpected",
+      });
+    }
   }
 
   if (input.candidateId && isDiscardIntent(input.intent)) {
     await discardOne(input.candidateId);
-    return { ok: true as const, results };
+    return summarizeIntentResults(results);
   }
 
   if (input.candidateId && input.intent) {
     const kind = intentFromButton(input.intent);
     if (!kind) return { ok: false as const, error: "invalid_intent" as const };
     await applyOne(input.candidateId, kind);
-    return { ok: true as const, results };
+    return summarizeIntentResults(results);
   }
 
   const parsed = parseIntakeIntentText(input.message ?? input.intent ?? "");
@@ -194,7 +317,7 @@ export async function applyIntakeIntents(input: {
         : null) ?? pending[0];
     if (target) await discardOne(target.id);
     return results.length
-      ? { ok: true as const, results }
+      ? summarizeIntentResults(results)
       : { ok: false as const, error: "unparsed_intent" as const };
   }
 
@@ -203,14 +326,14 @@ export async function applyIntakeIntents(input: {
     for (let i = 0; i < list.length - 1; i++) {
       await applyOne(list[i]!.id, parsed.allExceptLast);
     }
-    return { ok: true as const, results };
+    return summarizeIntentResults(results);
   }
 
   if (parsed.all) {
     for (const c of pending.length ? pending : ordered) {
       await applyOne(c.id, parsed.all);
     }
-    return { ok: true as const, results };
+    return summarizeIntentResults(results);
   }
 
   const assigned = new Set<string>();
@@ -262,5 +385,5 @@ export async function applyIntakeIntents(input: {
   if (results.length === 0) {
     return { ok: false as const, error: "unparsed_intent" as const };
   }
-  return { ok: true as const, results };
+  return summarizeIntentResults(results);
 }

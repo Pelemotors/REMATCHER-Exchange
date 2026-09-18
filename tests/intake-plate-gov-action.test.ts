@@ -162,6 +162,21 @@ describe("action truth — gateway", () => {
 });
 
 describe("action truth — assistant copy hygiene", () => {
+  it("blocks success claims while pending confirmation exists", () => {
+    const sanitized = sanitizeUserFacingAssistantMessage(
+      "הרכב נשמר במלאי בהצלחה.",
+      {
+        pendingConfirmation: {
+          action: "intake_resolve",
+          label: "לאשר?",
+          payload: {},
+        },
+      }
+    );
+    expect(sanitized).toMatch(/ממתינה לאישור/);
+    expect(sanitized).not.toMatch(/נשמר במלאי/);
+  });
+
   it("sanitizes false pending claims when state has no pending", () => {
     expect(
       assistantTextClaimsPendingConfirmation("הפעולה ממתינה לאישור שלך")

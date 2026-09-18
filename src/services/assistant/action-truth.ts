@@ -7,7 +7,7 @@ const CONFIRMATION_CLAIM_RE =
   /(?:ממתין(?:ה)?\s*(?:ל)?אישור|לאישור(?:ך)?|לאשר|צריך\s*אישור|לשמור\s*א(?:ת|תה)?\s*הרכב|ה(?:אם|אם)\s*לאשר|confirm(?:ation)?|pending\s+approval)/iu;
 
 const MUTATION_SUCCESS_CLAIM_RE =
-  /(?:נשמר(?:ה)?\s*(?:במלאי|בהצלחה)?|בוצע(?:ה)?\s*ה(?:פעולה|שינוי)|ה(?:רכב|קליטה)\s*נ(?:שמר|דחה)|saved\s+to\s+inventory|mutation\s+(?:completed|succeeded))/iu;
+  /(?:נשמר(?:ה)?\s*(?:במלאי|בהצלחה)?|נוסף(?:ה)?\s*למלאי|הושל(?:ם|מה)|עודכ(?:ן|נה)\s*במערכת|בוצע(?:ה)?\s*ה(?:פעולה|שינוי)|ה(?:רכב|קליטה)\s*נ(?:שמר|דחה)|saved\s+to\s+inventory|mutation\s+(?:completed|succeeded)|successfully\s+(?:saved|updated|created))/iu;
 
 export function assistantTextClaimsPendingConfirmation(text: string): boolean {
   return CONFIRMATION_CLAIM_RE.test(text.trim());
@@ -41,6 +41,10 @@ export function sanitizeUserFacingAssistantMessage(
   if (!hasPending && assistantTextClaimsPendingConfirmation(out)) {
     out =
       "כדי לבצע שינוי במערכת צריך אישור מפורש — עדיין אין פעולה ממתינה. אם תרצה, אפשר לנסח שוב מה לבצע.";
+  }
+  if (hasPending && assistantTextClaimsMutationSuccess(out)) {
+    out =
+      "הפעולה עדיין ממתינה לאישורך — לא בוצע שינוי במערכת עד שתאשר.";
   }
   if (!hasPending && assistantTextClaimsMutationSuccess(out)) {
     out =
