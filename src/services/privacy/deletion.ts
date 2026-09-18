@@ -130,8 +130,8 @@ export async function confirmAccountDeletion(params: {
       data: {
         isActive: false,
         verificationStatus: "DISABLED",
-        contactName: null,
-        phone: null,
+        contactName: "Deleted",
+        phone: "0000000000",
         city: null,
         region: null,
       },
