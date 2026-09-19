@@ -88,6 +88,7 @@ export type CatalogSettingsInput = {
   openingHoursJson?: Prisma.InputJsonValue | null;
   allowSearchIndexing?: boolean;
   cityLabel?: string | null;
+  publicationPolicy?: "MANUAL" | "ALL_ELIGIBLE_ACTIVE_INVENTORY";
 };
 
 export async function createOrUpdateCatalog(
@@ -169,6 +170,9 @@ export async function createOrUpdateCatalog(
     data.allowSearchIndexing = input.allowSearchIndexing;
   }
   if (input.cityLabel !== undefined) data.cityLabel = input.cityLabel;
+  if (input.publicationPolicy !== undefined) {
+    data.publicationPolicy = input.publicationPolicy;
+  }
 
   if (input.slug !== undefined) {
     const slugCheck = validateCatalogSlug(input.slug);
@@ -192,6 +196,10 @@ export async function createOrUpdateCatalog(
     where: { id: existing.id },
     data,
   });
+  if (input.publicationPolicy) {
+    const { reconcileCatalogForDealer } = await import("@/services/catalog/reconcile");
+    await reconcileCatalogForDealer(dealerId);
+  }
   return {
     ok: true as const,
     catalog: serializeDealerCatalog({ ...catalog, publications: [] }),

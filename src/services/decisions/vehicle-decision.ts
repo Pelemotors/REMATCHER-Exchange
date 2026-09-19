@@ -586,6 +586,10 @@ export async function acceptDecision(input: {
         operational: true,
         idempotencyKey: `vehicle.converted_owned:${result.decision.id}`,
       }).catch(() => undefined);
+      const { reconcileCatalogForDealer } = await import(
+        "@/services/catalog/reconcile"
+      );
+      await reconcileCatalogForDealer(input.dealerId).catch(() => undefined);
     }
   }
 

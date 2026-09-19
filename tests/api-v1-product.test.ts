@@ -311,6 +311,7 @@ describe("privacy DTO on matches", () => {
         },
         interest: null,
         revealId: null,
+        dealerFacingState: "MATCH_FOUND",
       },
     ]);
     const res = await v1Matches(authReq("/api/v1/matches"));

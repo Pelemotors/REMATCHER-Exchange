@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { toBuyerMatchView } from "@/lib/privacy-views";
 import { publicThumbUrlForDisplayKey } from "@/lib/media/storage";
-import { BUYER_VISIBLE_MATCH_WHERE } from "@/services/domain/candidate-policy";
+import {
+  BUYER_VISIBLE_MATCH_WHERE,
+  getCandidateLifecycleState,
+} from "@/services/domain/candidate-policy";
+import { toDealerFacingMatchState } from "@/services/matching/dealer-facing-state";
 
 /**
  * Buyer-facing match DTO — pre-Reveal privacy boundary.
@@ -15,6 +19,7 @@ export interface BuyerMatchListItem {
   vehicle: ReturnType<typeof toBuyerMatchView>;
   interest: { status: string } | null;
   revealId: string | null;
+  dealerFacingState: string;
 }
 
 const buyerMatchInclude = (dealerId: string) => ({
@@ -52,13 +57,26 @@ function mapBuyerMatch(
     };
     buyerInterests: Array<{ status: string }>;
     sellerOpportunities: Array<{
+      status?: string;
       sellerInterest: {
+        status?: string;
         mutualInterest: { reveal: { id: string } | null } | null;
       } | null;
     }>;
   }
 ): BuyerMatchListItem {
   const primaryKey = m.vehicle.media[0]?.storageKey ?? null;
+  const buyerStatus = m.buyerInterests[0]?.status ?? null;
+  const seller = m.sellerOpportunities[0];
+  const lifecycle = getCandidateLifecycleState({
+    status: m.status,
+    resolutionState: "RESOLVED",
+    buyerInterestStatus: buyerStatus,
+    sellerOpportunityStatus: seller?.status ?? null,
+    sellerInterestStatus: seller?.sellerInterest?.status ?? null,
+    hasReveal: Boolean(seller?.sellerInterest?.mutualInterest?.reveal?.id),
+    hasMutual: Boolean(seller?.sellerInterest?.mutualInterest),
+  });
   return {
     id: m.id,
     demandId: m.demandId,
@@ -67,12 +85,13 @@ function mapBuyerMatch(
       ...m.vehicle,
       imageUrl: primaryKey ? publicThumbUrlForDisplayKey(primaryKey) : null,
     }),
-    interest: m.buyerInterests[0]
-      ? { status: m.buyerInterests[0].status }
-      : null,
-    revealId:
-      m.sellerOpportunities[0]?.sellerInterest?.mutualInterest?.reveal?.id ??
-      null,
+    interest: buyerStatus ? { status: buyerStatus } : null,
+    revealId: seller?.sellerInterest?.mutualInterest?.reveal?.id ?? null,
+    dealerFacingState: toDealerFacingMatchState({
+      lifecycle,
+      buyerInterestStatus: buyerStatus,
+      sellerInterestStatus: seller?.sellerInterest?.status ?? null,
+    }),
   };
 }
 
@@ -91,6 +110,7 @@ export async function listBuyerMatches(
         ...(demandId ? { id: demandId } : {}),
       },
       ...BUYER_VISIBLE_MATCH_WHERE,
+      buyerInterests: { none: { dealerId, status: "REJECTED" } },
     },
     include: buyerMatchInclude(dealerId),
     orderBy: { score: "desc" },

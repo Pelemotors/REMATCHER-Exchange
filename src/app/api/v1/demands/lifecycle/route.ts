@@ -42,17 +42,14 @@ export async function POST(req: Request) {
   }
 
   if (action === "close") {
-    const updated = await prisma.demand.update({
-      where: { id: demandId },
-      data: { status: "CANCELLED" },
-    });
-    await logAppEvent({
-      eventType: "demand_closed",
-      entityType: "Demand",
-      entityId: demandId,
-      dealerId,
-    });
-    return v1Json(ctx, updated);
+    const { cancelDemandForDealer } = await import(
+      "@/services/demand/demand-mutations"
+    );
+    const result = await cancelDemandForDealer({ dealerId, demandId });
+    if (!result.ok) {
+      return v1Error(ctx, "RESOURCE_NOT_FOUND");
+    }
+    return v1Json(ctx, result.demand);
   }
 
   if (action === "pause") {
@@ -83,7 +80,7 @@ export async function POST(req: Request) {
       data: { networkVisibility: "ANONYMOUS_NETWORK" },
     });
     if (updated.status === "ACTIVE") {
-      void runMatchingForDemand(demandId).catch(() => undefined);
+      await runMatchingForDemand(demandId).catch(() => undefined);
     }
     return v1Json(ctx, updated);
   }

@@ -222,6 +222,26 @@ async function resolveDemandShare(dealerId: string, demandId: string) {
   };
 }
 
+/** Publish first, then resolve URL. Never reports shared if publish failed. Does not enable the whole catalog. */
+export async function publishThenShareVehicle(params: {
+  dealerId: string;
+  vehicleId: string;
+}) {
+  const { publishVehicleToCatalog } = await import(
+    "@/services/catalog/catalog-service"
+  );
+  const published = await publishVehicleToCatalog({
+    dealerId: params.dealerId,
+    vehicleId: params.vehicleId,
+  });
+  if (!published.ok) return published;
+  return resolveOutboundShare({
+    dealerId: params.dealerId,
+    kind: "VEHICLE",
+    resourceId: params.vehicleId,
+  });
+}
+
 export async function recordShareEvent(params: {
   dealerId: string;
   userId?: string | null;

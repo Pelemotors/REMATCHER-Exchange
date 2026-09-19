@@ -38,6 +38,11 @@ function brandingFromBody(body: Record<string, unknown>): CatalogSettingsInput {
       body.openingHoursJson === undefined
         ? undefined
         : (body.openingHoursJson as CatalogSettingsInput["openingHoursJson"]),
+    publicationPolicy:
+      body.publicationPolicy === "MANUAL" ||
+      body.publicationPolicy === "ALL_ELIGIBLE_ACTIVE_INVENTORY"
+        ? body.publicationPolicy
+        : undefined,
   };
 }
 

@@ -123,8 +123,8 @@ export async function getPendingActionsForDealer(dealerId: string) {
     await Promise.all([
       prisma.candidateMatch.count({
         where: {
-          demand: { dealerId },
-          status: "VALIDATED",
+          demand: { dealerId, status: "ACTIVE" },
+          ...BUYER_VISIBLE_MATCH_WHERE,
           buyerInterests: { none: { dealerId } },
         },
       }),
@@ -167,7 +167,7 @@ export async function getPendingActionsForDealer(dealerId: string) {
       type: "validation",
       label: "רכבים שדורשים אימות",
       count: validations,
-      href: "/inventory?filter=attention",
+      href: "/validations",
       urgent: true,
     });
   }

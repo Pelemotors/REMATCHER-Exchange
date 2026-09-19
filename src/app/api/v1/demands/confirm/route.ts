@@ -138,16 +138,24 @@ export async function POST(req: Request) {
     entityId: demandId,
   }).catch(() => undefined);
 
+  let immediateMatchCount = 0;
   if (publishMode === "network") {
-    void runMatchingForDemand(demandId).catch((err) => {
+    try {
+      const matches = await runMatchingForDemand(demandId);
+      immediateMatchCount = Array.isArray(matches) ? matches.length : 0;
+      const { refreshDealerOpportunitySources } = await import(
+        "@/services/opportunities/dealer-opportunity"
+      );
+      await refreshDealerOpportunitySources(principal.dealerId).catch(() => undefined);
+    } catch (err) {
       console.error("[v1/demands/confirm] matching failed", demandId, err);
-    });
+    }
   }
 
   return v1Json(ctx, {
     ...updated,
-    immediateMatchCount: 0,
-    hasImmediateMatch: false,
+    immediateMatchCount,
+    hasImmediateMatch: immediateMatchCount > 0,
     matchingStarted: publishMode === "network",
     publishMode,
     customerId,

@@ -30,5 +30,6 @@ export async function GET(req: Request) {
     })),
     unreadNotificationCount: snapshot.notifications.filter((n) => !n.readAt)
       .length,
+    actionCenter: snapshot.actionCenter,
   });
 }

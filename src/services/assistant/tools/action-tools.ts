@@ -114,27 +114,11 @@ export async function executeDemandClosure(dealerId: string, demandId: string) {
   });
   if (!demand) return { ok: false as const, error: "not_found" };
 
-  await prisma.demand.update({
-    where: { id: demandId },
-    data: { status: "CANCELLED" },
-  });
-
-  await logAppEvent({
-    eventType: "demand_closed",
-    entityType: "Demand",
-    entityId: demandId,
-    dealerId,
-  });
-
-  try {
-    const { cancelOpenRequestsForDemand } = await import(
-      "@/services/matching/information-request"
-    );
-    await cancelOpenRequestsForDemand(demandId);
-  } catch {
-    // non-blocking
-  }
-
+  const { cancelDemandForDealer } = await import(
+    "@/services/demand/demand-mutations"
+  );
+  const result = await cancelDemandForDealer({ dealerId, demandId });
+  if (!result.ok) return { ok: false as const, error: "not_found" };
   return { ok: true as const };
 }
 

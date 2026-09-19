@@ -35,6 +35,7 @@ const baseVehicle: Vehicle = {
   dealerRelationship: "OWNED",
   visibility: "ANONYMOUS_NETWORK",
   archivedAt: null,
+  catalogOverride: "DEFAULT_FROM_POLICY",
 };
 
 const profile = {

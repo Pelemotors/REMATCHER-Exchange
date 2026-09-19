@@ -246,10 +246,15 @@ describe("Mass 2.5 Partial Match", () => {
     );
     expect(mark).toContain("applyVehicleSoldLifecycle");
     const close = readFileSync(
-      join(process.cwd(), "src/services/assistant/tools/action-tools.ts"),
+      join(process.cwd(), "src/services/demand/demand-mutations.ts"),
       "utf8"
     );
     expect(close).toContain("cancelOpenRequestsForDemand");
+    const agent = readFileSync(
+      join(process.cwd(), "src/services/assistant/tools/action-tools.ts"),
+      "utf8"
+    );
+    expect(agent).toContain("cancelDemandForDealer");
   });
 
   it("15. privacy: buyer view and seller notify omit counterpart identity", () => {

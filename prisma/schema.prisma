@@ -181,6 +181,8 @@ model DealerCatalog {
   openingHoursJson     Json?
   allowSearchIndexing  Boolean  @default(false)
   cityLabel            String?
+  /** MANUAL = current default. ALL_ELIGIBLE requires explicit opt-in. */
+  publicationPolicy    CatalogPublicationPolicy @default(MANUAL)
 
   dealer       Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   publications CatalogPublication[]
@@ -216,6 +218,17 @@ model CatalogPublication {
   @@unique([catalogId, vehicleId])
   @@index([catalogId, isActive, publishedAt(sort: Desc)])
   @@index([vehicleId, isActive])
+}
+
+enum CatalogPublicationPolicy {
+  MANUAL
+  ALL_ELIGIBLE_ACTIVE_INVENTORY
+}
+
+enum CatalogVehicleOverride {
+  DEFAULT_FROM_POLICY
+  FORCE_EXCLUDE
+  FORCE_INCLUDE
 }
 
 enum CatalogLeadStatus {
@@ -430,6 +443,7 @@ model Vehicle {
    * Only ANONYMOUS_NETWORK + mediaReady + ACTIVE participates in Network Matching.
    */
   visibility         VehicleVisibility @default(PRIVATE)
+  catalogOverride    CatalogVehicleOverride @default(DEFAULT_FROM_POLICY)
 
   // Raw & normalized data
   rawInput        String?

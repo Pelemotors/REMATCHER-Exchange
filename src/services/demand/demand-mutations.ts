@@ -279,6 +279,48 @@ export async function pauseDemandForDealer(params: {
     where: { id: demand.id },
     data: { status: "PAUSED", pausedAt: new Date() },
   });
+  const { deactivateDemandSideEffects } = await import(
+    "@/services/domain/matching-flow"
+  );
+  await deactivateDemandSideEffects(demand.id);
+  return { ok: true as const, demand: updated };
+}
+
+/** Cancel demand — close derived actionable opportunities, keep history. */
+export async function cancelDemandForDealer(params: {
+  dealerId: string;
+  demandId: string;
+}) {
+  const demand = await prisma.demand.findFirst({
+    where: {
+      id: params.demandId,
+      dealerId: params.dealerId,
+      status: { in: ["ACTIVE", "PAUSED", "EXPIRED", "PENDING_CONFIRMATION"] },
+    },
+  });
+  if (!demand) return { ok: false as const, error: "not_found" as const };
+  const updated = await prisma.demand.update({
+    where: { id: demand.id },
+    data: { status: "CANCELLED" },
+  });
+  const { deactivateDemandSideEffects } = await import(
+    "@/services/domain/matching-flow"
+  );
+  await deactivateDemandSideEffects(demand.id);
+  try {
+    const { cancelOpenRequestsForDemand } = await import(
+      "@/services/matching/information-request"
+    );
+    await cancelOpenRequestsForDemand(demand.id);
+  } catch {
+    // non-blocking
+  }
+  await logAppEvent({
+    eventType: "demand_closed",
+    entityType: "Demand",
+    entityId: demand.id,
+    dealerId: params.dealerId,
+  });
   return { ok: true as const, demand: updated };
 }
 

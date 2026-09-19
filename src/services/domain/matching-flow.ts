@@ -204,11 +204,36 @@ export async function runMatchingForDemand(demandId: string) {
         vehicle.freshnessState === "UNKNOWN");
     const needsB2bPrice = !isPotential && vehicle.b2bPrice == null;
 
-    let status: "CANDIDATE" | "PENDING_VALIDATION" | "VALIDATED" = isPotential
+    let status: "CANDIDATE" | "PENDING_VALIDATION" | "VALIDATED" | "HIDDEN" =
+      isPotential
       ? "CANDIDATE"
       : needsAvailability || needsB2bPrice
         ? "PENDING_VALIDATION"
         : "VALIDATED";
+
+    const priorReject = await prisma.buyerInterest.findFirst({
+      where: {
+        status: "REJECTED",
+        candidateMatch: { demandId, vehicleId: vehicle.id },
+      },
+      select: { id: true },
+    });
+    if (priorReject && status === "VALIDATED") {
+      const prior = await prisma.candidateMatch.findUnique({
+        where: { demandId_vehicleId: { demandId, vehicleId: vehicle.id } },
+        select: { matchBandV2: true, engineVersion: true },
+      });
+      if (
+        !isMaterialRejectedMatchChange({
+          priorBand: prior?.matchBandV2,
+          priorEngine: prior?.engineVersion,
+          nextBand: String(evaluationV2.band ?? ""),
+          nextEngine: MATCH_ENGINE_VERSION,
+        })
+      ) {
+        status = "HIDDEN";
+      }
+    }
 
     const match = await prisma.candidateMatch.upsert({
       where: {
@@ -925,6 +950,30 @@ export function computeDemandExpiry() {
   return addDays(new Date(), 3);
 }
 
+/** Rejected matches stay hidden unless band or engine version materially changed. */
+export function isMaterialRejectedMatchChange(input: {
+  priorBand?: string | null;
+  priorEngine?: string | null;
+  nextBand: string;
+  nextEngine: string;
+}): boolean {
+  if (!input.priorBand) return true;
+  return (
+    input.priorBand !== input.nextBand || input.priorEngine !== input.nextEngine
+  );
+}
+
+export async function deactivateDemandSideEffects(demandId: string) {
+  await prisma.dealerOpportunity.updateMany({
+    where: { demandId, status: "OPEN" },
+    data: { status: "RESOLVED", resolvedAt: new Date() },
+  });
+  await prisma.sellerOpportunity.updateMany({
+    where: { candidateMatch: { demandId }, status: "OPEN" },
+    data: { status: "CLOSED" },
+  });
+}
+
 export async function expireStaleDemands(dealerId?: string) {
   const now = new Date();
   const demands = await prisma.demand.findMany({
@@ -947,6 +996,7 @@ export async function expireStaleDemands(dealerId?: string) {
     } catch {
       // non-blocking
     }
+    await deactivateDemandSideEffects(d.id);
     await notifyDealerUsers(d.dealerId, {
       type: "DEMAND_EXPIRY",
       title: "חיפוש פג תוקף",

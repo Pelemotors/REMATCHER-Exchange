@@ -297,6 +297,8 @@ export async function createVehicleForDealer(input: {
   if (!input.skipRematch && vehicle.mediaReady) {
     const { rematchAfterInventoryMutation } = await import("@/services/matching/inventory-rematch");
     await rematchAfterInventoryMutation({ vehicleId: vehicle.id, sellerDealerId: input.dealerId });
+    const { reconcileCatalogForDealer } = await import("@/services/catalog/reconcile");
+    await reconcileCatalogForDealer(input.dealerId).catch(() => undefined);
   }
 
   return { ok: true as const, vehicle, source: input.source ?? "domain" };

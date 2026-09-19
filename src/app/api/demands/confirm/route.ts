@@ -131,7 +131,7 @@ export async function POST(req: Request) {
   }).catch(() => undefined);
 
   if (publishMode === "network") {
-    void runMatchingForDemand(demandId).catch((err) => {
+    await runMatchingForDemand(demandId).catch((err) => {
       console.error("[demands/confirm] matching failed", demandId, err);
     });
   }

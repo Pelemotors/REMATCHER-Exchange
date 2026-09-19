@@ -17,6 +17,7 @@ export type CatalogEligibilityInput = {
   status: string;
   dealerRelationship: DealerVehicleRelationship;
   dealerId: string;
+  catalogOverride?: "DEFAULT_FROM_POLICY" | "FORCE_EXCLUDE" | "FORCE_INCLUDE" | null;
 };
 
 export type CatalogEligibilityResult =
@@ -31,6 +32,13 @@ export function checkCatalogPublishEligibility(
   vehicle: CatalogEligibilityInput,
   dealerId: string
 ): CatalogEligibilityResult {
+  if (vehicle.catalogOverride === "FORCE_EXCLUDE") {
+    return {
+      ok: false,
+      code: "force_exclude",
+      message: "הרכב הוחרג ידנית מהקטלוג.",
+    };
+  }
   if (vehicle.dealerId !== dealerId) {
     return {
       ok: false,

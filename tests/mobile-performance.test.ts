@@ -26,6 +26,10 @@ vi.mock("@/services/demand/demand-queries", () => ({
   getPendingActionsForDealer: vi.fn().mockResolvedValue({ items: [] }),
 }));
 
+vi.mock("@/services/actions/action-center", () => ({
+  getActionCenter: vi.fn().mockResolvedValue({ items: [], generatedAt: "2026-09-19T00:00:00.000Z" }),
+}));
+
 vi.mock("@/services/dealer/onboarding-state", () => ({
   getDealerSetupStatus: vi.fn().mockResolvedValue({
     hasInventory: true,

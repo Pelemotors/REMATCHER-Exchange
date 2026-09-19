@@ -2,6 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getDealerUsageSummary } from "@/services/commercial/reveal-usage";
 import { getPendingActionsForDealer } from "@/services/demand/demand-queries";
+import { getActionCenter } from "@/services/actions/action-center";
+import { OWNED_INVENTORY_RELATIONSHIPS } from "@/services/vehicles/vehicle-capabilities";
 import {
   connectionsMonthlyUsedLabel,
   connectionsRemainingSecondary,
@@ -37,6 +39,7 @@ export interface WorkCenterSnapshot {
     createdAt: Date;
     readAt: Date | null;
   }>;
+  actionCenter: Awaited<ReturnType<typeof getActionCenter>>;
 }
 
 export async function getWorkCenterSnapshot(
@@ -51,10 +54,17 @@ export async function getWorkCenterSnapshot(
     pendingOutcomes,
     recentReveals,
     recentNotifications,
+    actionCenter,
   ] = await Promise.all([
     getPendingActionsForDealer(dealerId),
     getDealerUsageSummary(dealerId),
-    prisma.vehicle.count({ where: { dealerId, status: "ACTIVE" } }),
+    prisma.vehicle.count({
+      where: {
+        dealerId,
+        status: "ACTIVE",
+        dealerRelationship: { in: [...OWNED_INVENTORY_RELATIONSHIPS] },
+      },
+    }),
     prisma.demand.count({ where: { dealerId, status: "ACTIVE" } }),
     prisma.reveal.count({
       where: {
@@ -82,6 +92,7 @@ export async function getWorkCenterSnapshot(
         readAt: true,
       },
     }),
+    getActionCenter(dealerId),
   ]);
 
   const setupStatus = await getDealerSetupStatus(dealerId, {
@@ -167,5 +178,6 @@ export async function getWorkCenterSnapshot(
     connectionsSecondary,
     setupStatus,
     notifications: recentNotifications,
+    actionCenter,
   };
 }
