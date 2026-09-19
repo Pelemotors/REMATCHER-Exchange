@@ -81,6 +81,7 @@ export async function getInventoryList({
         mediaReady: true,
         dealerRelationship: true,
         visibility: true,
+        catalogOverride: true,
         updatedAt: true,
         createdAt: true,
         media: {

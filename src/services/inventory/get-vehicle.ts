@@ -57,6 +57,7 @@ export async function getVehicleForDealer(dealerId: string, vehicleId: string) {
     mediaReady: vehicle.mediaReady,
     dealerRelationship: vehicle.dealerRelationship,
     visibility: vehicle.visibility,
+    catalogOverride: vehicle.catalogOverride,
     conditionNotes: vehicle.conditionNotes,
     updatedAt: vehicle.updatedAt.toISOString(),
     createdAt: vehicle.createdAt.toISOString(),
