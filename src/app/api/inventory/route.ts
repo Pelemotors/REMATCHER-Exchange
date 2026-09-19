@@ -125,10 +125,18 @@ export async function GET(req: Request) {
     where.dealerRelationship = { in: ["OWNED", "INVENTORY"] };
   } else if (filter === "review") {
     where.status = "ACTIVE";
-    where.dealerRelationship = { in: ["OFFERED_TO_ME", "TRADE_IN_CANDIDATE"] };
+    where.incomingDecisions = {
+      some: { dealerId, status: "OPEN" },
+    };
   } else if (filter === "active") where.status = "ACTIVE";
   else if (filter === "sold") where.status = "SOLD";
-  else if (filter === "all") where.status = { in: ["ACTIVE", "SOLD"] };
+  else if (filter === "all") {
+    where.status = { in: ["ACTIVE", "SOLD"] };
+    where.OR = [
+      { dealerRelationship: { in: ["OWNED", "INVENTORY"] } },
+      { incomingDecisions: { some: { dealerId, status: "OPEN" } } },
+    ];
+  }
   else if (filter === "missing_price") {
     where.status = "ACTIVE";
     where.b2bPrice = null;

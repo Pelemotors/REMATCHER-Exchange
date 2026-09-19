@@ -46,6 +46,8 @@ dist/
 
 # typescript
 next-env.d.ts
+tsconfig.tsbuildinfo
+.next-field-test/
 
 # vitest
 .vitest

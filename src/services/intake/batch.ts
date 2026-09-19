@@ -313,6 +313,27 @@ export async function getIntakeBatchForDealer(input: {
   });
   if (!batch) return { ok: false as const, error: "not_found" as const };
 
+  const committedIds = batch.candidates
+    .map((c) => c.committedVehicleId)
+    .filter((id): id is string => Boolean(id));
+  const decisions = committedIds.length
+    ? await prisma.vehicleDecision.findMany({
+        where: {
+          dealerId: input.dealerId,
+          vehicleId: { in: committedIds },
+        },
+        select: {
+          id: true,
+          vehicleId: true,
+          type: true,
+          status: true,
+          incomingAskPrice: true,
+          incomingAgreedPrice: true,
+        },
+      })
+    : [];
+  const decisionByVehicle = new Map(decisions.map((d) => [d.vehicleId, d]));
+
   return {
     ok: true as const,
     batch: {
@@ -370,15 +391,19 @@ export async function getIntakeBatchForDealer(input: {
             retailPrice?: number | null;
             price?: number | null;
           } | null;
+          const decision = c.committedVehicleId
+            ? decisionByVehicle.get(c.committedVehicleId)
+            : undefined;
+          const decisionPrice =
+            decision?.incomingAgreedPrice ?? decision?.incomingAskPrice ?? null;
           const offeredPrice =
+            decisionPrice ??
             (typeof commercial?.offeredPrice === "number"
               ? commercial.offeredPrice
               : null) ??
             (typeof commercial?.askingPrice === "number"
               ? commercial.askingPrice
-              : null) ??
-            (typeof commercial?.b2bPrice === "number" ? commercial.b2bPrice : null) ??
-            (typeof commercial?.price === "number" ? commercial.price : null);
+              : null);
           const engine =
             gov?.engine ??
             (typeof gov?.engineDisplacementCc === "number"
@@ -413,6 +438,15 @@ export async function getIntakeBatchForDealer(input: {
             trim: gov?.trim ?? null,
             offeredPrice,
             askingPrice: offeredPrice,
+            decision: decision
+              ? {
+                  id: decision.id,
+                  type: decision.type,
+                  status: decision.status,
+                  incomingAskPrice: decision.incomingAskPrice,
+                  incomingAgreedPrice: decision.incomingAgreedPrice,
+                }
+              : null,
             thumbUrl: thumbMedia
               ? publicThumbUrlForDisplayKey(thumbMedia.storageKey)
               : null,

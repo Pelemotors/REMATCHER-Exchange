@@ -18,6 +18,10 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
     },
+    vehicleDecision: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+    },
   },
 }));
 vi.mock("@/services/inventory/update-vehicle", () => ({

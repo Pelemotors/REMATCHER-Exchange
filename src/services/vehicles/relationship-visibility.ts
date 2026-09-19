@@ -70,6 +70,26 @@ export async function setVehicleRelationship(params: {
     return { ok: false as const, error: "use_convert_owned" as const };
   }
 
+  const currentReview =
+    v.dealerRelationship === "OFFERED_TO_ME" ||
+    v.dealerRelationship === "TRADE_IN_CANDIDATE";
+  const nextReview =
+    params.relationship === "OFFERED_TO_ME" ||
+    params.relationship === "TRADE_IN_CANDIDATE";
+  if (
+    currentReview &&
+    nextReview &&
+    v.dealerRelationship !== params.relationship
+  ) {
+    return { ok: false as const, error: "use_retarget_decision" as const };
+  }
+  if (
+    (v.dealerRelationship === "OWNED" || v.dealerRelationship === "INVENTORY") &&
+    nextReview
+  ) {
+    return { ok: false as const, error: "cannot_downgrade_inventory" as const };
+  }
+
   // Converting to non-owned must force PRIVATE (cannot stay network as offered/trade-in)
   const forcePrivate = !NETWORK_ELIGIBLE_RELATIONSHIPS.includes(params.relationship);
   const updated = await prisma.vehicle.update({

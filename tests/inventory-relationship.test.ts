@@ -41,13 +41,13 @@ describe("inventory owned vs review filters", () => {
     expect(where.dealerRelationship).toEqual({ in: ["OWNED", "INVENTORY"] });
   });
 
-  it("review lists only offered/trade", () => {
+  it("review lists only vehicles with an OPEN Decision", () => {
     const where = buildDealerInventoryWhere({
       dealerId: "d1",
       filter: "review",
     });
-    expect(where.dealerRelationship).toEqual({
-      in: ["OFFERED_TO_ME", "TRADE_IN_CANDIDATE"],
+    expect(where.incomingDecisions).toEqual({
+      some: { dealerId: "d1", status: "OPEN" },
     });
   });
 

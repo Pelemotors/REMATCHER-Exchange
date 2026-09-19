@@ -1,9 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-import {
-  OWNED_INVENTORY_RELATIONSHIPS,
-  REVIEW_RELATIONSHIPS,
-} from "@/services/vehicles/vehicle-capabilities";
+import { OWNED_INVENTORY_RELATIONSHIPS } from "@/services/vehicles/vehicle-capabilities";
 
 export type InventoryFilter =
   | "all"
@@ -85,10 +82,22 @@ export function buildDealerInventoryWhere(input: {
     where.dealerRelationship = { in: [...OWNED_INVENTORY_RELATIONSHIPS] };
   } else if (filter === "review") {
     where.status = "ACTIVE";
-    where.dealerRelationship = { in: [...REVIEW_RELATIONSHIPS] };
+    where.incomingDecisions = {
+      some: { dealerId: input.dealerId, status: "OPEN" },
+    };
   } else if (filter === "active") where.status = "ACTIVE";
   else if (filter === "sold") where.status = "SOLD";
-  else if (filter === "all") where.status = { in: ["ACTIVE", "SOLD"] };
+  else if (filter === "all") {
+    where.status = { in: ["ACTIVE", "SOLD"] };
+    where.OR = [
+      { dealerRelationship: { in: [...OWNED_INVENTORY_RELATIONSHIPS] } },
+      {
+        incomingDecisions: {
+          some: { dealerId: input.dealerId, status: "OPEN" },
+        },
+      },
+    ];
+  }
   else if (filter === "missing_price") {
     where.status = "ACTIVE";
     where.b2bPrice = null;

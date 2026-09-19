@@ -144,6 +144,7 @@ model Dealer {
   catalog           DealerCatalog?
   marketWatches     MarketWatch[]
   conversations     ConversationThread[]
+  vehicleDecisions  VehicleDecision[]
 
   @@index([cohort])
 }
@@ -469,6 +470,8 @@ model Vehicle {
   intakeCandidates VehicleCandidate[]
   dealerOpportunities DealerOpportunity[]
   catalogPublications CatalogPublication[]
+  incomingDecisions VehicleDecision[] @relation("DecisionIncomingVehicle")
+  outgoingDecisions VehicleDecision[] @relation("DecisionOutgoingVehicle")
 
   /** Grandfathered inventory defaults true; new vehicles start false until EXTERIOR+INTERIOR */
   mediaReady      Boolean       @default(true)
@@ -1643,6 +1646,7 @@ model VehicleCandidate {
   dealer           Dealer                  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   existingVehicle  Vehicle?                @relation(fields: [existingVehicleId], references: [id], onDelete: SetNull)
   media            VehicleCandidateMedia[]
+  sourceDecisions  VehicleDecision[]
 
   @@index([batchId, status])
   @@index([dealerId, status, updatedAt])
@@ -1661,6 +1665,48 @@ model VehicleCandidateMedia {
 
   @@unique([candidateId, mediaId])
   @@index([mediaId])
+}
+
+enum VehicleDecisionType {
+  PURCHASE
+  TRADE
+}
+
+enum VehicleDecisionStatus {
+  OPEN
+  ACCEPTED
+  DECLINED
+}
+
+/**
+ * Canonical purchase/trade decision — not an Intake Candidate and not an Opportunity.
+ * One row per (dealer, incoming vehicle). Decision is price/lifecycle authority after open.
+ */
+model VehicleDecision {
+  id                  String                 @id @default(cuid())
+  dealerId            String
+  vehicleId           String
+  sourceCandidateId   String?
+  type                VehicleDecisionType
+  status              VehicleDecisionStatus  @default(OPEN)
+  incomingAskPrice    Int?
+  incomingAgreedPrice Int?
+  outgoingVehicleId   String?
+  outgoingAgreedPrice Int?
+  openedAt            DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  decidedAt           DateTime?
+
+  dealer          Dealer            @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle           @relation("DecisionIncomingVehicle", fields: [vehicleId], references: [id], onDelete: Cascade)
+  outgoingVehicle Vehicle?          @relation("DecisionOutgoingVehicle", fields: [outgoingVehicleId], references: [id], onDelete: SetNull)
+  sourceCandidate VehicleCandidate? @relation(fields: [sourceCandidateId], references: [id], onDelete: SetNull)
+
+  @@unique([dealerId, vehicleId])
+  @@index([dealerId, status, openedAt(sort: Desc)])
+  @@index([vehicleId, status])
+  @@index([outgoingVehicleId])
+  @@index([sourceCandidateId])
 }
 
 

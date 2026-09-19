@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { publicThumbUrlForDisplayKey } from "@/lib/media/storage";
 import { vehicleCapabilities } from "@/services/vehicles/vehicle-capabilities";
+import { getDecisionForVehicle } from "@/services/decisions/vehicle-decision";
 import { loadReviewAskingPriceForVehicle } from "@/services/vehicles/review-asking-price";
 
 export async function getVehicleForDealer(dealerId: string, vehicleId: string) {
@@ -22,15 +23,17 @@ export async function getVehicleForDealer(dealerId: string, vehicleId: string) {
   });
   if (!vehicle) return null;
 
-  const [openInterestCount, pendingValidationCount, reviewAskingPrice] = await Promise.all([
-    prisma.sellerOpportunity.count({
-      where: { vehicleId: vehicle.id, status: "OPEN" },
-    }),
-    prisma.validationEvent.count({
-      where: { vehicleId: vehicle.id, dealerId, status: "PENDING" },
-    }),
-    loadReviewAskingPriceForVehicle({ dealerId, vehicleId: vehicle.id }),
-  ]);
+  const [openInterestCount, pendingValidationCount, reviewAskingPrice, decision] =
+    await Promise.all([
+      prisma.sellerOpportunity.count({
+        where: { vehicleId: vehicle.id, status: "OPEN" },
+      }),
+      prisma.validationEvent.count({
+        where: { vehicleId: vehicle.id, dealerId, status: "PENDING" },
+      }),
+      loadReviewAskingPriceForVehicle({ dealerId, vehicleId: vehicle.id }),
+      getDecisionForVehicle({ dealerId, vehicleId: vehicle.id }),
+    ]);
 
   const primary = vehicle.media.find((m) => m.isPrimary) ?? vehicle.media[0];
 
@@ -47,6 +50,7 @@ export async function getVehicleForDealer(dealerId: string, vehicleId: string) {
     retailPrice: vehicle.retailPrice,
     b2bPrice: vehicle.b2bPrice,
     reviewAskingPrice,
+    decision,
     region: vehicle.region,
     status: vehicle.status,
     freshnessState: vehicle.freshnessState,

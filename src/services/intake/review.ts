@@ -223,6 +223,16 @@ export async function resolveIntakeCandidate(input: {
           }),
         },
       });
+      if (c.committedVehicleId) {
+        const { persistDecisionPrice } = await import(
+          "@/services/decisions/vehicle-decision"
+        );
+        await persistDecisionPrice({
+          dealerId: input.dealerId,
+          vehicleId: c.committedVehicleId,
+          price: input.askingPrice,
+        });
+      }
     }
     return {
       ok: true as const,

@@ -5,6 +5,8 @@ const mockVehicleFind = vi.fn();
 const mockCandidateUpdate = vi.fn();
 const mockSetRelationship = vi.fn();
 const mockConvert = vi.fn();
+const mockRetarget = vi.fn();
+const mockOpenDecision = vi.fn();
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/prisma", () => ({
@@ -32,6 +34,19 @@ vi.mock("@/services/exchange/events", () => ({
 vi.mock("@/services/intake/review", () => ({
   resolveIntakeCandidate: vi.fn(),
 }));
+vi.mock("@/services/decisions/vehicle-decision", () => ({
+  decisionTypeForRelationship: (rel: string) =>
+    rel === "OFFERED_TO_ME"
+      ? "PURCHASE"
+      : rel === "TRADE_IN_CANDIDATE"
+        ? "TRADE"
+        : null,
+  openOrGetDecision: (...args: unknown[]) => mockOpenDecision(...args),
+  retargetOpenDecision: (...args: unknown[]) => mockRetarget(...args),
+}));
+vi.mock("@/services/vehicles/review-asking-price", () => ({
+  reviewAskingPriceFromCommercial: () => null,
+}));
 
 import { applyCandidateIntent } from "@/services/intake/apply-intent";
 
@@ -42,6 +57,8 @@ describe("committed intake intent uses canonical services", () => {
     mockCandidateUpdate.mockReset();
     mockSetRelationship.mockReset();
     mockConvert.mockReset();
+    mockRetarget.mockReset();
+    mockOpenDecision.mockReset();
   });
 
   it("does not silently convert OFFERED → OWNED via intent", async () => {
@@ -67,7 +84,7 @@ describe("committed intake intent uses canonical services", () => {
     expect(mockSetRelationship).not.toHaveBeenCalled();
   });
 
-  it("routes non-owned committed change through setVehicleRelationship", async () => {
+  it("routes committed PURCHASE→TRADE through retargetOpenDecision", async () => {
     mockCandidateFind.mockResolvedValue({
       id: "c1",
       dealerId: "d1",
@@ -79,18 +96,22 @@ describe("committed intake intent uses canonical services", () => {
       id: "v1",
       dealerRelationship: "OFFERED_TO_ME",
     });
-    mockSetRelationship.mockResolvedValue({ ok: true, vehicle: { id: "v1" } });
+    mockRetarget.mockResolvedValue({
+      ok: true,
+      decision: { id: "dec-1", type: "TRADE", status: "OPEN" },
+    });
     const result = await applyCandidateIntent({
       dealerId: "d1",
       candidateId: "c1",
       intent: "TRADE_IN_CANDIDATE",
     });
     expect(result.ok).toBe(true);
-    expect(mockSetRelationship).toHaveBeenCalledWith({
+    expect(mockRetarget).toHaveBeenCalledWith({
       dealerId: "d1",
       vehicleId: "v1",
-      relationship: "TRADE_IN_CANDIDATE",
+      type: "TRADE",
     });
+    expect(mockSetRelationship).not.toHaveBeenCalled();
     expect(mockConvert).not.toHaveBeenCalled();
   });
 });

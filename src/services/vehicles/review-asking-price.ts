@@ -1,6 +1,6 @@
 /**
- * Review/offered/trade asking price lives on VehicleCandidate.commercialJson.
- * It is not retailPrice and not b2bPrice.
+ * After a Decision exists it is the price authority.
+ * Candidate commercialJson is seed/fallback only — never b2bPrice/retailPrice.
  */
 export function reviewAskingPriceFromCommercial(
   commercial: unknown
@@ -20,6 +20,12 @@ export async function loadReviewAskingPriceForVehicle(input: {
   dealerId: string;
   vehicleId: string;
 }): Promise<number | null> {
+  const { loadDecisionAuthorityPrice } = await import(
+    "@/services/decisions/vehicle-decision"
+  );
+  const fromDecision = await loadDecisionAuthorityPrice(input);
+  if (fromDecision != null && fromDecision > 0) return fromDecision;
+
   const { prisma } = await import("@/lib/prisma");
   const candidate = await prisma.vehicleCandidate.findFirst({
     where: {
@@ -39,6 +45,16 @@ export async function persistReviewAskingPrice(input: {
 }): Promise<number | null> {
   if (!Number.isFinite(input.price) || input.price <= 0) return null;
   const price = Math.round(input.price);
+  const { persistDecisionPrice } = await import(
+    "@/services/decisions/vehicle-decision"
+  );
+  const saved = await persistDecisionPrice({
+    dealerId: input.dealerId,
+    vehicleId: input.vehicleId,
+    price,
+  });
+  if (saved != null) return saved;
+
   const { prisma } = await import("@/lib/prisma");
   const { toPrismaJson } = await import("@/lib/prisma-json");
   const candidate = await prisma.vehicleCandidate.findFirst({

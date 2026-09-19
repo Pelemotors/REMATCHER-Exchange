@@ -10,6 +10,12 @@ import {
   type IntakeIntentKind,
 } from "@/services/intake/intent";
 import { resolveIntakeCandidate } from "@/services/intake/review";
+import {
+  decisionTypeForRelationship,
+  openOrGetDecision,
+  retargetOpenDecision,
+} from "@/services/decisions/vehicle-decision";
+import { reviewAskingPriceFromCommercial } from "@/services/vehicles/review-asking-price";
 import { setVehicleRelationship } from "@/services/vehicles/relationship-visibility";
 import { isReviewRelationship } from "@/services/vehicles/vehicle-capabilities";
 
@@ -46,6 +52,9 @@ export type IntakeIntentResultItem = {
   ok: boolean;
   vehicleId?: string;
   error?: string;
+  decisionId?: string;
+  decisionType?: string;
+  decisionStatus?: string;
 };
 
 function mapApplyErrorToOutcome(
@@ -107,11 +116,19 @@ export async function applyCandidateIntent(input: {
     candidate.status === "COMMITTED" &&
     candidate.committedVehicleId
   ) {
+    const decision = await ensureDecisionForCommitted({
+      dealerId: input.dealerId,
+      vehicleId: candidate.committedVehicleId,
+      candidateId: candidate.id,
+      relationship: INTENT_TO_RELATIONSHIP[input.intent],
+      commercialJson: candidate.commercialJson,
+    });
     return {
       ok: true as const,
       vehicleId: candidate.committedVehicleId,
       intent: input.intent,
       idempotent: true as const,
+      decision: decision ?? undefined,
     };
   }
 
@@ -183,6 +200,29 @@ export async function applyCandidateIntent(input: {
       };
     }
 
+    const currentType = decisionTypeForRelationship(vehicle.dealerRelationship);
+    const nextType = decisionTypeForRelationship(nextRelationship);
+    if (currentType && nextType && currentType !== nextType) {
+      const retargeted = await retargetOpenDecision({
+        dealerId: input.dealerId,
+        vehicleId: vehicle.id,
+        type: nextType,
+      });
+      if (!retargeted.ok) {
+        return { ok: false as const, error: retargeted.error };
+      }
+      await prisma.vehicleCandidate.update({
+        where: { id: candidate.id },
+        data: { dealerIntent: input.intent },
+      });
+      return {
+        ok: true as const,
+        vehicleId: vehicle.id,
+        intent: input.intent,
+        decision: retargeted.decision,
+      };
+    }
+
     const updated = await setVehicleRelationship({
       dealerId: input.dealerId,
       vehicleId: vehicle.id,
@@ -240,12 +280,40 @@ export async function applyCandidateIntent(input: {
     }).catch(() => undefined);
   }
 
+  const decision = await ensureDecisionForCommitted({
+    dealerId: input.dealerId,
+    vehicleId: committed.vehicleId,
+    candidateId: candidate.id,
+    relationship: INTENT_TO_RELATIONSHIP[input.intent],
+    commercialJson: candidate.commercialJson,
+  });
+
   return {
     ok: true as const,
     vehicleId: committed.vehicleId,
     intent: input.intent,
     idempotent: "idempotent" in committed ? committed.idempotent : false,
+    decision: decision ?? undefined,
   };
+}
+
+async function ensureDecisionForCommitted(input: {
+  dealerId: string;
+  vehicleId: string;
+  candidateId: string;
+  relationship: string;
+  commercialJson: unknown;
+}) {
+  const type = decisionTypeForRelationship(input.relationship);
+  if (!type) return null;
+  const opened = await openOrGetDecision({
+    dealerId: input.dealerId,
+    vehicleId: input.vehicleId,
+    type,
+    sourceCandidateId: input.candidateId,
+    incomingAskPrice: reviewAskingPriceFromCommercial(input.commercialJson),
+  });
+  return opened.decision;
 }
 
 export async function applyIntakeIntents(input: {
@@ -281,7 +349,12 @@ export async function applyIntakeIntents(input: {
     candidateId: string,
     intent: IntakeIntentKind,
     r:
-      | { ok: true; vehicleId?: string | null; idempotent?: boolean }
+      | {
+          ok: true;
+          vehicleId?: string | null;
+          idempotent?: boolean;
+          decision?: { id: string; type: string; status: string } | null;
+        }
       | { ok: false; error?: string }
   ) {
     if (r.ok) {
@@ -292,6 +365,9 @@ export async function applyIntakeIntents(input: {
         outcome,
         ok: true,
         vehicleId: r.vehicleId ?? undefined,
+        decisionId: r.decision?.id,
+        decisionType: r.decision?.type,
+        decisionStatus: r.decision?.status,
       });
       return;
     }

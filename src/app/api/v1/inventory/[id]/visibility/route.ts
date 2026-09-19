@@ -56,6 +56,17 @@ export async function POST(
   }
 
   if (body.action === "convert_owned") {
+    const { getOpenDecisionForVehicle } = await import(
+      "@/services/decisions/vehicle-decision"
+    );
+    const open = await getOpenDecisionForVehicle({ dealerId, vehicleId });
+    if (open) {
+      return v1Error(
+        ctx,
+        "RESOURCE_CONFLICT",
+        "use_accept_decision"
+      );
+    }
     const result = await convertToOwnedInventory({ dealerId, vehicleId });
     if (!result.ok) {
       return v1Error(

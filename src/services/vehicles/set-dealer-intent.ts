@@ -11,10 +11,8 @@ import {
   upsertSearchTargetFromCandidate,
   upsertSearchTargetFromVehicle,
 } from "@/services/demand/search-target-intent";
-import {
-  convertToOwnedInventory,
-  setVehicleRelationship,
-} from "@/services/vehicles/relationship-visibility";
+import { retargetOpenDecision } from "@/services/decisions/vehicle-decision";
+import { setVehicleRelationship } from "@/services/vehicles/relationship-visibility";
 import type { DealerVehicleRelationship } from "@prisma/client";
 
 export type DealerIntentKind = IntakeIntentKind | "SEARCH_TARGET";
@@ -211,14 +209,27 @@ async function setDealerIntentOnVehicle(
     relationship === "OWNED" &&
     WORKSPACE_RELATIONSHIPS.includes(v.dealerRelationship)
   ) {
-    const converted = await convertToOwnedInventory({ dealerId, vehicleId });
-    if (!converted.ok) return converted;
+    return { ok: false as const, error: "use_accept_decision" as const };
+  }
+
+  const currentReview =
+    v.dealerRelationship === "OFFERED_TO_ME" ||
+    v.dealerRelationship === "TRADE_IN_CANDIDATE";
+  const nextReview =
+    relationship === "OFFERED_TO_ME" || relationship === "TRADE_IN_CANDIDATE";
+  if (currentReview && nextReview && v.dealerRelationship !== relationship) {
+    const retargeted = await retargetOpenDecision({
+      dealerId,
+      vehicleId,
+      type: relationship === "TRADE_IN_CANDIDATE" ? "TRADE" : "PURCHASE",
+    });
+    if (!retargeted.ok) return retargeted;
     await logEvent({
       eventType: "intent.apply",
       dealerId,
       entityType: "Vehicle",
       entityId: vehicleId,
-      metadata: { intent, promoted: "convert_owned" },
+      metadata: { intent, retargeted: true },
     }).catch(() => undefined);
     return { ok: true as const, intent, vehicleId };
   }
