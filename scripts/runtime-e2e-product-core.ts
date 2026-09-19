@@ -42,7 +42,7 @@ function loadFieldTestEnv() {
     ) {
       val = val.slice(1, -1);
     }
-    if (!process.env[key]) process.env[key] = val;
+    process.env[key] = val;
   }
 }
 
@@ -407,7 +407,13 @@ async function main() {
       method: "POST",
       body: JSON.stringify({
         demandId: demand.id,
-        confirmed: { make: "Mazda", model: "CX-5", yearMin: 2020, yearMax: 2024 },
+        confirmed: {
+          make: "Mazda",
+          model: "CX-5",
+          yearMin: 2020,
+          yearMax: 2024,
+          budgetMax: 130000,
+        },
         publishMode: "network",
       }),
     });
@@ -419,7 +425,6 @@ async function main() {
     const dealerOppRows = await db.dealerOpportunity.findMany({
       where: {
         dealerId: b.dealerId,
-        type: "NETWORK_DEMAND_FOR_MY_VEHICLE",
         status: "OPEN",
       },
     });
@@ -571,7 +576,13 @@ async function main() {
       method: "POST",
       body: JSON.stringify({
         demandId: demandNeg.id,
-        confirmed: { make: "Honda", model: "Civic", yearMin: 2019, yearMax: 2023 },
+        confirmed: {
+          make: "Honda",
+          model: "Civic",
+          yearMin: 2019,
+          yearMax: 2023,
+          budgetMax: 120000,
+        },
         publishMode: "network",
       }),
     });
