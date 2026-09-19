@@ -7,6 +7,7 @@ import type {
   InventoryDbClient,
   InventoryMutationSource,
 } from "@/services/inventory/create-vehicle";
+import { vehicleCapabilities } from "@/services/vehicles/vehicle-capabilities";
 
 /**
  * Canonical mark-sold for Dealer inventory.
@@ -35,6 +36,18 @@ export async function markVehicleSoldForDealer(input: {
 
   if (!vehicle) {
     return { ok: false as const, error: "not_found" as const };
+  }
+
+  const caps = vehicleCapabilities({
+    dealerRelationship: vehicle.dealerRelationship,
+    status: vehicle.status,
+  });
+  if (!caps.canMarkSold && vehicle.status !== "SOLD") {
+    return {
+      ok: false as const,
+      error: "ownership_required" as const,
+      message: "רק רכב במלאי שלך ניתן לסמן כנמכר.",
+    };
   }
 
   if (vehicle.status === "SOLD") {

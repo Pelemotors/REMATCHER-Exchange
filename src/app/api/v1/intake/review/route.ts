@@ -47,6 +47,7 @@ export async function POST(req: Request) {
     /** Explicit Review resolve+commit only — plate confirm must NOT set this */
     commitAfterResolve?: boolean;
     reject?: boolean;
+    askingPrice?: number | null;
   };
 
   if (!body.candidateId) {
@@ -57,6 +58,8 @@ export async function POST(req: Request) {
     dealerId: principal.dealerId,
     candidateId: body.candidateId,
     detectedPlate: body.detectedPlate ?? body.plate,
+    askingPrice:
+      typeof body.askingPrice === "number" ? body.askingPrice : undefined,
     mediaCategories: body.mediaCategories,
     confirmExistingVehicleId: body.confirmExistingVehicleId,
     createNewDespiteExisting: body.createNewDespiteExisting,

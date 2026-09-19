@@ -10,9 +10,13 @@ import {
 describe("intake intent parsing", () => {
   it("maps buttons to domain relationships", () => {
     expect(intentFromButton("למלאי")).toBe("OWNED");
+    expect(intentFromButton("להוסיף למלאי")).toBe("OWNED");
     expect(intentFromButton("מציעים לי")).toBe("OFFERED_TO_ME");
+    expect(intentFromButton("שוקל לקנות")).toBe("OFFERED_TO_ME");
     expect(intentFromButton("טרייד")).toBe("TRADE_IN_CANDIDATE");
+    expect(intentFromButton("טרייד מלקוח")).toBe("TRADE_IN_CANDIDATE");
     expect(intentFromButton("רק בודק")).toBe("EXTERNAL");
+    expect(intentFromButton("בדיקה בלבד")).toBe("EXTERNAL");
     expect(INTENT_TO_RELATIONSHIP.OWNED).toBe("OWNED");
     expect(INTENT_TO_RELATIONSHIP.EXTERNAL).toBe("EXTERNAL");
   });

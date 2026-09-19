@@ -1,12 +1,19 @@
 import { prisma } from "@/lib/prisma";
 
+import {
+  OWNED_INVENTORY_RELATIONSHIPS,
+  REVIEW_RELATIONSHIPS,
+} from "@/services/vehicles/vehicle-capabilities";
+
 export type InventoryFilter =
   | "all"
   | "active"
   | "sold"
   | "attention"
   | "interest"
-  | "missing_price";
+  | "missing_price"
+  | "owned"
+  | "review";
 
 export type InventoryFilterAux = {
   attentionIds: Set<string>;
@@ -69,9 +76,17 @@ export function buildDealerInventoryWhere(input: {
   const where: Record<string, unknown> = {
     dealerId: input.dealerId,
     status: { not: "ARCHIVED" },
+    // EXTERNAL is investigation-only and must never appear as inventory.
+    dealerRelationship: { not: "EXTERNAL" },
   };
 
-  if (filter === "active") where.status = "ACTIVE";
+  if (filter === "owned") {
+    where.status = "ACTIVE";
+    where.dealerRelationship = { in: [...OWNED_INVENTORY_RELATIONSHIPS] };
+  } else if (filter === "review") {
+    where.status = "ACTIVE";
+    where.dealerRelationship = { in: [...REVIEW_RELATIONSHIPS] };
+  } else if (filter === "active") where.status = "ACTIVE";
   else if (filter === "sold") where.status = "SOLD";
   else if (filter === "all") where.status = { in: ["ACTIVE", "SOLD"] };
   else if (filter === "missing_price") {

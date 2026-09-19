@@ -86,10 +86,10 @@ type BatchDto = {
 };
 
 const INTENTS = [
-  { value: "OWNED", label: "למלאי שלי", tone: "owned", Icon: Package },
-  { value: "OFFERED_TO_ME", label: "מציעים לי", tone: "offered", Icon: Tag },
-  { value: "TRADE_IN_CANDIDATE", label: "טרייד", tone: "trade", Icon: RefreshCw },
-  { value: "EXTERNAL", label: "רק בודק", tone: "check", Icon: Search },
+  { value: "OWNED", label: "להוסיף למלאי", tone: "owned", Icon: Package },
+  { value: "OFFERED_TO_ME", label: "שוקל לקנות", tone: "offered", Icon: Tag },
+  { value: "TRADE_IN_CANDIDATE", label: "טרייד מלקוח", tone: "trade", Icon: RefreshCw },
+  { value: "EXTERNAL", label: "בדיקה בלבד", tone: "check", Icon: Search },
 ] as const;
 
 const INTENT_TONE: Record<string, string> = {
@@ -100,10 +100,10 @@ const INTENT_TONE: Record<string, string> = {
 };
 
 const INTENT_LABEL: Record<string, string> = {
-  OWNED: "למלאי שלי",
-  OFFERED_TO_ME: "מציעים לי",
-  TRADE_IN_CANDIDATE: "טרייד",
-  EXTERNAL: "רק בודק",
+  OWNED: "להוסיף למלאי",
+  OFFERED_TO_ME: "שוקל לקנות",
+  TRADE_IN_CANDIDATE: "טרייד מלקוח",
+  EXTERNAL: "בדיקה בלבד",
 };
 
 async function getShareStaging(): Promise<ShareStagingPlugin | null> {
@@ -796,7 +796,7 @@ export function IntakeHandoffClient() {
                         את הרכב הזה עוד לא הצלחתי לזהות בוודאות. יש לך מספר רכב?
                       </p>
                     ) : (
-                      <p className={styles.cardAsk}>מה הרכב הזה בשבילך?</p>
+                      <p className={styles.cardAsk}>מה אתה רוצה לעשות עם הרכב?</p>
                     )}
                     <div className={styles.actions}>
                       {INTENTS.map((intent) => (

@@ -66,10 +66,10 @@ describe("Pixel-faithful Capture / conversation", () => {
     expect(ui).toContain("הדבק טקסט / מידע");
     expect(ui).toContain("WhatsApp");
     expect(ui).toContain("כתוב ל-REMATCHER...");
-    expect(ui).toContain("למלאי שלי");
-    expect(ui).toContain("מציעים לי");
-    expect(ui).toContain("טרייד");
-    expect(ui).toContain("רק בודק");
+    expect(ui).toContain("להוסיף למלאי");
+    expect(ui).toContain("שוקל לקנות");
+    expect(ui).toContain("טרייד מלקוח");
+    expect(ui).toContain("בדיקה בלבד");
     expect(ui).not.toContain("OpenAI");
     expect(ui).not.toContain("OCR API");
     expect(ui).not.toContain("GOV endpoint");

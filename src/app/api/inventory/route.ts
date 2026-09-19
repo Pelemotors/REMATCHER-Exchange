@@ -31,7 +31,7 @@ const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
   filter: z
-    .enum(["all", "active", "sold", "attention", "interest", "missing_price"])
+    .enum(["all", "active", "sold", "attention", "interest", "missing_price", "owned", "review"])
     .default("active"),
   q: z.string().max(120).optional(),
 });
@@ -118,8 +118,15 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {
     dealerId,
     status: { not: "ARCHIVED" },
+    dealerRelationship: { not: "EXTERNAL" },
   };
-  if (filter === "active") where.status = "ACTIVE";
+  if (filter === "owned") {
+    where.status = "ACTIVE";
+    where.dealerRelationship = { in: ["OWNED", "INVENTORY"] };
+  } else if (filter === "review") {
+    where.status = "ACTIVE";
+    where.dealerRelationship = { in: ["OFFERED_TO_ME", "TRADE_IN_CANDIDATE"] };
+  } else if (filter === "active") where.status = "ACTIVE";
   else if (filter === "sold") where.status = "SOLD";
   else if (filter === "all") where.status = { in: ["ACTIVE", "SOLD"] };
   else if (filter === "missing_price") {

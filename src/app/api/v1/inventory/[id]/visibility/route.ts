@@ -58,7 +58,10 @@ export async function POST(
   if (body.action === "convert_owned") {
     const result = await convertToOwnedInventory({ dealerId, vehicleId });
     if (!result.ok) {
-      return v1Error(ctx, "RESOURCE_NOT_FOUND");
+      return v1Error(
+        ctx,
+        result.error === "not_found" ? "RESOURCE_NOT_FOUND" : "RESOURCE_CONFLICT"
+      );
     }
     return v1Json(ctx, result);
   }

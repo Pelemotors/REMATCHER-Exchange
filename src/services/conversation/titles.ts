@@ -4,9 +4,9 @@ import { formatVehicleDisplayLabel } from "@/lib/vehicle-display-label";
 
 const INTENT_TITLE_SUFFIX: Record<string, string> = {
   OWNED: "מלאי",
-  OFFERED_TO_ME: "מציעים לי",
-  TRADE_IN_CANDIDATE: "טרייד",
-  EXTERNAL: "בדיקה",
+  OFFERED_TO_ME: "שוקל לקנות",
+  TRADE_IN_CANDIDATE: "טרייד מלקוח",
+  EXTERNAL: "בדיקה בלבד",
 };
 
 export async function autoTitleFromVehicle(input: {

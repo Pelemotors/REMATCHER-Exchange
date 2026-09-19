@@ -176,7 +176,7 @@ describe("intake domain surface", () => {
     expect(handoffUi).toContain("add_text");
     expect(handoffUi).toContain("קליטת רכב");
     expect(handoffUi).not.toContain("קליטת מלאי");
-    expect(handoffUi).toContain("למלאי שלי");
+    expect(handoffUi).toContain("להוסיף למלאי");
   });
 
   it("iOS Share Extension + ShareStaging adapter sources are present", () => {

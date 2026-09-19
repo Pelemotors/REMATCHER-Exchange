@@ -199,6 +199,8 @@ export async function commitOneCandidate(
       mileage:
         typeof commercial.mileage === "number" ? commercial.mileage : null,
       b2bPrice:
+        (opts?.dealerRelationship === "OWNED" ||
+          opts?.dealerRelationship === "INVENTORY") &&
         typeof commercial.askingPrice === "number"
           ? commercial.askingPrice
           : null,
@@ -329,7 +331,9 @@ async function applyAdditiveCommercial(
   if (
     existing.b2bPrice == null &&
     existing.retailPrice == null &&
-    typeof commercial.askingPrice === "number"
+    typeof commercial.askingPrice === "number" &&
+    (existing.dealerRelationship === "OWNED" ||
+      existing.dealerRelationship === "INVENTORY")
   ) {
     data.b2bPrice = commercial.askingPrice;
     data.retailPrice = commercial.askingPrice;

@@ -144,7 +144,8 @@ export async function removeVehicleFromNetwork(params: {
 }
 
 /**
- * Candidate / offer → Owned inventory. Does NOT auto-publish.
+ * Offer / trade-in → Owned inventory. Same vehicle. Does NOT auto-publish.
+ * Keep PRIVATE unless already ANONYMOUS_NETWORK — never force publish.
  */
 export async function convertToOwnedInventory(params: {
   dealerId: string;
@@ -154,13 +155,40 @@ export async function convertToOwnedInventory(params: {
     where: { id: params.vehicleId, dealerId: params.dealerId },
   });
   if (!v) return { ok: false as const, error: "not_found" };
+
+  if (v.dealerRelationship === "OWNED" || v.dealerRelationship === "INVENTORY") {
+    return { ok: true as const, vehicle: v, idempotent: true as const };
+  }
+  if (
+    v.dealerRelationship !== "OFFERED_TO_ME" &&
+    v.dealerRelationship !== "TRADE_IN_CANDIDATE"
+  ) {
+    return {
+      ok: false as const,
+      error: "relationship_not_convertible" as const,
+      message: "רק רכב בבדיקה לפני קנייה או טרייד ניתן להעביר למלאי.",
+    };
+  }
+
   const updated = await prisma.vehicle.update({
     where: { id: v.id },
     data: {
       dealerRelationship: "OWNED",
-      // Keep PRIVATE unless already ANONYMOUS_NETWORK — never force publish
       visibility: v.visibility === "ANONYMOUS_NETWORK" ? "ANONYMOUS_NETWORK" : "PRIVATE",
     },
   });
-  return { ok: true as const, vehicle: updated };
+
+  const { emitExchangeEvent } = await import("@/services/exchange/events");
+  await emitExchangeEvent({
+    eventType: "vehicle.relationship.converted_owned",
+    dealerId: params.dealerId,
+    vehicleId: updated.id,
+    eventData: {
+      from: v.dealerRelationship,
+      to: "OWNED",
+    },
+    operational: true,
+  }).catch(() => undefined);
+
+  return { ok: true as const, vehicle: updated, idempotent: false as const };
 }

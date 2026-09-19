@@ -185,12 +185,12 @@ test.describe("Pixel-faithful Production live", () => {
     for (let i = 0; i < Math.min(intents.length, pending.length); i++) {
       const label =
         intents[i] === "OWNED"
-          ? "למלאי שלי"
+          ? "להוסיף למלאי"
           : intents[i] === "OFFERED_TO_ME"
-            ? "מציעים לי"
+            ? "שוקל לקנות"
             : intents[i] === "TRADE_IN_CANDIDATE"
-              ? "טרייד"
-              : "רק בודק";
+              ? "טרייד מלקוח"
+              : "בדיקה בלבד";
       await cards.nth(0).getByRole("button", { name: label }).click();
       await page.waitForTimeout(1200);
     }
@@ -565,10 +565,10 @@ test.describe("Pixel-faithful Production live", () => {
     for (let i = 0; i < Math.min(sequence.length, pending.length); i++) {
       const label =
         sequence[i] === "OFFERED_TO_ME"
-          ? "מציעים לי"
+          ? "שוקל לקנות"
           : sequence[i] === "TRADE_IN_CANDIDATE"
-            ? "טרייד"
-            : "רק בודק";
+            ? "טרייד מלקוח"
+            : "בדיקה בלבד";
       const card = page.getByTestId("vehicle-candidate-card").nth(0);
       if (await card.isVisible().catch(() => false)) {
         await card.getByRole("button", { name: label }).click();

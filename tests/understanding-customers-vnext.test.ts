@@ -72,8 +72,8 @@ describe("Customers UI", () => {
 
 describe("Vehicle Hebrew relationship/visibility", () => {
   it("labels are human Hebrew not DB enums", () => {
-    expect(relationshipLabelHe("OFFERED_TO_ME")).toBe("מציעים לי");
-    expect(relationshipLabelHe("TRADE_IN_CANDIDATE")).toBe("טרייד");
+    expect(relationshipLabelHe("OFFERED_TO_ME")).toBe("שוקל לקנות");
+    expect(relationshipLabelHe("TRADE_IN_CANDIDATE")).toBe("טרייד מלקוח");
     expect(relationshipLabelHe("OWNED")).toBe("הרכב שלי");
     expect(visibilityLabelHe("PRIVATE")).toBe("פרטי");
     expect(visibilityLabelHe("ANONYMOUS_NETWORK")).toBe("פעיל ברשת");

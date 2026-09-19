@@ -211,6 +211,19 @@ export async function resolveIntakeCandidate(input: {
   });
   if (!c) return { ok: false as const, error: "not_found" as const };
   if (c.status === "COMMITTED") {
+    if (typeof input.askingPrice === "number" && input.askingPrice > 0) {
+      const prev = (c.commercialJson ?? {}) as Record<string, unknown>;
+      await prisma.vehicleCandidate.update({
+        where: { id: c.id },
+        data: {
+          commercialJson: toPrismaJson({
+            ...prev,
+            askingPrice: input.askingPrice,
+            offeredPrice: input.askingPrice,
+          }),
+        },
+      });
+    }
     return {
       ok: true as const,
       vehicleId: c.committedVehicleId,

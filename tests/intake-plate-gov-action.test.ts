@@ -57,6 +57,27 @@ describe("intake plate identity — GOV NOT_FOUND", () => {
   });
 });
 
+describe("GOV failure copy vs OCR plate", () => {
+  it("does not claim the vehicle was unidentified when a plate exists", () => {
+    const update = govLookupUpdateForKnownPlate({
+      govState: "NOT_FOUND",
+      plateNormalized: "4656581",
+      govIdentity: null,
+      provenance: {},
+      lowOcr: false,
+    });
+    expect(update.status).toBe("READY");
+    expect(derivePlateIdentityState({
+      plateNormalized: "4656581",
+      govState: "TIMEOUT",
+    })).toBe("PLATE_FOUND_GOV_NOT_FOUND");
+    expect(derivePlateIdentityState({
+      plateNormalized: "4656581",
+      govState: "UNAVAILABLE",
+    })).toBe("PLATE_FOUND_GOV_UNAVAILABLE");
+  });
+});
+
 describe("action truth — gateway", () => {
   beforeEach(() => {
     gatewayRejectMock.mockReset();

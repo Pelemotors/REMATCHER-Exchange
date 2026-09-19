@@ -17,6 +17,8 @@ const FILTERS: InventoryFilter[] = [
   "attention",
   "interest",
   "missing_price",
+  "owned",
+  "review",
 ];
 
 const patchSchema = z
@@ -144,7 +146,10 @@ export async function PATCH(req: Request) {
       userId: principal.userId,
     });
     if (!result.ok) {
-      return v1Error(ctx, "RESOURCE_NOT_FOUND");
+      return v1Error(
+        ctx,
+        result.error === "not_found" ? "RESOURCE_NOT_FOUND" : "RESOURCE_CONFLICT"
+      );
     }
     return v1Json(ctx, {
       ok: true,

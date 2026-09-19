@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { publicThumbUrlForDisplayKey } from "@/lib/media/storage";
+import { vehicleCapabilities } from "@/services/vehicles/vehicle-capabilities";
 
 export async function getVehicleForDealer(dealerId: string, vehicleId: string) {
   const vehicle = await prisma.vehicle.findFirst({
@@ -55,6 +56,10 @@ export async function getVehicleForDealer(dealerId: string, vehicleId: string) {
     openInterestCount,
     pendingValidationCount,
     thumbUrl: primary ? publicThumbUrlForDisplayKey(primary.storageKey) : null,
+    capabilities: vehicleCapabilities({
+      dealerRelationship: vehicle.dealerRelationship,
+      status: vehicle.status,
+    }),
     media: vehicle.media.map((m) => ({
       id: m.id,
       category: m.category,

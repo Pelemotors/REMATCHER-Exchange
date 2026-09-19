@@ -115,6 +115,15 @@ export async function applyCandidateIntent(input: {
 
   // EXTERNAL is investigation-only: record intent, do not create inventory/workspace vehicle.
   if (input.intent === "EXTERNAL") {
+    if (candidate.dealerIntent === "EXTERNAL") {
+      return {
+        ok: true as const,
+        vehicleId: null,
+        intent: input.intent,
+        deferredCommit: true as const,
+        idempotent: true as const,
+      };
+    }
     await prisma.vehicleCandidate.update({
       where: { id: candidate.id },
       data: { dealerIntent: input.intent },

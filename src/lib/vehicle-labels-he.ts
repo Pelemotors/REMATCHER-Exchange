@@ -20,11 +20,11 @@ export function relationshipLabelHe(code: DealerRelationshipCode): string {
     case "INVENTORY":
       return "במלאי";
     case "OFFERED_TO_ME":
-      return "מציעים לי";
+      return "שוקל לקנות";
     case "TRADE_IN_CANDIDATE":
-      return "טרייד";
+      return "טרייד מלקוח";
     case "EXTERNAL":
-      return "רכב שאני בודק";
+      return "בדיקה בלבד";
     default:
       return "רכב";
   }

@@ -42,6 +42,7 @@ export async function POST(req: Request) {
     confirmExistingVehicleId?: string | null;
     createNewDespiteExisting?: boolean;
     reject?: boolean;
+    askingPrice?: number | null;
   };
 
   if (!body.candidateId) {
@@ -52,6 +53,8 @@ export async function POST(req: Request) {
     dealerId,
     candidateId: body.candidateId,
     detectedPlate: body.detectedPlate,
+    askingPrice:
+      typeof body.askingPrice === "number" ? body.askingPrice : undefined,
     mediaCategories: body.mediaCategories,
     confirmExistingVehicleId: body.confirmExistingVehicleId,
     createNewDespiteExisting: body.createNewDespiteExisting,

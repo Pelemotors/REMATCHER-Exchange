@@ -31,10 +31,20 @@ const INDEX_WORDS: Array<{ re: RegExp; index: number }> = [
 ];
 
 function detectIntent(fragment: string): IntakeIntentKind | null {
-  if (/טרייד|trade/i.test(fragment)) return "TRADE_IN_CANDIDATE";
-  if (/מציעים|מציע|offered/i.test(fragment)) return "OFFERED_TO_ME";
-  if (/רק בודק|בדיקה|external|רק לבדוק/i.test(fragment)) return "EXTERNAL";
-  if (/למלאי|inventory|owned|(?:^|[\s,])שלי(?=[\s,]|$)/i.test(fragment)) {
+  if (/טרייד מלקוח|טרייד|trade/i.test(fragment)) return "TRADE_IN_CANDIDATE";
+  if (/שוקל לקנות|מציעים|מציע|offered/i.test(fragment)) return "OFFERED_TO_ME";
+  if (
+    /בדיקה בלבד|רק בודק|(?:^|[\s,])בודק(?:[\s,]|$)|בדיקה(?!ת)|external|רק לבדוק/i.test(
+      fragment
+    )
+  ) {
+    return "EXTERNAL";
+  }
+  if (
+    /להוסיף למלאי|למלאי|inventory|owned|(?:^|[\s,])שלי(?=[\s,]|$)/i.test(
+      fragment
+    )
+  ) {
     return "OWNED";
   }
   return null;
@@ -97,10 +107,31 @@ export function parseIntakeIntentText(message: string): ParsedIntakeIntent {
 
 export function intentFromButton(value: string): IntakeIntentKind | null {
   const v = value.trim();
-  if (v === "OWNED" || v === "למלאי" || v === "למלאי שלי") return "OWNED";
-  if (v === "OFFERED_TO_ME" || v === "מציעים לי") return "OFFERED_TO_ME";
-  if (v === "TRADE_IN_CANDIDATE" || v === "טרייד") return "TRADE_IN_CANDIDATE";
-  if (v === "EXTERNAL" || v === "רק בודק") return "EXTERNAL";
+  if (
+    v === "OWNED" ||
+    v === "למלאי" ||
+    v === "למלאי שלי" ||
+    v === "להוסיף למלאי"
+  ) {
+    return "OWNED";
+  }
+  if (
+    v === "OFFERED_TO_ME" ||
+    v === "מציעים לי" ||
+    v === "שוקל לקנות"
+  ) {
+    return "OFFERED_TO_ME";
+  }
+  if (
+    v === "TRADE_IN_CANDIDATE" ||
+    v === "טרייד" ||
+    v === "טרייד מלקוח"
+  ) {
+    return "TRADE_IN_CANDIDATE";
+  }
+  if (v === "EXTERNAL" || v === "רק בודק" || v === "בדיקה בלבד") {
+    return "EXTERNAL";
+  }
   return detectIntent(v);
 }
 
