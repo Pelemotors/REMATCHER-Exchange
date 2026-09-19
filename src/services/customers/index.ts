@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { toPrismaJson } from "@/lib/prisma-json";
 import { normalizePhoneIL } from "@/lib/phone";
-import type { CustomerStatus, Prisma } from "@prisma/client";
+import { Prisma, type CustomerStatus } from "@prisma/client";
 
 export type UpsertCustomerInput = {
   dealerId: string;
@@ -10,6 +10,8 @@ export type UpsertCustomerInput = {
   phone?: string | null;
   notes?: string | null;
   source?: Record<string, unknown>;
+  /** Catalog / inbound sources must not overwrite an existing customer's name/notes. */
+  preserveExisting?: boolean;
 };
 
 /**
@@ -34,8 +36,9 @@ export async function upsertCustomerForDealer(
       },
     });
     if (existing) {
-      const nextName =
-        !existing.name && name
+      const nextName = input.preserveExisting
+        ? existing.name ?? name
+        : !existing.name && name
           ? name
           : existing.name && name && namesSoftMatch(existing.name, name)
             ? existing.name
@@ -44,10 +47,12 @@ export async function upsertCustomerForDealer(
         where: { id: existing.id },
         data: {
           name: nextName,
-          rawPhone: input.phone ?? existing.rawPhone,
-          ...(input.notes ? { notes: input.notes } : {}),
+          rawPhone: existing.rawPhone ?? input.phone ?? null,
+          ...(input.preserveExisting || !input.notes
+            ? {}
+            : { notes: input.notes }),
           ...(input.source
-            ? { sourceJson: toPrismaJson({ ...(existing.sourceJson as object), ...input.source }) }
+            ? { sourceJson: toPrismaJson({ ...(existing.sourceJson as object ?? {}), ...input.source }) }
             : {}),
         },
       });
@@ -63,25 +68,54 @@ export async function upsertCustomerForDealer(
     }
   }
 
-  const created = await prisma.customer.create({
-    data: {
-      dealerId: input.dealerId,
-      name,
-      normalizedPhone,
-      rawPhone: input.phone ?? null,
-      notes: input.notes ?? null,
-      sourceJson: input.source ? toPrismaJson(input.source) : undefined,
-    },
-  });
-  return {
-    customer: {
-      id: created.id,
-      name: created.name,
-      normalizedPhone: created.normalizedPhone,
-    },
-    created: true,
-    linkedExisting: false,
-  };
+  try {
+    const created = await prisma.customer.create({
+      data: {
+        dealerId: input.dealerId,
+        name,
+        normalizedPhone,
+        rawPhone: input.phone ?? null,
+        notes: input.notes ?? null,
+        sourceJson: input.source ? toPrismaJson(input.source) : undefined,
+      },
+    });
+    return {
+      customer: {
+        id: created.id,
+        name: created.name,
+        normalizedPhone: created.normalizedPhone,
+      },
+      created: true,
+      linkedExisting: false,
+    };
+  } catch (err) {
+    if (
+      normalizedPhone &&
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      const raced = await prisma.customer.findUnique({
+        where: {
+          dealerId_normalizedPhone: {
+            dealerId: input.dealerId,
+            normalizedPhone,
+          },
+        },
+      });
+      if (raced) {
+        return {
+          customer: {
+            id: raced.id,
+            name: raced.name,
+            normalizedPhone: raced.normalizedPhone,
+          },
+          created: false,
+          linkedExisting: true,
+        };
+      }
+    }
+    throw err;
+  }
 }
 
 function namesSoftMatch(a: string, b: string): boolean {

@@ -185,8 +185,8 @@ describe("catalog WhatsApp interest", () => {
       "utf8"
     );
     expect(home).toContain("צור קשר ב-WhatsApp");
-    expect(home).toContain("catalogVehicleWhatsAppHref");
+    expect(home).toContain("/out/whatsapp/");
     expect(detail).toContain("צור קשר ב-WhatsApp");
-    expect(detail).toContain("catalogVehicleWhatsAppHref");
+    expect(detail).toContain("/out/whatsapp/");
   });
 });

@@ -28,6 +28,7 @@ describe("public catalog never leaks dealer pricing", () => {
     expect(src).toMatch(/finance:\s*finance\s*\?\s*\{\s*monthlyIls:/);
     expect(src).not.toMatch(/annualRate/);
     expect(src).not.toMatch(/conditionClass/);
+    expect(src).not.toMatch(/conditionNotes/);
   });
 
   it("public catalog pages serialize only retailPrice", () => {

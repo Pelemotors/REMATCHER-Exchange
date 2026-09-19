@@ -18,6 +18,10 @@ export async function removeVehicleFromInventoryForDealer(input: {
     source: input.source ?? "inventory_api",
   });
   if (!result.ok) return result;
+  const { reconcileCatalogPublicationForVehicle } = await import(
+    "@/services/catalog/reconcile"
+  );
+  await reconcileCatalogPublicationForVehicle(input.vehicleId).catch(() => undefined);
   await applyVehicleArchiveLifecycle({
     vehicleId: input.vehicleId,
     dealerId: input.dealerId,

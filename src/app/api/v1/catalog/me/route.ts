@@ -5,12 +5,42 @@ import {
   createOrUpdateCatalog,
   getCatalogForDealer,
   setCatalogStatus,
+  type CatalogSettingsInput,
 } from "@/services/catalog/catalog-service";
+import { catalogDomainToV1 } from "@/services/catalog/v1-errors";
 import type { CatalogStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-/** Thin wrap of Web GET /api/catalog/me */
+function brandingFromBody(body: Record<string, unknown>): CatalogSettingsInput {
+  return {
+    slug: typeof body.slug === "string" ? body.slug : undefined,
+    displayName: typeof body.displayName === "string" ? body.displayName : undefined,
+    phone: body.phone === undefined ? undefined : (body.phone as string | null),
+    whatsapp:
+      body.whatsapp === undefined ? undefined : (body.whatsapp as string | null),
+    address: body.address === undefined ? undefined : (body.address as string | null),
+    description:
+      body.description === undefined ? undefined : (body.description as string | null),
+    logoUrl: body.logoUrl === undefined ? undefined : (body.logoUrl as string | null),
+    coverImageUrl:
+      body.coverImageUrl === undefined
+        ? undefined
+        : (body.coverImageUrl as string | null),
+    themeKey: typeof body.themeKey === "string" ? body.themeKey : undefined,
+    allowSearchIndexing:
+      typeof body.allowSearchIndexing === "boolean"
+        ? body.allowSearchIndexing
+        : undefined,
+    cityLabel:
+      body.cityLabel === undefined ? undefined : (body.cityLabel as string | null),
+    openingHoursJson:
+      body.openingHoursJson === undefined
+        ? undefined
+        : (body.openingHoursJson as CatalogSettingsInput["openingHoursJson"]),
+  };
+}
+
 export async function GET(req: Request) {
   const auth = await requireV1VerifiedDealer(req);
   if (!auth.ok) return auth.response;
@@ -19,7 +49,6 @@ export async function GET(req: Request) {
   return v1Json(ctx, { catalog });
 }
 
-/** Thin wrap of Web POST /api/catalog/me (upsert / enable / disable / draft). */
 export async function POST(req: Request) {
   const auth = await requireV1VerifiedDealer(req);
   if (!auth.ok) return auth.response;
@@ -43,23 +72,25 @@ export async function POST(req: Request) {
       statusMap[String(body.action)]
     );
     if (!result.ok) {
-      return v1Error(ctx, "RESOURCE_NOT_FOUND");
+      return v1Error(
+        ctx,
+        catalogDomainToV1(result.error),
+        "message" in result ? result.message : undefined
+      );
     }
     return v1Json(ctx, result);
   }
 
-  const result = await createOrUpdateCatalog(principal.dealerId, {
-    slug: body.slug as string | undefined,
-    displayName: body.displayName as string | undefined,
-    phone: body.phone as string | undefined,
-    whatsapp: body.whatsapp as string | undefined,
-    address: body.address as string | undefined,
-    description: body.description as string | undefined,
-    logoUrl: body.logoUrl as string | undefined,
-  });
-
+  const result = await createOrUpdateCatalog(
+    principal.dealerId,
+    brandingFromBody(body)
+  );
   if (!result.ok) {
-    return v1Error(ctx, "VALIDATION_INVALID_REQUEST");
+    return v1Error(ctx, catalogDomainToV1(result.error), result.message);
   }
   return v1Json(ctx, result);
+}
+
+export async function PATCH(req: Request) {
+  return POST(req);
 }

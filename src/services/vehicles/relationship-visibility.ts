@@ -79,6 +79,10 @@ export async function setVehicleRelationship(params: {
       ...(forcePrivate ? { visibility: "PRIVATE" } : {}),
     },
   });
+  const { reconcileCatalogPublicationForVehicle } = await import(
+    "@/services/catalog/reconcile"
+  );
+  await reconcileCatalogPublicationForVehicle(updated.id).catch(() => undefined);
   return { ok: true as const, vehicle: updated };
 }
 

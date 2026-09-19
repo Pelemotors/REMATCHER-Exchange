@@ -425,3 +425,105 @@
   padding: 40px 16px;
   color: var(--rm2-text-secondary);
 }
+
+.previewBanner {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(212, 175, 59, 0.12);
+  border: 1px solid rgba(212, 175, 59, 0.35);
+  color: var(--rm2-gold);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--rm2-border-strong);
+  background: var(--rm2-surface-raised);
+  color: var(--rm2-text-secondary);
+  font-size: 0.8rem;
+}
+
+.leadCard {
+  margin-top: 28px;
+  padding: 20px;
+  border-radius: 16px;
+  background: #f6f3ec;
+  color: #14181c;
+  border: 1px solid rgba(20, 24, 28, 0.08);
+}
+
+.leadTitle {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.leadHint {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.leadField {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.leadField label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.leadField input,
+.leadField textarea {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d4d0c8;
+  background: #fff;
+  font: inherit;
+}
+
+.leadField textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+}
+
+.leadError {
+  margin: 0 0 10px;
+  color: #9b1c1c;
+  font-size: 0.85rem;
+}
+
+.stickyBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 0 0;
+  background: linear-gradient(180deg, transparent, rgba(7, 11, 14, 0.92) 30%);
+}
+
+.cityLabel {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--rm2-text-muted);
+}

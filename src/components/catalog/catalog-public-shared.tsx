@@ -63,4 +63,79 @@ export function CatalogPoweredBy() {
   );
 }
 
+export function PublicDealerHeader({
+  catalog,
+}: {
+  catalog: {
+    displayName: string;
+    description?: string | null;
+    address?: string | null;
+    cityLabel?: string | null;
+    logoUrl?: string | null;
+  };
+}) {
+  const initial = catalog.displayName.trim().charAt(0).toUpperCase() || "R";
+  return (
+    <div className={styles.brandBlock}>
+      {catalog.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={catalog.logoUrl} alt="" className={styles.logo} />
+      ) : (
+        <div className={styles.logoFallback} aria-hidden>
+          {initial}
+        </div>
+      )}
+      <div>
+        <h1 className={styles.displayName}>{catalog.displayName}</h1>
+        {catalog.description && (
+          <p className={styles.description}>{catalog.description}</p>
+        )}
+        {(catalog.cityLabel || catalog.address) && (
+          <p className={styles.cityLabel}>{catalog.cityLabel || catalog.address}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function PublicContactActions({
+  phoneHref,
+  whatsappHref,
+  primaryLabel = "WhatsApp",
+}: {
+  phoneHref: string | null;
+  whatsappHref: string | null;
+  primaryLabel?: string;
+}) {
+  return (
+    <div className={styles.contactRow}>
+      {phoneHref && (
+        <a className={styles.contactBtn} href={phoneHref}>
+          התקשר
+        </a>
+      )}
+      {whatsappHref && (
+        <a
+          className={styles.contactBtnPrimary}
+          href={whatsappHref}
+          rel="noopener noreferrer"
+        >
+          {primaryLabel}
+        </a>
+      )}
+    </div>
+  );
+}
+
+export function PublicPoweredBy() {
+  return (
+    <p className={styles.powered}>
+      מופעל על ידי{" "}
+      <a className={styles.poweredLink} href="https://exchange.rematcher.co.il">
+        REMATCHER
+      </a>
+    </p>
+  );
+}
+
 export { styles as catalogStyles };

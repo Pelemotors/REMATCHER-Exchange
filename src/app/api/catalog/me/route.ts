@@ -46,6 +46,11 @@ export async function POST(req: Request) {
     address: body.address,
     description: body.description,
     logoUrl: body.logoUrl,
+    coverImageUrl: body.coverImageUrl,
+    themeKey: body.themeKey,
+    allowSearchIndexing: body.allowSearchIndexing,
+    cityLabel: body.cityLabel,
+    openingHoursJson: body.openingHoursJson,
   });
 
   if (!result.ok) {

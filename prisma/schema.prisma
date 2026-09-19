@@ -175,8 +175,16 @@ model DealerCatalog {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  coverImageUrl        String?
+  themeKey             String?  @default("MIDNIGHT_GOLD")
+  openingHoursJson     Json?
+  allowSearchIndexing  Boolean  @default(false)
+  cityLabel            String?
+
   dealer       Dealer               @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   publications CatalogPublication[]
+  leads        CatalogLead[]
+  events       CatalogEvent[]
 
   @@index([status, slug])
 }
@@ -194,13 +202,76 @@ model CatalogPublication {
   unpublishedAt DateTime?
   /** Optional public monthly-payment simulation. Default off. */
   showMonthlyFinance Boolean @default(false)
+  publicId           String  @unique
+  sortOrder          Int     @default(0)
+  showPrice          Boolean @default(true)
+  publicDescription  String?
 
   catalog DealerCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
   vehicle Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  leads   CatalogLead[]
+  events  CatalogEvent[]
 
   @@unique([catalogId, vehicleId])
   @@index([catalogId, isActive, publishedAt(sort: Desc)])
   @@index([vehicleId, isActive])
+}
+
+enum CatalogLeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CLOSED
+  SPAM
+}
+
+model CatalogLead {
+  id                 String            @id @default(cuid())
+  catalogId          String
+  dealerId           String
+  publicationId      String?
+  vehicleId          String?
+  customerId         String?
+  name               String
+  rawPhone           String
+  normalizedPhone    String
+  message            String?
+  source             String            @default("PUBLIC_FORM")
+  status             CatalogLeadStatus @default(NEW)
+  clientSubmissionId String            @unique
+  consentVersion     String?
+  consentedAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  catalog     DealerCatalog        @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  publication CatalogPublication?  @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  customer    Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([catalogId, createdAt(sort: Desc)])
+  @@index([dealerId, status, createdAt(sort: Desc)])
+  @@index([normalizedPhone, catalogId, createdAt(sort: Desc)])
+}
+
+model CatalogEvent {
+  id            String   @id @default(cuid())
+  clientEventId String?  @unique
+  catalogId     String
+  publicationId String?
+  vehicleId     String?
+  eventType     String
+  sessionHash   String?
+  referrerHost  String?
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  createdAt     DateTime @default(now())
+
+  catalog     DealerCatalog       @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  publication CatalogPublication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+
+  @@index([catalogId, eventType, createdAt])
+  @@index([catalogId, createdAt])
 }
 
 // ─── Customer (Person of a Dealer — ≠ Demand) ───────────────────
@@ -221,6 +292,7 @@ model Customer {
 
   dealer  Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   demands Demand[]
+  catalogLeads CatalogLead[]
 
   @@index([dealerId, status, updatedAt(sort: Desc)])
   @@index([dealerId, normalizedPhone])
@@ -954,6 +1026,7 @@ enum NotificationType {
   OUTCOME_REMINDER
   INVENTORY_ENRICHMENT
   SYSTEM
+  CATALOG_LEAD
 }
 
 model PushSubscription {

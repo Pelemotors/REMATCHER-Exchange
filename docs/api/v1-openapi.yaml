@@ -91,6 +91,113 @@ paths:
           description: RESOURCE_NOT_FOUND
         "409":
           description: MATCH_VEHICLE_UNAVAILABLE
+  /api/v1/catalog/me:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dealer catalog with Backend-authored publicUrl
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: upsert branding or action enable/disable/draft
+        "400":
+          description: CATALOG_SLUG_INVALID / CATALOG_SLUG_RESERVED
+        "409":
+          description: CATALOG_SLUG_TAKEN / CATALOG_NO_CONTACT_METHOD / CATALOG_NO_PUBLISHED_VEHICLES
+    patch:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: branding fields
+  /api/v1/catalog/status:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: DRAFT / ENABLED / DISABLED
+        "409":
+          description: CATALOG_NOT_READY family
+  /api/v1/catalog/publish:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: publish one vehicle
+        "409":
+          description: CATALOG_VEHICLE_NOT_ELIGIBLE
+  /api/v1/catalog/unpublish:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: unpublish one vehicle
+  /api/v1/catalog/publications:
+    put:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: desired-state vehicleIds, all-or-nothing
+        "409":
+          description: CATALOG_VEHICLE_NOT_ELIGIBLE
+  /api/v1/catalog/publications/{publicId}:
+    patch:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: showPrice / sortOrder / publicDescription
+        "404":
+          description: CATALOG_PUBLICATION_NOT_FOUND
+  /api/v1/catalog/logo:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: multipart file → logoUrl
+  /api/v1/catalog/cover:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: multipart file → coverImageUrl
+  /api/v1/catalog/preview-token:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: short-lived CATALOG_PREVIEW token + previewUrl
+  /api/v1/catalog/leads:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: CatalogLead list for the dealer
+  /api/v1/catalog/analytics:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [7d, 30d]
+      responses:
+        "200":
+          description: views / WhatsApp / phone / leads KPI
 components:
   securitySchemes:
     bearerAuth:

@@ -46,6 +46,10 @@ export async function markVehicleSoldForDealer(input: {
         source: String(input.source ?? "domain"),
       }).catch(() => undefined);
     }
+    const { reconcileCatalogPublicationForVehicle } = await import(
+      "@/services/catalog/reconcile"
+    );
+    await reconcileCatalogPublicationForVehicle(vehicle.id).catch(() => undefined);
     return { ok: true as const, vehicle, alreadySold: true as const };
   }
 
@@ -72,6 +76,11 @@ export async function markVehicleSoldForDealer(input: {
 
     return row;
   });
+
+  const { reconcileCatalogPublicationForVehicle } = await import(
+    "@/services/catalog/reconcile"
+  );
+  await reconcileCatalogPublicationForVehicle(updated.id).catch(() => undefined);
 
   if (!input.skipEventLog) {
     await logAppEvent({

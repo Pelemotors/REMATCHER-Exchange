@@ -1,9 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type {
-  CatalogStatus,
-  DealerCatalog,
+import {
   Prisma,
+  type CatalogStatus,
+  type DealerCatalog,
 } from "@prisma/client";
 import {
   normalizeCatalogSlug,
@@ -21,6 +21,10 @@ import {
 import { processVehicleImage } from "@/lib/media/process";
 import { randomBytes } from "node:crypto";
 import { simulateCatalogFinance } from "@/services/catalog/finance-rules";
+import { catalogPublicUrl } from "@/services/catalog/public-url";
+import { newCatalogPublicId } from "@/services/catalog/public-id";
+import { verifyCatalogPreviewToken } from "@/services/catalog/preview-token";
+import { assertCatalogPublishReady } from "@/services/catalog/readiness";
 
 export {
   CATALOG_ELIGIBLE_RELATIONSHIPS,
@@ -29,7 +33,7 @@ export {
 } from "@/services/catalog/eligibility";
 
 export async function getCatalogForDealer(dealerId: string) {
-  return prisma.dealerCatalog.findUnique({
+  const catalog = await prisma.dealerCatalog.findUnique({
     where: { dealerId },
     include: {
       publications: {
@@ -37,15 +41,38 @@ export async function getCatalogForDealer(dealerId: string) {
         select: {
           id: true,
           vehicleId: true,
+          publicId: true,
           publishedAt: true,
           isActive: true,
           showMonthlyFinance: true,
+          showPrice: true,
+          sortOrder: true,
+          publicDescription: true,
         },
-        orderBy: { publishedAt: "desc" },
+        orderBy: [{ sortOrder: "asc" }, { publishedAt: "desc" }],
       },
       _count: { select: { publications: { where: { isActive: true } } } },
     },
   });
+  if (!catalog) return null;
+  return serializeDealerCatalog(catalog);
+}
+
+export function serializeDealerCatalog<
+  T extends {
+    slug: string;
+    _count?: { publications: number };
+    publications?: unknown[];
+  },
+>(catalog: T) {
+  const vehicleCount =
+    catalog._count?.publications ??
+    (Array.isArray(catalog.publications) ? catalog.publications.length : 0);
+  return {
+    ...catalog,
+    publicUrl: catalogPublicUrl(catalog.slug),
+    vehicleCount,
+  };
 }
 
 export type CatalogSettingsInput = {
@@ -56,6 +83,11 @@ export type CatalogSettingsInput = {
   address?: string | null;
   description?: string | null;
   logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  themeKey?: string | null;
+  openingHoursJson?: Prisma.InputJsonValue | null;
+  allowSearchIndexing?: boolean;
+  cityLabel?: string | null;
 };
 
 export async function createOrUpdateCatalog(
@@ -100,10 +132,19 @@ export async function createOrUpdateCatalog(
         address: input.address ?? null,
         description: input.description ?? null,
         logoUrl: input.logoUrl ?? null,
+        coverImageUrl: input.coverImageUrl ?? null,
+        themeKey: input.themeKey ?? "MIDNIGHT_GOLD",
+        openingHoursJson: input.openingHoursJson ?? undefined,
+        allowSearchIndexing: input.allowSearchIndexing ?? false,
+        cityLabel: input.cityLabel ?? null,
         status: "DRAFT",
       },
     });
-    return { ok: true as const, catalog, created: true as const };
+    return {
+      ok: true as const,
+      catalog: serializeDealerCatalog({ ...catalog, publications: [], _count: { publications: 0 } }),
+      created: true as const,
+    };
   }
 
   const data: Prisma.DealerCatalogUpdateInput = {};
@@ -119,6 +160,15 @@ export async function createOrUpdateCatalog(
   if (input.address !== undefined) data.address = input.address;
   if (input.description !== undefined) data.description = input.description;
   if (input.logoUrl !== undefined) data.logoUrl = input.logoUrl;
+  if (input.coverImageUrl !== undefined) data.coverImageUrl = input.coverImageUrl;
+  if (input.themeKey !== undefined) data.themeKey = input.themeKey ?? "MIDNIGHT_GOLD";
+  if (input.openingHoursJson !== undefined) {
+    data.openingHoursJson = input.openingHoursJson ?? Prisma.JsonNull;
+  }
+  if (input.allowSearchIndexing !== undefined) {
+    data.allowSearchIndexing = input.allowSearchIndexing;
+  }
+  if (input.cityLabel !== undefined) data.cityLabel = input.cityLabel;
 
   if (input.slug !== undefined) {
     const slugCheck = validateCatalogSlug(input.slug);
@@ -142,7 +192,11 @@ export async function createOrUpdateCatalog(
     where: { id: existing.id },
     data,
   });
-  return { ok: true as const, catalog, created: false as const };
+  return {
+    ok: true as const,
+    catalog: serializeDealerCatalog({ ...catalog, publications: [] }),
+    created: false as const,
+  };
 }
 
 export async function isSlugAvailable(
@@ -165,6 +219,10 @@ export async function enableCatalog(dealerId: string) {
     where: { dealerId },
   });
   if (!catalog) return { ok: false as const, error: "not_found" as const };
+  const ready = await assertCatalogPublishReady(dealerId);
+  if (!ready.ok) {
+    return { ok: false as const, error: ready.code, message: ready.message };
+  }
   const updated = await prisma.dealerCatalog.update({
     where: { id: catalog.id },
     data: {
@@ -172,7 +230,7 @@ export async function enableCatalog(dealerId: string) {
       publishedAt: catalog.publishedAt ?? new Date(),
     },
   });
-  return { ok: true as const, catalog: updated };
+  return { ok: true as const, catalog: serializeDealerCatalog({ ...updated, publications: [] }) };
 }
 
 export async function disableCatalog(dealerId: string) {
@@ -184,7 +242,7 @@ export async function disableCatalog(dealerId: string) {
     where: { id: catalog.id },
     data: { status: "DISABLED" },
   });
-  return { ok: true as const, catalog: updated };
+  return { ok: true as const, catalog: serializeDealerCatalog({ ...updated, publications: [] }) };
 }
 
 export async function setCatalogStatus(
@@ -201,7 +259,7 @@ export async function setCatalogStatus(
     where: { id: catalog.id },
     data: { status: "DRAFT" },
   });
-  return { ok: true as const, catalog: updated };
+  return { ok: true as const, catalog: serializeDealerCatalog({ ...updated, publications: [] }) };
 }
 
 export async function publishVehicleToCatalog(params: {
@@ -251,6 +309,7 @@ export async function publishVehicleToCatalog(params: {
     create: {
       catalogId: catalog.id,
       vehicleId: vehicle.id,
+      publicId: newCatalogPublicId(),
       isActive: true,
       publishedAt: new Date(),
     },
@@ -378,7 +437,6 @@ export async function bulkPublishVehiclesToCatalog(params: {
 }
 
 const publicVehicleSelect = {
-  id: true,
   make: true,
   model: true,
   trim: true,
@@ -388,7 +446,8 @@ const publicVehicleSelect = {
   ownershipHand: true,
   region: true,
   retailPrice: true,
-  conditionNotes: true,
+  status: true,
+  dealerRelationship: true,
   media: {
     orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }],
     take: 8,
@@ -400,19 +459,27 @@ const publicVehicleSelect = {
   },
 } satisfies Prisma.VehicleSelect;
 
+type PublicPublicationFields = {
+  publicId: string;
+  showMonthlyFinance: boolean;
+  showPrice: boolean;
+  publicDescription: string | null;
+};
+
 function mapPublicVehicle(
   v: Prisma.VehicleGetPayload<{ select: typeof publicVehicleSelect }>,
-  publication?: { showMonthlyFinance: boolean }
+  publication: PublicPublicationFields
 ) {
   const primary = v.media[0];
+  const retailPrice = publication.showPrice ? v.retailPrice : null;
   const finance = simulateCatalogFinance({
-    enabled: Boolean(publication?.showMonthlyFinance),
-    retailPrice: v.retailPrice,
+    enabled: Boolean(publication.showMonthlyFinance),
+    retailPrice,
     year: v.year,
     mileage: v.mileage,
   });
   return {
-    id: v.id,
+    publicId: publication.publicId,
     make: v.make,
     model: v.model,
     trim: v.trim,
@@ -421,8 +488,8 @@ function mapPublicVehicle(
     color: v.color,
     ownershipHand: v.ownershipHand,
     region: v.region,
-    retailPrice: v.retailPrice,
-    conditionNotes: v.conditionNotes,
+    retailPrice,
+    publicDescription: publication.publicDescription,
     title: [v.make, v.model, v.trim].filter(Boolean).join(" ") || "רכב",
     imageUrl: primary ? publicUrlForStorageKey(primary.storageKey) : null,
     thumbUrl: primary
@@ -440,14 +507,18 @@ function mapPublicVehicle(
   };
 }
 
-export async function getPublicCatalogBySlug(slug: string) {
+export async function getPublicCatalogBySlug(
+  slug: string,
+  opts?: { previewToken?: string | null }
+) {
   const normalized = normalizeCatalogSlug(slug);
   if (!normalized) return null;
 
   const catalog = await prisma.dealerCatalog.findFirst({
-    where: { slug: normalized, status: "ENABLED" },
+    where: { slug: normalized },
     select: {
       id: true,
+      dealerId: true,
       slug: true,
       displayName: true,
       phone: true,
@@ -455,16 +526,35 @@ export async function getPublicCatalogBySlug(slug: string) {
       address: true,
       description: true,
       logoUrl: true,
+      coverImageUrl: true,
+      cityLabel: true,
+      themeKey: true,
+      allowSearchIndexing: true,
       publishedAt: true,
       status: true,
       dealer: { select: { phone: true } },
     },
   });
-  return catalog;
+  if (!catalog) return null;
+  const allowed =
+    catalog.status === "ENABLED" ||
+    Boolean(
+      opts?.previewToken &&
+        verifyCatalogPreviewToken(opts.previewToken, {
+          catalogId: catalog.id,
+          dealerId: catalog.dealerId,
+        })
+    );
+  if (!allowed) return null;
+  const { dealerId: _dealerId, ...publicCatalog } = catalog;
+  return publicCatalog;
 }
 
-export async function listPublicCatalogVehicles(slug: string) {
-  const catalog = await getPublicCatalogBySlug(slug);
+export async function listPublicCatalogVehicles(
+  slug: string,
+  opts?: { previewToken?: string | null }
+) {
+  const catalog = await getPublicCatalogBySlug(slug, opts);
   if (!catalog) return null;
 
   const rows = await prisma.catalogPublication.findMany({
@@ -476,7 +566,7 @@ export async function listPublicCatalogVehicles(slug: string) {
         dealerRelationship: { in: CATALOG_ELIGIBLE_RELATIONSHIPS },
       },
     },
-    orderBy: { publishedAt: "desc" },
+    orderBy: [{ sortOrder: "asc" }, { publishedAt: "desc" }],
     include: {
       vehicle: { select: publicVehicleSelect },
     },
@@ -486,6 +576,7 @@ export async function listPublicCatalogVehicles(slug: string) {
   return {
     catalog,
     vehicles,
+    preview: catalog.status !== "ENABLED",
     hasFinanceDisplay: vehicles.some((v) => v.finance != null),
   };
 }
@@ -493,32 +584,190 @@ export async function listPublicCatalogVehicles(slug: string) {
 export async function getPublicCatalogVehicle(params: {
   slug: string;
   vehicleId: string;
+  previewToken?: string | null;
 }) {
-  const catalog = await getPublicCatalogBySlug(params.slug);
+  const catalog = await getPublicCatalogBySlug(params.slug, {
+    previewToken: params.previewToken,
+  });
   if (!catalog) return null;
 
-  const pub = await prisma.catalogPublication.findFirst({
-    where: {
-      catalogId: catalog.id,
-      vehicleId: params.vehicleId,
-      isActive: true,
-      vehicle: {
-        status: "ACTIVE",
-        dealerRelationship: { in: CATALOG_ELIGIBLE_RELATIONSHIPS },
-      },
-    },
-    include: {
-      vehicle: { select: publicVehicleSelect },
-    },
+  let pub = await prisma.catalogPublication.findFirst({
+    where: { catalogId: catalog.id, publicId: params.vehicleId },
+    include: { vehicle: { select: publicVehicleSelect } },
   });
+  let resolvedViaLegacy = false;
+  if (!pub) {
+    pub = await prisma.catalogPublication.findFirst({
+      where: { catalogId: catalog.id, vehicleId: params.vehicleId },
+      include: { vehicle: { select: publicVehicleSelect } },
+    });
+    resolvedViaLegacy = Boolean(pub);
+  }
   if (!pub) return null;
+
+  const eligible =
+    pub.isActive &&
+    pub.vehicle.status === "ACTIVE" &&
+    CATALOG_ELIGIBLE_RELATIONSHIPS.includes(pub.vehicle.dealerRelationship);
+
+  if (!eligible) {
+    return {
+      kind: "unavailable" as const,
+      catalog,
+      canonicalPublicId: pub.publicId,
+      resolvedViaLegacy,
+    };
+  }
 
   const vehicle = mapPublicVehicle(pub.vehicle, pub);
   return {
+    kind: "ok" as const,
     catalog,
     vehicle,
+    canonicalPublicId: pub.publicId,
+    resolvedViaLegacy,
+    preview: catalog.status !== "ENABLED",
     hasFinanceDisplay: vehicle.finance != null,
   };
+}
+
+export async function replaceCatalogPublications(params: {
+  dealerId: string;
+  vehicleIds: string[];
+}) {
+  const catalog = await prisma.dealerCatalog.findUnique({
+    where: { dealerId: params.dealerId },
+  });
+  if (!catalog) {
+    return { ok: false as const, error: "catalog_required" as const };
+  }
+
+  const uniqueIds = [...new Set(params.vehicleIds.filter(Boolean))];
+  const vehicles = await prisma.vehicle.findMany({
+    where: { id: { in: uniqueIds }, dealerId: params.dealerId },
+    select: {
+      id: true,
+      status: true,
+      dealerRelationship: true,
+      dealerId: true,
+    },
+  });
+  const found = new Map(vehicles.map((v) => [v.id, v]));
+  const failures: Array<{ vehicleId: string; error: string; message: string }> = [];
+  for (const vehicleId of uniqueIds) {
+    const vehicle = found.get(vehicleId);
+    if (!vehicle) {
+      failures.push({
+        vehicleId,
+        error: "not_found",
+        message: "הרכב לא נמצא במלאי שלך.",
+      });
+      continue;
+    }
+    const eligibility = checkCatalogPublishEligibility(vehicle, params.dealerId);
+    if (!eligibility.ok) {
+      failures.push({
+        vehicleId,
+        error: eligibility.code,
+        message: eligibility.message,
+      });
+    }
+  }
+  if (failures.length > 0) {
+    return { ok: false as const, error: "not_eligible" as const, failures };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.catalogPublication.updateMany({
+      where: {
+        catalogId: catalog.id,
+        vehicleId: { notIn: uniqueIds },
+        isActive: true,
+      },
+      data: { isActive: false, unpublishedAt: new Date() },
+    });
+    for (const [index, vehicleId] of uniqueIds.entries()) {
+      await tx.catalogPublication.upsert({
+        where: {
+          catalogId_vehicleId: { catalogId: catalog.id, vehicleId },
+        },
+        create: {
+          catalogId: catalog.id,
+          vehicleId,
+          publicId: newCatalogPublicId(),
+          isActive: true,
+          publishedAt: new Date(),
+          sortOrder: index,
+        },
+        update: {
+          isActive: true,
+          unpublishedAt: null,
+          publishedAt: new Date(),
+          sortOrder: index,
+        },
+      });
+    }
+  });
+
+  return { ok: true as const, catalog: await getCatalogForDealer(params.dealerId) };
+}
+
+export async function updateCatalogPublicationForDealer(params: {
+  dealerId: string;
+  publicId: string;
+  showPrice?: boolean;
+  showMonthlyFinance?: boolean;
+  sortOrder?: number;
+  publicDescription?: string | null;
+}) {
+  const catalog = await prisma.dealerCatalog.findUnique({
+    where: { dealerId: params.dealerId },
+  });
+  if (!catalog) {
+    return { ok: false as const, error: "catalog_required" as const };
+  }
+  const existing = await prisma.catalogPublication.findFirst({
+    where: { catalogId: catalog.id, publicId: params.publicId },
+    include: { vehicle: { select: { retailPrice: true } } },
+  });
+  if (!existing) {
+    return { ok: false as const, error: "not_found" as const };
+  }
+  if (params.showMonthlyFinance && existing.vehicle.retailPrice == null) {
+    return {
+      ok: false as const,
+      error: "retail_price_required" as const,
+      message: "יש להזין מחיר ללקוח כדי להציג החזר חודשי.",
+    };
+  }
+  const publication = await prisma.catalogPublication.update({
+    where: { id: existing.id },
+    data: {
+      ...(params.showPrice !== undefined ? { showPrice: params.showPrice } : {}),
+      ...(params.showMonthlyFinance !== undefined
+        ? { showMonthlyFinance: params.showMonthlyFinance }
+        : {}),
+      ...(params.sortOrder !== undefined ? { sortOrder: params.sortOrder } : {}),
+      ...(params.publicDescription !== undefined
+        ? { publicDescription: params.publicDescription }
+        : {}),
+    },
+  });
+  return { ok: true as const, publication };
+}
+
+export async function saveCatalogCover(params: {
+  dealerId: string;
+  bytes: Buffer;
+}) {
+  const processed = await processVehicleImage(params.bytes);
+  const token = randomBytes(12).toString("hex");
+  const storageKey = `catalogs/${params.dealerId}/cover-${token}.webp`;
+  await writeMediaFile(storageKey, processed.display);
+  const coverImageUrl = publicUrlForStorageKey(storageKey);
+  const result = await createOrUpdateCatalog(params.dealerId, { coverImageUrl });
+  if (!result.ok) return result;
+  return { ok: true as const, coverImageUrl };
 }
 
 export type DealerCatalogWithPubs = Awaited<
