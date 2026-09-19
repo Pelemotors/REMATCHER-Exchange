@@ -198,6 +198,22 @@ paths:
       responses:
         "200":
           description: views / WhatsApp / phone / leads KPI
+  /api/v1/sharing/resolve:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OutboundSharePayload for CATALOG / VEHICLE / DEMAND
+        "404":
+          description: RESOURCE_NOT_FOUND
+  /api/v1/sharing/events:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: AppEvent telemetry, opened not sent
 components:
   securitySchemes:
     bearerAuth:
