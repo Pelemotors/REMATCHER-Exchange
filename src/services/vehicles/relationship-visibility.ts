@@ -103,7 +103,7 @@ export async function setVehicleRelationship(params: {
   const { reconcileCatalogPublicationForVehicle } = await import(
     "@/services/catalog/reconcile"
   );
-  await reconcileCatalogPublicationForVehicle(updated.id).catch(() => undefined);
+  await reconcileCatalogPublicationForVehicle(updated.id);
   return { ok: true as const, vehicle: updated };
 }
 

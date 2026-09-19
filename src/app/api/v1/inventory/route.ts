@@ -92,11 +92,23 @@ export async function POST(req: Request) {
   const rawInput =
     typeof body.rawInput === "string" ? body.rawInput : null;
 
+  const relationshipRaw =
+    typeof body.dealerRelationship === "string" ? body.dealerRelationship : "";
+  const dealerRelationship =
+    relationshipRaw === "OFFERED_TO_ME" ||
+    relationshipRaw === "TRADE_IN_CANDIDATE" ||
+    relationshipRaw === "EXTERNAL" ||
+    relationshipRaw === "OWNED" ||
+    relationshipRaw === "INVENTORY"
+      ? relationshipRaw
+      : undefined;
+
   const result = await createVehicleForDealer({
     dealerId: principal.dealerId,
     userId: principal.userId,
     rawInput,
     normalizeFromRaw: Boolean(rawInput),
+    dealerRelationship,
     fields: rawInput
       ? undefined
       : {

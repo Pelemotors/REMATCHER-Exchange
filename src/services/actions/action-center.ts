@@ -121,7 +121,7 @@ export async function getActionCenter(dealerId: string): Promise<{
     }),
     prisma.informationRequest.findMany({
       where: { status: "OPEN", vehicle: { dealerId } },
-      select: { id: true, createdAt: true, candidateMatchId: true },
+      select: { id: true, createdAt: true, candidateMatchId: true, vehicleId: true },
       take: 20,
     }),
     prisma.catalogLead.findMany({
@@ -145,7 +145,7 @@ export async function getActionCenter(dealerId: string): Promise<{
       priority: 1,
       entityType: "SellerOpportunity",
       entityId: row.id,
-      href: `/opportunities?focus=${row.id}`,
+      href: `/opportunities/${row.id}`,
       createdAt: row.createdAt.toISOString(),
       urgent: true,
     });
@@ -173,7 +173,7 @@ export async function getActionCenter(dealerId: string): Promise<{
       priority: 1,
       entityType: "ValidationEvent",
       entityId: row.id,
-      href: `/validations?focus=${row.vehicleId}`,
+      href: `/validations/${row.id}`,
       createdAt: row.requestedAt.toISOString(),
       urgent: true,
     });
@@ -222,7 +222,9 @@ export async function getActionCenter(dealerId: string): Promise<{
       priority: 4,
       entityType: "InformationRequest",
       entityId: row.id,
-      href: `/inventory?enrich=1&focus=${row.candidateMatchId}`,
+      href: row.candidateMatchId
+        ? `/matches/${row.candidateMatchId}`
+        : `/inventory/${row.vehicleId}`,
       createdAt: row.createdAt.toISOString(),
       urgent: false,
     });
@@ -236,7 +238,7 @@ export async function getActionCenter(dealerId: string): Promise<{
       priority: 2,
       entityType: "CatalogLead",
       entityId: row.id,
-      href: `/customers?lead=${row.id}`,
+      href: `/catalog/leads/${row.id}`,
       createdAt: row.createdAt.toISOString(),
       urgent: false,
     });
@@ -255,7 +257,7 @@ export async function getActionCenter(dealerId: string): Promise<{
       priority: 2,
       entityType: "DealerOpportunity",
       entityId: row.id,
-      href: `/opportunities?focus=${row.id}`,
+      href: `/dealer-opportunities/${row.id}`,
       createdAt: row.createdAt.toISOString(),
       urgent: false,
     });

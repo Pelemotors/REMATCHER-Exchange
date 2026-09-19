@@ -184,6 +184,13 @@ vi.mock("@/services/exchange/events", () => ({
     return Promise.resolve(undefined);
   },
 }));
+vi.mock("@/services/catalog/reconcile", () => ({
+  reconcileCatalogForDealer: vi.fn().mockResolvedValue({
+    published: 0,
+    unpublished: 0,
+    policy: "MANUAL",
+  }),
+}));
 vi.mock("@/services/vehicles/relationship-visibility", async () => {
   const actual = await vi.importActual<
     typeof import("@/services/vehicles/relationship-visibility")

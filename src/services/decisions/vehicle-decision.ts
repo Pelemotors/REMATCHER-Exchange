@@ -589,7 +589,7 @@ export async function acceptDecision(input: {
       const { reconcileCatalogForDealer } = await import(
         "@/services/catalog/reconcile"
       );
-      await reconcileCatalogForDealer(input.dealerId).catch(() => undefined);
+      await reconcileCatalogForDealer(input.dealerId);
     }
   }
 

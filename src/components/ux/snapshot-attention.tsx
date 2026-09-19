@@ -76,7 +76,7 @@ export type AttentionItem = {
 
 function attentionHref(item: AttentionItem): string {
   if (item.href !== "/validations") return item.href;
-  return `/validations?focus=${encodeURIComponent(item.id)}`;
+  return `/validations/${encodeURIComponent(item.id)}`;
 }
 
 export function AttentionList({

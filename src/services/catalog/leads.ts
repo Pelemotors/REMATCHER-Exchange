@@ -139,7 +139,7 @@ export async function submitCatalogLead(input: SubmitCatalogLeadInput) {
       type: "CATALOG_LEAD",
       title: "פנייה חדשה מהקטלוג",
       body: `${name} השאיר פנייה בקטלוג הציבורי.`,
-      link: `/customers/${customer.customer.id}`,
+      link: `/catalog/leads/${lead.id}`,
       entityType: "CatalogLead",
       entityId: lead.id,
       sendPush: true,

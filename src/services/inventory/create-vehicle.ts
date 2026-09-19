@@ -294,11 +294,28 @@ export async function createVehicleForDealer(input: {
     }).catch(() => undefined);
   }
 
+  if (
+    vehicle.dealerRelationship === "OFFERED_TO_ME" ||
+    vehicle.dealerRelationship === "TRADE_IN_CANDIDATE"
+  ) {
+    const { openOrGetDecision } = await import(
+      "@/services/decisions/vehicle-decision"
+    );
+    await openOrGetDecision({
+      dealerId: input.dealerId,
+      vehicleId: vehicle.id,
+      type:
+        vehicle.dealerRelationship === "TRADE_IN_CANDIDATE"
+          ? "TRADE"
+          : "PURCHASE",
+    });
+  }
+
   if (!input.skipRematch && vehicle.mediaReady) {
     const { rematchAfterInventoryMutation } = await import("@/services/matching/inventory-rematch");
     await rematchAfterInventoryMutation({ vehicleId: vehicle.id, sellerDealerId: input.dealerId });
     const { reconcileCatalogForDealer } = await import("@/services/catalog/reconcile");
-    await reconcileCatalogForDealer(input.dealerId).catch(() => undefined);
+    await reconcileCatalogForDealer(input.dealerId);
   }
 
   return { ok: true as const, vehicle, source: input.source ?? "domain" };

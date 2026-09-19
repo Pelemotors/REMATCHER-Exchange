@@ -42,7 +42,7 @@ export async function removeVehicleFromInventoryForDealer(input: {
   const { reconcileCatalogPublicationForVehicle } = await import(
     "@/services/catalog/reconcile"
   );
-  await reconcileCatalogPublicationForVehicle(input.vehicleId).catch(() => undefined);
+  await reconcileCatalogPublicationForVehicle(input.vehicleId);
   await applyVehicleArchiveLifecycle({
     vehicleId: input.vehicleId,
     dealerId: input.dealerId,

@@ -6,10 +6,13 @@ export const SAFE_DEEP_LINK_PREFIXES = [
   "/home",
   "/matches",
   "/opportunities",
+  "/dealer-opportunities",
   "/inventory",
   "/demand",
   "/intake",
   "/validations",
+  "/catalog",
+  "/customers",
   "/reveals/",
   "/activity",
   "/account",
@@ -64,11 +67,19 @@ export function sanitizeReturnPath(
 }
 
 export function deepLinkForMatch(matchId: string): string {
-  return `/matches?focus=${encodeURIComponent(matchId)}`;
+  return `/matches/${encodeURIComponent(matchId)}`;
 }
 
 export function deepLinkForOpportunity(opportunityId: string): string {
-  return `/opportunities?focus=${encodeURIComponent(opportunityId)}`;
+  return `/opportunities/${encodeURIComponent(opportunityId)}`;
+}
+
+export function deepLinkForDealerOpportunity(opportunityId: string): string {
+  return `/dealer-opportunities/${encodeURIComponent(opportunityId)}`;
+}
+
+export function deepLinkForCatalogLead(leadId: string): string {
+  return `/catalog/leads/${encodeURIComponent(leadId)}`;
 }
 
 export function deepLinkForVehicle(
@@ -81,7 +92,7 @@ export function deepLinkForVehicle(
 }
 
 export function deepLinkForValidation(validationId: string): string {
-  return `/validations?focus=${encodeURIComponent(validationId)}`;
+  return `/validations/${encodeURIComponent(validationId)}`;
 }
 
 export function deepLinkForReveal(revealId: string): string {

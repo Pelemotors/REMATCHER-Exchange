@@ -40,6 +40,19 @@ export async function runLifecycleCatchUp(params?: {
   );
   const reconciliation = await reconcilePilotInconsistencies();
 
+  const stuckBatches = await prisma.intakeBatch.findMany({
+    where: {
+      status: { in: ["RECEIVED", "PROCESSING"] },
+      acknowledgedAt: { lte: new Date(now.getTime() - 2 * 60 * 1000) },
+    },
+    select: { id: true, dealerId: true },
+    take: 20,
+  });
+  const { processIntakeBatch } = await import("@/services/intake/process-batch");
+  for (const batch of stuckBatches) {
+    await processIntakeBatch(batch.dealerId, batch.id);
+  }
+
   await logEvent({
     eventType: "lifecycle_catchup_completed",
     entityType: "System",

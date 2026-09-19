@@ -151,7 +151,7 @@ function buildActionItems(
         href:
           firstOpp?.href ??
           (firstOpp?.id
-            ? `/opportunities?focus=${firstOpp.id}`
+            ? `/opportunities/${firstOpp.id}`
             : "/opportunities"),
       },
     });
@@ -174,7 +174,7 @@ function buildActionItems(
           type: "pending_action",
           title: v.title,
           body: isPrice ? "השלמת פרטים" : "נדרש אישור זמינות",
-          href: v.href ?? `/validations?focus=${v.id}`,
+          href: v.href ?? `/validations/${v.id}`,
         },
         listItem: { id: v.id, title: v.title, type: "validation" },
       });

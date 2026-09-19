@@ -62,7 +62,7 @@ export async function markVehicleSoldForDealer(input: {
     const { reconcileCatalogPublicationForVehicle } = await import(
       "@/services/catalog/reconcile"
     );
-    await reconcileCatalogPublicationForVehicle(vehicle.id).catch(() => undefined);
+    await reconcileCatalogPublicationForVehicle(vehicle.id);
     return { ok: true as const, vehicle, alreadySold: true as const };
   }
 
@@ -93,7 +93,7 @@ export async function markVehicleSoldForDealer(input: {
   const { reconcileCatalogPublicationForVehicle } = await import(
     "@/services/catalog/reconcile"
   );
-  await reconcileCatalogPublicationForVehicle(updated.id).catch(() => undefined);
+  await reconcileCatalogPublicationForVehicle(updated.id);
 
   if (!input.skipEventLog) {
     await logAppEvent({

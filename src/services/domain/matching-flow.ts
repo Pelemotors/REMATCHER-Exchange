@@ -34,7 +34,10 @@ import {
   marketSideFromDealerRow,
   marketsCompatible,
 } from "@/services/dealer/market-scope";
-import { maybeOpportunityFromNetworkMatch } from "@/services/opportunities/dealer-opportunity";
+import {
+  maybeOpportunityFromDemandForMyVehicle,
+  maybeOpportunityFromNetworkMatch,
+} from "@/services/opportunities/dealer-opportunity";
 import { COPY, BRAND } from "@/config/brand";
 
 import { createRevealFromMutualInterest } from "@/services/commercial/reveal-flow";
@@ -277,13 +280,21 @@ export async function runMatchingForDemand(demandId: string) {
       },
     });
 
-    void maybeOpportunityFromNetworkMatch({
+    await maybeOpportunityFromNetworkMatch({
       buyerDealerId: demand.dealerId,
       demandId,
       candidateMatchId: match.id,
       scoreBand: String(evaluationV2.band ?? evaluation.overallBand),
       score: evaluation.score,
-    }).catch(() => undefined);
+    });
+    await maybeOpportunityFromDemandForMyVehicle({
+      sellerDealerId: vehicle.dealerId,
+      vehicleId: vehicle.id,
+      demandId,
+      candidateMatchId: match.id,
+      scoreBand: String(evaluationV2.band ?? evaluation.overallBand),
+      score: evaluation.score,
+    });
 
     if (isPotential) {
       await emitExchangeEvent({
@@ -393,7 +404,7 @@ export async function runMatchingForDemand(demandId: string) {
         },
       });
       if (!existing) {
-        await prisma.validationEvent.create({
+        const created = await prisma.validationEvent.create({
           data: {
             type: "AVAILABILITY",
             vehicleId: vehicle.id,
@@ -406,14 +417,14 @@ export async function runMatchingForDemand(demandId: string) {
           type: "VALIDATION_REQUEST",
           title: COPY.validationContext,
           body: "יש ביקוש רלוונטי לרכב שלך — הוא עדיין זמין?",
-          link: `/validations?focus=${match.id}`,
+          link: `/validations/${created.id}`,
           entityType: "validation",
-          entityId: match.id,
+          entityId: created.id,
         });
         await logAppEvent({
           eventType: "validation_requested",
           entityType: "ValidationEvent",
-          entityId: match.id,
+          entityId: created.id,
           dealerId: vehicle.dealerId,
           metadata: { type: "AVAILABILITY" },
         });
@@ -441,12 +452,12 @@ export async function runMatchingForDemand(demandId: string) {
             ? "נמצאה התאמה רלוונטית לחיפוש שלך"
             : COPY.matchPossible,
         body: "רוצה להתקדם עם הרכב הזה?",
-        link: `/matches?focus=${match.id}`,
-        entityType: "match",
-        entityId: match.id,
-      });
-      await emitExchangeEvent({
-        eventType: "MATCH_PRESENTED",
+          link: `/matches/${match.id}`,
+          entityType: "match",
+          entityId: match.id,
+        });
+        await emitExchangeEvent({
+          eventType: "MATCH_PRESENTED",
         dealerId: demand.dealerId,
         demandId,
         vehicleId: vehicle.id,
@@ -566,7 +577,7 @@ export async function confirmAvailabilityValidation(
           type: "BUYER_MATCH",
           title: "נמצאה התאמה גבוהה לחיפוש שלך",
           body: "התאמה מאומתת זמינה לצפייה",
-          link: `/matches?focus=${match.id}`,
+          link: `/matches/${match.id}`,
           entityType: "match",
           entityId: match.id,
         });
@@ -730,7 +741,7 @@ export async function recordBuyerInterest(params: {
         type: "SELLER_OPPORTUNITY",
         title: COPY.opportunity,
         body: COPY.opportunityPushBody,
-        link: `/opportunities?focus=${opp.id}`,
+        link: `/opportunities/${opp.id}`,
         entityType: "opportunity",
         entityId: opp.id,
       });

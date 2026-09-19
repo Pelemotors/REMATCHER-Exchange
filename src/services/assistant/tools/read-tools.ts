@@ -207,7 +207,7 @@ export async function executeReadTool(
         items: events.map((e) => ({
           id: e.id,
           title: `${e.vehicle.make ?? ""} ${e.vehicle.model ?? ""} ${e.vehicle.year ?? ""}`.trim(),
-          href: `/validations?focus=${e.id}`,
+          href: `/validations/${e.id}`,
         })),
       };
     }
@@ -235,7 +235,7 @@ export async function executeReadTool(
         count: totalCount,
         items: opps.map((o) => ({
           id: o.id,
-          href: `/opportunities?focus=${o.id}`,
+          href: `/opportunities/${o.id}`,
           vehicleTitle:
             `${o.vehicle.make ?? ""} ${o.vehicle.model ?? ""} ${o.vehicle.year ?? ""}`.trim(),
           note: "סוחר מאומת ברשת הביע עניין",

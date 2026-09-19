@@ -24,8 +24,8 @@ const read = (rel: string) => readFileSync(join(root, rel), "utf8");
 
 describe("Deep Links", () => {
   it("builds canonical entity destinations", () => {
-    expect(deepLinkForMatch("m1")).toBe("/matches?focus=m1");
-    expect(deepLinkForOpportunity("o1")).toBe("/opportunities?focus=o1");
+    expect(deepLinkForMatch("m1")).toBe("/matches/m1");
+    expect(deepLinkForOpportunity("o1")).toBe("/opportunities/o1");
     expect(deepLinkForReveal("r1")).toBe("/reveals/r1");
     expect(deepLinkForVehicle("v1", { enrich: true })).toContain("enrich=1");
   });

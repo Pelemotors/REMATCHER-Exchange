@@ -141,7 +141,7 @@ describe("action center priority + missing info", () => {
         priority: 1,
         entityType: "SellerOpportunity",
         entityId: "2",
-        href: "/opportunities?focus=2",
+        href: "/opportunities/2",
         createdAt: "2026-09-19T11:00:00.000Z",
         urgent: true,
       },
