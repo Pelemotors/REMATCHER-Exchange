@@ -1,9 +1,21 @@
 .page {
+  /* Public catalog is a consumer showroom — light, not the dealer app. */
+  --rm2-midnight: #f7f4ee;
+  --rm2-text-primary: #14181c;
+  --rm2-text-secondary: #4b5563;
+  --rm2-text-muted: #6b7280;
+  --rm2-platinum: #14181c;
+  --rm2-surface: #ffffff;
+  --rm2-surface-raised: #ffffff;
+  --rm2-surface-secondary: #f3efe6;
+  --rm2-border: rgba(20, 24, 28, 0.08);
+  --rm2-border-strong: rgba(20, 24, 28, 0.14);
+  --rm2-gold: #c4a034;
+  --rm2-gold-soft: rgba(196, 160, 52, 0.12);
   min-height: 100dvh;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212, 175, 59, 0.12), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 20%, rgba(46, 104, 247, 0.08), transparent 50%),
-    linear-gradient(180deg, var(--rm2-midnight) 0%, #070b0e 100%);
+    radial-gradient(ellipse 80% 45% at 50% -8%, rgba(196, 160, 52, 0.10), transparent 52%),
+    linear-gradient(180deg, #fbf8f1 0%, #f3efe6 100%);
   color: var(--rm2-text-primary);
   direction: rtl;
 }
@@ -132,7 +144,7 @@
   overflow: hidden;
   background: var(--rm2-surface);
   border: 1px solid var(--rm2-border);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 28px rgba(20, 24, 28, 0.08);
   transition: transform 180ms ease, border-color 180ms ease;
 }
 
@@ -152,7 +164,7 @@
 .photo {
   aspect-ratio: 16 / 10;
   background:
-    linear-gradient(135deg, #121a22, #1f2937);
+    linear-gradient(135deg, #ece7dc, #ddd6c8);
   object-fit: cover;
   width: 100%;
 }
@@ -162,7 +174,7 @@
   width: 100%;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #121a22, #1f2937);
+  background: linear-gradient(135deg, #ece7dc, #ddd6c8);
   color: var(--rm2-text-muted);
   font-size: 0.8rem;
   border-radius: 16px;
@@ -274,7 +286,7 @@
   color: var(--rm2-text-secondary);
   border: 1px dashed var(--rm2-border-strong);
   border-radius: 16px;
-  background: rgba(18, 26, 34, 0.6);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .footer {
@@ -519,7 +531,7 @@
   display: flex;
   gap: 8px;
   padding: 12px 0 0;
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 14, 0.92) 30%);
+  background: linear-gradient(180deg, transparent, rgba(247, 244, 238, 0.96) 30%);
 }
 
 .cityLabel {
