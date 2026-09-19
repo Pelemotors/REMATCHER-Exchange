@@ -10,6 +10,8 @@ import {
   type IntakeIntentKind,
 } from "@/services/intake/intent";
 import { resolveIntakeCandidate } from "@/services/intake/review";
+import { setVehicleRelationship } from "@/services/vehicles/relationship-visibility";
+import { isReviewRelationship } from "@/services/vehicles/vehicle-capabilities";
 
 export function orderIntakeCandidates<T extends { id: string; createdAt?: Date }>(
   candidates: Array<
@@ -148,19 +150,55 @@ export async function applyCandidateIntent(input: {
   }
 
   if (candidate.status === "COMMITTED" && candidate.committedVehicleId) {
-    await prisma.vehicle.update({
-      where: { id: candidate.committedVehicleId },
-      data: { dealerRelationship: INTENT_TO_RELATIONSHIP[input.intent] },
+    const vehicle = await prisma.vehicle.findFirst({
+      where: {
+        id: candidate.committedVehicleId,
+        dealerId: input.dealerId,
+      },
+      select: { id: true, dealerRelationship: true },
     });
+    if (!vehicle) return { ok: false as const, error: "not_found" as const };
+
+    const nextRelationship = INTENT_TO_RELATIONSHIP[input.intent];
+    if (vehicle.dealerRelationship === nextRelationship) {
+      await prisma.vehicleCandidate.update({
+        where: { id: candidate.id },
+        data: { dealerIntent: input.intent },
+      });
+      return {
+        ok: true as const,
+        vehicleId: vehicle.id,
+        intent: input.intent,
+        idempotent: true as const,
+      };
+    }
+
+    if (
+      nextRelationship === "OWNED" &&
+      isReviewRelationship(vehicle.dealerRelationship)
+    ) {
+      return {
+        ok: false as const,
+        error: "use_convert_owned" as const,
+      };
+    }
+
+    const updated = await setVehicleRelationship({
+      dealerId: input.dealerId,
+      vehicleId: vehicle.id,
+      relationship: nextRelationship,
+    });
+    if (!updated.ok) {
+      return { ok: false as const, error: updated.error };
+    }
     await prisma.vehicleCandidate.update({
       where: { id: candidate.id },
       data: { dealerIntent: input.intent },
     });
     return {
       ok: true as const,
-      vehicleId: candidate.committedVehicleId,
+      vehicleId: vehicle.id,
       intent: input.intent,
-      idempotent: true as const,
     };
   }
 

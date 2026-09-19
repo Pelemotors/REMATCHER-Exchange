@@ -1,6 +1,8 @@
 import "server-only";
+import { prisma } from "@/lib/prisma";
 import { updateVehicleForDealer } from "@/services/inventory/update-vehicle";
 import { applyVehicleArchiveLifecycle } from "@/services/inventory/archive-lifecycle";
+import { vehicleCapabilities } from "@/services/vehicles/vehicle-capabilities";
 
 /**
  * Remove a vehicle from active inventory without marking it SOLD.
@@ -11,6 +13,25 @@ export async function removeVehicleFromInventoryForDealer(input: {
   vehicleId: string;
   source?: string;
 }) {
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: input.vehicleId, dealerId: input.dealerId },
+    select: { dealerRelationship: true, status: true },
+  });
+  if (!vehicle) {
+    return { ok: false as const, error: "not_found" as const };
+  }
+  const caps = vehicleCapabilities({
+    dealerRelationship: vehicle.dealerRelationship,
+    status: vehicle.status,
+  });
+  if (!caps.canArchive && vehicle.status !== "ARCHIVED") {
+    return {
+      ok: false as const,
+      error: "ownership_required" as const,
+      message: "רק רכב במלאי שלך ניתן להעביר לארכיון.",
+    };
+  }
+
   const result = await updateVehicleForDealer({
     dealerId: input.dealerId,
     vehicleId: input.vehicleId,

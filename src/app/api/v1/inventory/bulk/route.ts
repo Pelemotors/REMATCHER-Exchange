@@ -13,6 +13,8 @@ const inventoryFilterSchema = z.enum([
   "attention",
   "interest",
   "missing_price",
+  "owned",
+  "review",
 ]);
 
 const bodySchema = z

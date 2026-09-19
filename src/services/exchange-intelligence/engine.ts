@@ -701,6 +701,29 @@ export async function runExchangeIntelligenceEngine(input: {
   }
   const resolved = resolvedWrap.subject;
 
+  const subjectVehicleId =
+    "vehicleId" in input.subject ? String(input.subject.vehicleId ?? "") : "";
+  let offeredPrice = input.offeredPrice ?? null;
+  if (subjectVehicleId && offeredPrice != null && offeredPrice > 0) {
+    const { persistReviewAskingPrice } = await import(
+      "@/services/vehicles/review-asking-price"
+    );
+    await persistReviewAskingPrice({
+      dealerId: input.dealerId,
+      vehicleId: subjectVehicleId,
+      price: offeredPrice,
+    });
+  }
+  if ((offeredPrice == null || offeredPrice <= 0) && subjectVehicleId) {
+    const { loadReviewAskingPriceForVehicle } = await import(
+      "@/services/vehicles/review-asking-price"
+    );
+    offeredPrice = await loadReviewAskingPriceForVehicle({
+      dealerId: input.dealerId,
+      vehicleId: subjectVehicleId,
+    });
+  }
+
   const rows = await loadNetworkRows(input.dealerId, resolved);
   const picked = pickCohort(rows, resolved);
   const supplyRows = picked.cohort.filter((r) => r.kind === "supply");
@@ -834,7 +857,7 @@ export async function runExchangeIntelligenceEngine(input: {
       supplyB2B,
       "SUPPLY_ASKING_PRICE_B2B"
     );
-    if (input.offeredPrice == null || input.offeredPrice <= 0) {
+    if (offeredPrice == null || offeredPrice <= 0) {
       return {
         ...base,
         needsOfferedPrice: true,
@@ -844,14 +867,14 @@ export async function runExchangeIntelligenceEngine(input: {
     const med = supplyB2B.median;
     let verdict: string | null = null;
     if (med != null && !supplyB2B.insufficientData) {
-      const delta = ((input.offeredPrice - med) / med) * 100;
+      const delta = ((offeredPrice - med) / med) * 100;
       if (delta <= -8) verdict = "BELOW_MARKET";
       else if (delta >= 8) verdict = "ABOVE_MARKET";
       else verdict = "NEAR_MEDIAN";
     }
     return {
       ...base,
-      offeredPrice: input.offeredPrice,
+      offeredPrice,
       askingB2B,
       verdict,
     };
@@ -879,7 +902,7 @@ export async function runExchangeIntelligenceEngine(input: {
       demandCount: dc,
       supplyPrivacyOk,
       demandPrivacyOk,
-      offeredPrice: input.offeredPrice,
+      offeredPrice,
       b2bMedian: supplyB2B.median,
       b2bPrivacyOk: !supplyB2B.insufficientData,
     });
@@ -983,7 +1006,7 @@ export async function runExchangeIntelligenceEngine(input: {
         demandCount: dc,
         supplyPrivacyOk,
         demandPrivacyOk,
-        offeredPrice: input.offeredPrice,
+        offeredPrice,
         b2bMedian: supplyB2B.median,
         b2bPrivacyOk: !supplyB2B.insufficientData,
       }),
