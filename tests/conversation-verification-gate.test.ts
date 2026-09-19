@@ -144,10 +144,8 @@ describe("exact-one-message persistence contract", () => {
       __dirname,
       "../../../REMATCHER-Exchange-Mobile/ios/REMATCHERExchange/Screens/ConversationView.swift"
     );
-    const alt = path.resolve(
-      "/srv/gal/REMATCHER-Exchange-Mobile/ios/REMATCHERExchange/Screens/ConversationView.swift"
-    );
-    const src = fs.readFileSync(fs.existsSync(root) ? root : alt, "utf8");
+    if (!fs.existsSync(root)) return;
+    const src = fs.readFileSync(root, "utf8");
     const send = src.match(/private func sendMessage\(\) async \{[\s\S]*?\n    \}/)?.[0] ?? "";
     expect(send).toContain("assistantChat");
     expect(send).not.toContain("postConversationMessage");

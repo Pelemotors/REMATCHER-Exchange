@@ -41,6 +41,8 @@ export async function POST(
           : result.error === "agreed_price_required" ||
               result.error === "outgoing_vehicle_required"
             ? "VALIDATION_INVALID_REQUEST"
+            : result.error === "decision_type_changed"
+              ? "RESOURCE_CONFLICT"
             : "RESOURCE_CONFLICT";
     return v1Error(ctx, code, result.error);
   }

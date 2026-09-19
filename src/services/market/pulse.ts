@@ -12,6 +12,7 @@ export type MarketPulseQuery = {
 
 /**
  * Dealer-scoped market pulse: own inventory/demand counts + optional network overview.
+ * Network aggregates reuse MARKET_OVERVIEW — the same primitive as Market Activity.
  */
 export async function getMarketPulse(
   dealerId: string,

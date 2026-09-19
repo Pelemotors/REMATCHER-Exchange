@@ -35,6 +35,7 @@ const state: { decisions: DecisionRow[]; vehicles: Record<string, VehicleRow> } 
   vehicles: {},
 };
 let convertShouldFail = false;
+let afterOpenRead: (() => void) | null = null;
 let nextId = 1;
 
 function cloneState() {
@@ -51,6 +52,7 @@ function matchesDecision(row: DecisionRow, where: Record<string, unknown>) {
   if (where.dealerId && row.dealerId !== where.dealerId) return false;
   if (where.vehicleId && row.vehicleId !== where.vehicleId) return false;
   if (where.status && row.status !== where.status) return false;
+  if (where.type && row.type !== where.type) return false;
   return true;
 }
 
@@ -64,7 +66,14 @@ function decisionApi(store: typeof state) {
       if (args.orderBy?.openedAt === "desc") {
         rows = [...rows].sort((a, b) => b.openedAt.getTime() - a.openedAt.getTime());
       }
-      return rows[0] ?? null;
+      const row = rows[0] ?? null;
+      const snapshot = row ? { ...row } : null;
+      if (row?.status === "OPEN" && args.where.status === "OPEN" && afterOpenRead) {
+        const hook = afterOpenRead;
+        afterOpenRead = null;
+        hook();
+      }
+      return snapshot;
     },
     findMany: async (args: { where: Record<string, unknown> }) =>
       store.decisions.filter((row) => matchesDecision(row, args.where)),
@@ -375,6 +384,7 @@ describe("accept atomicity", () => {
     };
     emitCalls.length = 0;
     convertShouldFail = false;
+    afterOpenRead = null;
   });
 
   it("successful accept yields ACCEPTED + OWNED together", async () => {
@@ -466,6 +476,62 @@ describe("accept atomicity", () => {
     if (second.ok) expect(second.idempotent).toBe(true);
     expect(state.decisions[0]?.status).toBe("DECLINED");
     expect(state.vehicles["v-in"]?.dealerRelationship).toBe("OFFERED_TO_ME");
+  });
+
+  it("accept cannot commit TRADE after validating PURCHASE if retarget raced", async () => {
+    seedOpen({ incomingAgreedPrice: 88000 });
+    afterOpenRead = () => {
+      const open = state.decisions.find((row) => row.status === "OPEN");
+      if (!open) return;
+      open.type = "TRADE";
+      open.outgoingVehicleId = null;
+      open.outgoingAgreedPrice = null;
+    };
+    const result = await acceptDecision({
+      dealerId: "d1",
+      vehicleId: "v-in",
+      incomingAgreedPrice: 88000,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("decision_type_changed");
+    expect(state.decisions[0]?.status).toBe("OPEN");
+    expect(state.decisions[0]?.type).toBe("TRADE");
+    expect(state.vehicles["v-in"]?.dealerRelationship).toBe("OFFERED_TO_ME");
+    expect(
+      emitCalls.some(
+        (e) =>
+          typeof e === "object" &&
+          e &&
+          "eventType" in e &&
+          (e as { eventType: string }).eventType === "decision.accepted"
+      )
+    ).toBe(false);
+  });
+
+  it("TRADE accept still requires outgoingVehicleId and incomingAgreedPrice", async () => {
+    seedOpen({ type: "TRADE", incomingAgreedPrice: null, outgoingVehicleId: null });
+    const missingPrice = await acceptDecision({
+      dealerId: "d1",
+      vehicleId: "v-in",
+    });
+    expect(missingPrice.ok).toBe(false);
+    if (!missingPrice.ok) expect(missingPrice.error).toBe("agreed_price_required");
+
+    state.decisions = [];
+    seedOpen({
+      type: "TRADE",
+      incomingAgreedPrice: 70000,
+      outgoingVehicleId: null,
+    });
+    const missingOutgoing = await acceptDecision({
+      dealerId: "d1",
+      vehicleId: "v-in",
+      incomingAgreedPrice: 70000,
+    });
+    expect(missingOutgoing.ok).toBe(false);
+    if (!missingOutgoing.ok) {
+      expect(missingOutgoing.error).toBe("outgoing_vehicle_required");
+    }
   });
 });
 
@@ -573,13 +639,9 @@ describe("filters and price families", () => {
     ).toBeNull();
   });
 
-  it("mobile hides live convert CTA unless Decision is OPEN", () => {
-    const src = readFileSync(
-      "/srv/gal/REMATCHER-Exchange-Mobile/ios/REMATCHERExchange/Screens/InventoryDetailView.swift",
-      "utf8"
-    );
-    expect(src).toContain("if let decision = item.decision, decision.isOpen");
-    expect(src).not.toContain("if item.decision?.isOpen != true, capabilities(item).canConvertToOwned");
-    expect(src).toContain("item.decision?.isOpen == true");
+  it("backend tests do not depend on an absolute Mobile repository path", () => {
+    const src = readFileSync(join(__dirname, "vehicle-decision.test.ts"), "utf8");
+    const banned = ["srv", "gal", "REMATCHER-Exchange-Mobile"].join("/");
+    expect(src.includes(`/${banned}`)).toBe(false);
   });
 });

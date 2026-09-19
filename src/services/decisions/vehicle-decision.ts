@@ -477,7 +477,7 @@ async function acceptInsideTransaction(
   }
 
   const claimed = await tx.vehicleDecision.updateMany({
-    where: { id: current.id, status: "OPEN" },
+    where: { id: current.id, status: "OPEN", type: current.type },
     data: {
       status: "ACCEPTED",
       decidedAt: new Date(),
@@ -499,6 +499,9 @@ async function acceptInsideTransaction(
         decision: toVehicleDecisionView(latest),
         idempotent: true as const,
       };
+    }
+    if (latest?.status === "OPEN" && latest.type !== current.type) {
+      return { ok: false as const, error: "decision_type_changed" as const };
     }
     return { ok: false as const, error: "decision_declined" as const };
   }

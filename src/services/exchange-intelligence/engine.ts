@@ -28,6 +28,11 @@
  */
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import {
+  minCohortObservations,
+  minDistinctDealers as minDistinctDealersThreshold,
+  minDistributionObservations,
+} from "@/services/market/thresholds";
 import { logEvent } from "@/services/events/log-event";
 import { legacyToSearchIntent } from "@/services/matching/legacy-search-intent-adapter";
 import { networkSupplyWhere } from "@/services/vehicles/relationship-visibility";
@@ -88,20 +93,17 @@ export type MarketBalanceLabel =
   | "SUPPLY_HEAVY"
   | "INSUFFICIENT_DATA";
 
+/** NETWORK_INTEL_MIN_COHORT / NETWORK_INTEL_MIN_DISTINCT_DEALERS live in market/thresholds. */
 function minCohort(): number {
-  const raw = process.env.NETWORK_INTEL_MIN_COHORT;
-  if (raw && /^\d+$/.test(raw)) return Math.max(1, Number(raw));
-  return 3;
+  return minCohortObservations();
 }
 
 function minDistinctDealers(): number {
-  const raw = process.env.NETWORK_INTEL_MIN_DISTINCT_DEALERS;
-  if (raw && /^\d+$/.test(raw)) return Math.max(1, Number(raw));
-  return 3;
+  return minDistinctDealersThreshold();
 }
 
 function minDistributionObs(): number {
-  return 5;
+  return minDistributionObservations();
 }
 
 function fuelFamily(fuel: CanonicalFuelType | null): string | null {
@@ -201,7 +203,7 @@ export function yearWindowForCohortLevel(
   };
 }
 
-function modelsMatch(model: string | null, target: string): boolean {
+export function modelsMatch(model: string | null, target: string): boolean {
   if (!model) return false;
   return model.toLowerCase().includes(target.toLowerCase());
 }
