@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  Prisma,
   VehicleDecisionStatus,
   VehicleDecisionType,
 } from "@prisma/client";
@@ -32,6 +33,8 @@ export type VehicleDecisionView = {
     year: number | null;
   } | null;
 };
+
+type DecisionDb = Prisma.TransactionClient | typeof prisma;
 
 export function decisionTypeForRelationship(
   relationship: string | null | undefined
@@ -99,31 +102,78 @@ const outgoingInclude = {
   },
 } as const;
 
-export async function getDecisionForVehicle(input: {
-  dealerId: string;
-  vehicleId: string;
-}) {
-  const row = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
-    include: outgoingInclude,
-  });
-  return row ? toVehicleDecisionView(row) : null;
+function openWhere(dealerId: string, vehicleId: string) {
+  return { dealerId, vehicleId, status: "OPEN" as const };
 }
 
 export async function getOpenDecisionForVehicle(input: {
   dealerId: string;
   vehicleId: string;
 }) {
-  const row = await getDecisionForVehicle(input);
-  return row?.status === "OPEN" ? row : null;
+  const row = await prisma.vehicleDecision.findFirst({
+    where: openWhere(input.dealerId, input.vehicleId),
+    include: outgoingInclude,
+  });
+  return row ? toVehicleDecisionView(row) : null;
 }
 
-/** Authority price for intelligence / display. Never b2b/retail. */
+export async function getLatestDecisionForVehicle(input: {
+  dealerId: string;
+  vehicleId: string;
+}) {
+  const row = await prisma.vehicleDecision.findFirst({
+    where: { dealerId: input.dealerId, vehicleId: input.vehicleId },
+    orderBy: { openedAt: "desc" },
+    include: outgoingInclude,
+  });
+  return row ? toVehicleDecisionView(row) : null;
+}
+
+/** Current API decision: OPEN first, otherwise latest terminal. */
+export async function getDecisionForVehicle(input: {
+  dealerId: string;
+  vehicleId: string;
+}) {
+  return (
+    (await getOpenDecisionForVehicle(input)) ??
+    (await getLatestDecisionForVehicle(input))
+  );
+}
+
+export async function listDecisionsForVehicle(input: {
+  dealerId: string;
+  vehicleId: string;
+}) {
+  const rows = await prisma.vehicleDecision.findMany({
+    where: { dealerId: input.dealerId, vehicleId: input.vehicleId },
+    orderBy: { openedAt: "desc" },
+    include: outgoingInclude,
+  });
+  return rows.map(toVehicleDecisionView);
+}
+
+export function pickCurrentDecision<
+  T extends { vehicleId: string; status: string; openedAt?: Date },
+>(rows: T[]): Map<string, T> {
+  const byVehicle = new Map<string, T>();
+  for (const row of rows) {
+    const current = byVehicle.get(row.vehicleId);
+    if (!current) {
+      byVehicle.set(row.vehicleId, row);
+      continue;
+    }
+    if (row.status === "OPEN" && current.status !== "OPEN") {
+      byVehicle.set(row.vehicleId, row);
+      continue;
+    }
+    if (row.status === current.status && row.openedAt && current.openedAt) {
+      if (row.openedAt > current.openedAt) byVehicle.set(row.vehicleId, row);
+    }
+  }
+  return byVehicle;
+}
+
+/** Authority price for the OPEN Decision only. Never b2b/retail. */
 export function decisionAuthorityPrice(row: {
   incomingAgreedPrice?: number | null;
   incomingAskPrice?: number | null;
@@ -141,13 +191,8 @@ export async function loadDecisionAuthorityPrice(input: {
   dealerId: string;
   vehicleId: string;
 }): Promise<number | null> {
-  const row = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
+  const row = await prisma.vehicleDecision.findFirst({
+    where: openWhere(input.dealerId, input.vehicleId),
     select: { incomingAgreedPrice: true, incomingAskPrice: true },
   });
   return row ? decisionAuthorityPrice(row) : null;
@@ -165,19 +210,14 @@ export async function openOrGetDecision(input: {
   created: boolean;
   idempotent: boolean;
 }> {
-  const existing = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
+  const existingOpen = await prisma.vehicleDecision.findFirst({
+    where: openWhere(input.dealerId, input.vehicleId),
     include: outgoingInclude,
   });
-  if (existing) {
+  if (existingOpen) {
     return {
       ok: true,
-      decision: toVehicleDecisionView(existing),
+      decision: toVehicleDecisionView(existingOpen),
       created: false,
       idempotent: true,
     };
@@ -188,37 +228,52 @@ export async function openOrGetDecision(input: {
       ? Math.round(input.incomingAskPrice)
       : null;
 
-  const created = await prisma.vehicleDecision.create({
-    data: {
+  try {
+    const created = await prisma.vehicleDecision.create({
+      data: {
+        dealerId: input.dealerId,
+        vehicleId: input.vehicleId,
+        sourceCandidateId: input.sourceCandidateId ?? null,
+        type: input.type,
+        status: "OPEN",
+        incomingAskPrice: seed,
+      },
+      include: outgoingInclude,
+    });
+
+    await emitExchangeEvent({
+      eventType: "decision.opened",
       dealerId: input.dealerId,
       vehicleId: input.vehicleId,
-      sourceCandidateId: input.sourceCandidateId ?? null,
-      type: input.type,
-      status: "OPEN",
-      incomingAskPrice: seed,
-    },
-    include: outgoingInclude,
-  });
+      eventData: {
+        decisionId: created.id,
+        type: created.type,
+        sourceCandidateId: created.sourceCandidateId,
+      },
+      operational: true,
+      idempotencyKey: `decision.opened:${created.id}`,
+    }).catch(() => undefined);
 
-  await emitExchangeEvent({
-    eventType: "decision.opened",
-    dealerId: input.dealerId,
-    vehicleId: input.vehicleId,
-    eventData: {
-      decisionId: created.id,
-      type: created.type,
-      sourceCandidateId: created.sourceCandidateId,
-    },
-    operational: true,
-    idempotencyKey: `decision.opened:${created.id}`,
-  }).catch(() => undefined);
-
-  return {
-    ok: true,
-    decision: toVehicleDecisionView(created),
-    created: true,
-    idempotent: false,
-  };
+    return {
+      ok: true,
+      decision: toVehicleDecisionView(created),
+      created: true,
+      idempotent: false,
+    };
+  } catch (error) {
+    if (!isUniqueOpenConflict(error)) throw error;
+    const raced = await prisma.vehicleDecision.findFirst({
+      where: openWhere(input.dealerId, input.vehicleId),
+      include: outgoingInclude,
+    });
+    if (!raced) throw error;
+    return {
+      ok: true,
+      decision: toVehicleDecisionView(raced),
+      created: false,
+      idempotent: true,
+    };
+  }
 }
 
 export async function updateOpenDecision(input: {
@@ -229,18 +284,10 @@ export async function updateOpenDecision(input: {
   outgoingVehicleId?: string | null;
   outgoingAgreedPrice?: number | null;
 }) {
-  const current = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
+  const current = await prisma.vehicleDecision.findFirst({
+    where: openWhere(input.dealerId, input.vehicleId),
   });
   if (!current) return { ok: false as const, error: "not_found" as const };
-  if (current.status !== "OPEN") {
-    return { ok: false as const, error: "decision_terminal" as const };
-  }
 
   const data: {
     incomingAskPrice?: number | null;
@@ -270,11 +317,19 @@ export async function updateOpenDecision(input: {
     data.outgoingVehicleId = input.outgoingVehicleId ?? null;
   }
 
-  const updated = await prisma.vehicleDecision.update({
-    where: { id: current.id },
+  const claimed = await prisma.vehicleDecision.updateMany({
+    where: { id: current.id, status: "OPEN" },
     data,
+  });
+  if (claimed.count === 0) {
+    return { ok: false as const, error: "decision_terminal" as const };
+  }
+
+  const updated = await prisma.vehicleDecision.findFirst({
+    where: { id: current.id },
     include: outgoingInclude,
   });
+  if (!updated) return { ok: false as const, error: "not_found" as const };
 
   await emitExchangeEvent({
     eventType: "decision.updated",
@@ -297,95 +352,104 @@ export async function retargetOpenDecision(input: {
   vehicleId: string;
   type: VehicleDecisionType;
 }) {
-  const current = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.vehicleDecision.findFirst({
+        where: openWhere(input.dealerId, input.vehicleId),
+        include: outgoingInclude,
+      });
+      if (!current) {
+        return { ok: false as const, error: "not_found" as const };
+      }
+      if (current.type === input.type) {
+        return {
+          ok: true as const,
+          decision: toVehicleDecisionView(current),
+          idempotent: true as const,
+        };
+      }
+
+      const nextRel = relationshipForDecisionType(input.type);
+      const claimed = await tx.vehicleDecision.updateMany({
+        where: { id: current.id, status: "OPEN" },
+        data: {
+          type: input.type,
+          outgoingVehicleId:
+            input.type === "PURCHASE" ? null : current.outgoingVehicleId,
+        },
+      });
+      if (claimed.count === 0) {
+        return { ok: false as const, error: "decision_terminal" as const };
+      }
+
+      await tx.vehicle.update({
+        where: { id: input.vehicleId },
+        data: { dealerRelationship: nextRel, visibility: "PRIVATE" },
+      });
+
+      const updated = await tx.vehicleDecision.findFirst({
+        where: { id: current.id },
+        include: outgoingInclude,
+      });
+      if (!updated) return { ok: false as const, error: "not_found" as const };
+      return {
+        ok: true as const,
+        decision: toVehicleDecisionView(updated),
+        idempotent: false as const,
+      };
+    });
+
+    if (result.ok && !result.idempotent) {
+      await emitExchangeEvent({
+        eventType: "decision.updated",
         dealerId: input.dealerId,
         vehicleId: input.vehicleId,
-      },
-    },
-    include: outgoingInclude,
-  });
-  if (!current) return { ok: false as const, error: "not_found" as const };
-  if (current.status !== "OPEN") {
-    return { ok: false as const, error: "decision_terminal" as const };
+        eventData: {
+          decisionId: result.decision.id,
+          type: result.decision.type,
+          retargeted: true,
+        },
+        operational: true,
+      }).catch(() => undefined);
+    }
+    return result;
+  } catch {
+    return { ok: false as const, error: "retarget_failed" as const };
   }
-  if (current.type === input.type) {
-    return {
-      ok: true as const,
-      decision: toVehicleDecisionView(current),
-      idempotent: true as const,
-    };
-  }
-
-  const nextRel = relationshipForDecisionType(input.type);
-  const updated = await prisma.vehicleDecision.update({
-    where: { id: current.id },
-    data: {
-      type: input.type,
-      outgoingVehicleId: input.type === "PURCHASE" ? null : current.outgoingVehicleId,
-    },
-    include: outgoingInclude,
-  });
-  await prisma.vehicle.update({
-    where: { id: input.vehicleId },
-    data: { dealerRelationship: nextRel, visibility: "PRIVATE" },
-  });
-
-  await emitExchangeEvent({
-    eventType: "decision.updated",
-    dealerId: input.dealerId,
-    vehicleId: input.vehicleId,
-    eventData: {
-      decisionId: updated.id,
-      type: updated.type,
-      retargeted: true,
-    },
-    operational: true,
-  }).catch(() => undefined);
-
-  return {
-    ok: true as const,
-    decision: toVehicleDecisionView(updated),
-    idempotent: false as const,
-  };
 }
 
-export async function acceptDecision(input: {
-  dealerId: string;
-  vehicleId: string;
-  incomingAgreedPrice?: number | null;
-  outgoingVehicleId?: string | null;
-  outgoingAgreedPrice?: number | null;
-}) {
-  const current = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
+async function acceptInsideTransaction(
+  tx: Prisma.TransactionClient,
+  input: {
+    dealerId: string;
+    vehicleId: string;
+    incomingAgreedPrice?: number | null;
+    outgoingVehicleId?: string | null;
+    outgoingAgreedPrice?: number | null;
+  },
+  onConverted: (from: string | null) => void
+) {
+  const current = await tx.vehicleDecision.findFirst({
+    where: openWhere(input.dealerId, input.vehicleId),
     include: outgoingInclude,
   });
-  if (!current) return { ok: false as const, error: "not_found" as const };
-  if (current.status === "ACCEPTED") {
-    return {
-      ok: true as const,
-      decision: toVehicleDecisionView(current),
-      idempotent: true as const,
-    };
-  }
-  if (current.status === "DECLINED") {
-    return { ok: false as const, error: "decision_declined" as const };
-  }
-
-  if (input.outgoingVehicleId) {
-    const linked = await assertOutgoingVehicleEligible({
-      dealerId: input.dealerId,
-      incomingVehicleId: input.vehicleId,
-      outgoingVehicleId: input.outgoingVehicleId,
+  if (!current) {
+    const latest = await tx.vehicleDecision.findFirst({
+      where: { dealerId: input.dealerId, vehicleId: input.vehicleId },
+      orderBy: { openedAt: "desc" },
+      include: outgoingInclude,
     });
-    if (!linked.ok) return linked;
+    if (latest?.status === "ACCEPTED") {
+      return {
+        ok: true as const,
+        decision: toVehicleDecisionView(latest),
+        idempotent: true as const,
+      };
+    }
+    if (latest?.status === "DECLINED") {
+      return { ok: false as const, error: "decision_declined" as const };
+    }
+    return { ok: false as const, error: "not_found" as const };
   }
 
   const agreed = normalizePrice(
@@ -407,43 +471,58 @@ export async function acceptDecision(input: {
       dealerId: input.dealerId,
       incomingVehicleId: input.vehicleId,
       outgoingVehicleId: outgoingId,
+      db: tx,
     });
     if (!linked.ok) return linked;
+  }
+
+  const claimed = await tx.vehicleDecision.updateMany({
+    where: { id: current.id, status: "OPEN" },
+    data: {
+      status: "ACCEPTED",
+      decidedAt: new Date(),
+      incomingAgreedPrice: agreed,
+      outgoingVehicleId:
+        current.type === "TRADE" ? outgoingId : current.outgoingVehicleId,
+      outgoingAgreedPrice:
+        current.type === "TRADE" ? outgoingPrice : current.outgoingAgreedPrice,
+    },
+  });
+  if (claimed.count === 0) {
+    const latest = await tx.vehicleDecision.findFirst({
+      where: { id: current.id },
+      include: outgoingInclude,
+    });
+    if (latest?.status === "ACCEPTED") {
+      return {
+        ok: true as const,
+        decision: toVehicleDecisionView(latest),
+        idempotent: true as const,
+      };
+    }
+    return { ok: false as const, error: "decision_declined" as const };
   }
 
   const converted = await convertToOwnedInventory({
     dealerId: input.dealerId,
     vehicleId: input.vehicleId,
+    db: tx,
+    emitEvent: false,
   });
-  if (!converted.ok) return converted;
+  if (!converted.ok) {
+    throw Object.assign(new Error(converted.error), {
+      decisionError: converted.error,
+    });
+  }
+  onConverted(converted.fromRelationship ?? null);
 
-  const updated = await prisma.vehicleDecision.update({
+  const updated = await tx.vehicleDecision.findFirst({
     where: { id: current.id },
-    data: {
-      status: "ACCEPTED",
-      decidedAt: new Date(),
-      incomingAgreedPrice: agreed,
-      outgoingVehicleId: current.type === "TRADE" ? outgoingId : current.outgoingVehicleId,
-      outgoingAgreedPrice: current.type === "TRADE" ? outgoingPrice : current.outgoingAgreedPrice,
-    },
     include: outgoingInclude,
   });
-
-  await emitExchangeEvent({
-    eventType: "decision.accepted",
-    dealerId: input.dealerId,
-    vehicleId: input.vehicleId,
-    eventData: {
-      decisionId: updated.id,
-      type: updated.type,
-      incomingAgreedPrice: updated.incomingAgreedPrice,
-      outgoingVehicleId: updated.outgoingVehicleId,
-      outgoingAutoSold: false,
-    },
-    operational: true,
-    idempotencyKey: `decision.accepted:${updated.id}`,
-  }).catch(() => undefined);
-
+  if (!updated) {
+    throw Object.assign(new Error("not_found"), { decisionError: "not_found" });
+  }
   return {
     ok: true as const,
     decision: toVehicleDecisionView(updated),
@@ -452,51 +531,134 @@ export async function acceptDecision(input: {
   };
 }
 
+export async function acceptDecision(input: {
+  dealerId: string;
+  vehicleId: string;
+  incomingAgreedPrice?: number | null;
+  outgoingVehicleId?: string | null;
+  outgoingAgreedPrice?: number | null;
+}) {
+  let convertedFrom: string | null = null;
+  let result: Awaited<ReturnType<typeof acceptInsideTransaction>>;
+  try {
+    result = await prisma.$transaction((tx) =>
+      acceptInsideTransaction(tx, input, (from) => {
+        convertedFrom = from;
+      })
+    );
+  } catch (error) {
+    const code =
+      typeof error === "object" &&
+      error &&
+      "decisionError" in error &&
+      typeof (error as { decisionError?: string }).decisionError === "string"
+        ? (error as { decisionError: string }).decisionError
+        : "accept_failed";
+    return { ok: false as const, error: code };
+  }
+
+  if (!result.ok) return result;
+
+  if (!result.idempotent) {
+    await emitExchangeEvent({
+      eventType: "decision.accepted",
+      dealerId: input.dealerId,
+      vehicleId: input.vehicleId,
+      eventData: {
+        decisionId: result.decision.id,
+        type: result.decision.type,
+        incomingAgreedPrice: result.decision.incomingAgreedPrice,
+        outgoingVehicleId: result.decision.outgoingVehicleId,
+        outgoingAutoSold: false,
+      },
+      operational: true,
+      idempotencyKey: `decision.accepted:${result.decision.id}`,
+    }).catch(() => undefined);
+    if (convertedFrom) {
+      await emitExchangeEvent({
+        eventType: "vehicle.relationship.converted_owned",
+        dealerId: input.dealerId,
+        vehicleId: input.vehicleId,
+        eventData: { from: convertedFrom, to: "OWNED" },
+        operational: true,
+        idempotencyKey: `vehicle.converted_owned:${result.decision.id}`,
+      }).catch(() => undefined);
+    }
+  }
+
+  return result;
+}
+
 export async function declineDecision(input: {
   dealerId: string;
   vehicleId: string;
 }) {
-  const current = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
-    include: outgoingInclude,
-  });
-  if (!current) return { ok: false as const, error: "not_found" as const };
-  if (current.status === "DECLINED") {
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.vehicleDecision.findFirst({
+      where: openWhere(input.dealerId, input.vehicleId),
+      include: outgoingInclude,
+    });
+    if (!current) {
+      const latest = await tx.vehicleDecision.findFirst({
+        where: { dealerId: input.dealerId, vehicleId: input.vehicleId },
+        orderBy: { openedAt: "desc" },
+        include: outgoingInclude,
+      });
+      if (latest?.status === "DECLINED") {
+        return {
+          ok: true as const,
+          decision: toVehicleDecisionView(latest),
+          idempotent: true as const,
+        };
+      }
+      if (latest?.status === "ACCEPTED") {
+        return { ok: false as const, error: "decision_accepted" as const };
+      }
+      return { ok: false as const, error: "not_found" as const };
+    }
+
+    const claimed = await tx.vehicleDecision.updateMany({
+      where: { id: current.id, status: "OPEN" },
+      data: { status: "DECLINED", decidedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      const latest = await tx.vehicleDecision.findFirst({
+        where: { id: current.id },
+        include: outgoingInclude,
+      });
+      if (latest?.status === "DECLINED") {
+        return {
+          ok: true as const,
+          decision: toVehicleDecisionView(latest),
+          idempotent: true as const,
+        };
+      }
+      return { ok: false as const, error: "decision_accepted" as const };
+    }
+
+    const updated = await tx.vehicleDecision.findFirst({
+      where: { id: current.id },
+      include: outgoingInclude,
+    });
+    if (!updated) return { ok: false as const, error: "not_found" as const };
     return {
       ok: true as const,
-      decision: toVehicleDecisionView(current),
-      idempotent: true as const,
+      decision: toVehicleDecisionView(updated),
+      idempotent: false as const,
     };
-  }
-  if (current.status === "ACCEPTED") {
-    return { ok: false as const, error: "decision_accepted" as const };
-  }
-
-  const updated = await prisma.vehicleDecision.update({
-    where: { id: current.id },
-    data: { status: "DECLINED", decidedAt: new Date() },
-    include: outgoingInclude,
   });
 
-  await emitExchangeEvent({
-    eventType: "decision.declined",
-    dealerId: input.dealerId,
-    vehicleId: input.vehicleId,
-    eventData: { decisionId: updated.id, type: updated.type },
-    operational: true,
-    idempotencyKey: `decision.declined:${updated.id}`,
-  }).catch(() => undefined);
-
-  return {
-    ok: true as const,
-    decision: toVehicleDecisionView(updated),
-    idempotent: false as const,
-  };
+  if (result.ok && !result.idempotent) {
+    await emitExchangeEvent({
+      eventType: "decision.declined",
+      dealerId: input.dealerId,
+      vehicleId: input.vehicleId,
+      eventData: { decisionId: result.decision.id, type: result.decision.type },
+      operational: true,
+      idempotencyKey: `decision.declined:${result.decision.id}`,
+    }).catch(() => undefined);
+  }
+  return result;
 }
 
 export async function persistDecisionPrice(input: {
@@ -507,23 +669,19 @@ export async function persistDecisionPrice(input: {
 }): Promise<number | null> {
   const price = normalizePrice(input.price);
   if (price == null) return null;
-  const current = await prisma.vehicleDecision.findUnique({
-    where: {
-      dealerId_vehicleId: {
-        dealerId: input.dealerId,
-        vehicleId: input.vehicleId,
-      },
-    },
-    select: { id: true, status: true, type: true },
+  const current = await prisma.vehicleDecision.findFirst({
+    where: openWhere(input.dealerId, input.vehicleId),
+    select: { id: true, type: true },
   });
-  if (!current || current.status !== "OPEN") return null;
+  if (!current) return null;
   const field =
     input.field ??
     (current.type === "TRADE" ? "incomingAgreedPrice" : "incomingAskPrice");
-  await prisma.vehicleDecision.update({
-    where: { id: current.id },
+  const claimed = await prisma.vehicleDecision.updateMany({
+    where: { id: current.id, status: "OPEN" },
     data: { [field]: price },
   });
+  if (claimed.count === 0) return null;
   await emitExchangeEvent({
     eventType: "decision.updated",
     dealerId: input.dealerId,
@@ -558,6 +716,15 @@ export async function backfillOpenVehicleDecisions(): Promise<{
       skipped += 1;
       continue;
     }
+    const existing = await prisma.vehicleDecision.findFirst({
+      where: { dealerId: vehicle.dealerId, vehicleId: vehicle.id },
+      select: { id: true, status: true },
+      orderBy: { openedAt: "desc" },
+    });
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
     const candidate = await prisma.vehicleCandidate.findFirst({
       where: { committedVehicleId: vehicle.id, dealerId: vehicle.dealerId },
       select: { id: true, commercialJson: true },
@@ -580,11 +747,13 @@ export async function assertOutgoingVehicleEligible(input: {
   dealerId: string;
   incomingVehicleId: string;
   outgoingVehicleId: string;
+  db?: DecisionDb;
 }) {
   if (input.outgoingVehicleId === input.incomingVehicleId) {
     return { ok: false as const, error: "outgoing_same_as_incoming" as const };
   }
-  const outgoing = await prisma.vehicle.findFirst({
+  const db = input.db ?? prisma;
+  const outgoing = await db.vehicle.findFirst({
     where: { id: input.outgoingVehicleId, dealerId: input.dealerId },
     select: { id: true, dealerRelationship: true, status: true },
   });
@@ -618,4 +787,13 @@ function reviewAskFromCommercial(commercial: unknown): number | null {
     }
   }
   return null;
+}
+
+function isUniqueOpenConflict(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
 }

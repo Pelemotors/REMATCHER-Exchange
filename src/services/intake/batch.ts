@@ -329,10 +329,14 @@ export async function getIntakeBatchForDealer(input: {
           status: true,
           incomingAskPrice: true,
           incomingAgreedPrice: true,
+          openedAt: true,
         },
       })
     : [];
-  const decisionByVehicle = new Map(decisions.map((d) => [d.vehicleId, d]));
+  const { pickCurrentDecision } = await import(
+    "@/services/decisions/vehicle-decision"
+  );
+  const decisionByVehicle = pickCurrentDecision(decisions);
 
   return {
     ok: true as const,

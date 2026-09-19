@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type {
   DealerVehicleRelationship,
+  Prisma,
   VehicleVisibility,
 } from "@prisma/client";
 import {
@@ -170,14 +171,22 @@ export async function removeVehicleFromNetwork(params: {
 export async function convertToOwnedInventory(params: {
   dealerId: string;
   vehicleId: string;
+  db?: Prisma.TransactionClient;
+  emitEvent?: boolean;
 }) {
-  const v = await prisma.vehicle.findFirst({
+  const db = params.db ?? prisma;
+  const v = await db.vehicle.findFirst({
     where: { id: params.vehicleId, dealerId: params.dealerId },
   });
   if (!v) return { ok: false as const, error: "not_found" };
 
   if (v.dealerRelationship === "OWNED" || v.dealerRelationship === "INVENTORY") {
-    return { ok: true as const, vehicle: v, idempotent: true as const };
+    return {
+      ok: true as const,
+      vehicle: v,
+      idempotent: true as const,
+      fromRelationship: v.dealerRelationship,
+    };
   }
   if (
     v.dealerRelationship !== "OFFERED_TO_ME" &&
@@ -190,7 +199,7 @@ export async function convertToOwnedInventory(params: {
     };
   }
 
-  const updated = await prisma.vehicle.update({
+  const updated = await db.vehicle.update({
     where: { id: v.id },
     data: {
       dealerRelationship: "OWNED",
@@ -198,17 +207,24 @@ export async function convertToOwnedInventory(params: {
     },
   });
 
-  const { emitExchangeEvent } = await import("@/services/exchange/events");
-  await emitExchangeEvent({
-    eventType: "vehicle.relationship.converted_owned",
-    dealerId: params.dealerId,
-    vehicleId: updated.id,
-    eventData: {
-      from: v.dealerRelationship,
-      to: "OWNED",
-    },
-    operational: true,
-  }).catch(() => undefined);
+  if (params.emitEvent !== false && !params.db) {
+    const { emitExchangeEvent } = await import("@/services/exchange/events");
+    await emitExchangeEvent({
+      eventType: "vehicle.relationship.converted_owned",
+      dealerId: params.dealerId,
+      vehicleId: updated.id,
+      eventData: {
+        from: v.dealerRelationship,
+        to: "OWNED",
+      },
+      operational: true,
+    }).catch(() => undefined);
+  }
 
-  return { ok: true as const, vehicle: updated, idempotent: false as const };
+  return {
+    ok: true as const,
+    vehicle: updated,
+    idempotent: false as const,
+    fromRelationship: v.dealerRelationship,
+  };
 }

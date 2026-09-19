@@ -1702,7 +1702,7 @@ model VehicleDecision {
   outgoingVehicle Vehicle?          @relation("DecisionOutgoingVehicle", fields: [outgoingVehicleId], references: [id], onDelete: SetNull)
   sourceCandidate VehicleCandidate? @relation(fields: [sourceCandidateId], references: [id], onDelete: SetNull)
 
-  @@unique([dealerId, vehicleId])
+  @@index([dealerId, vehicleId, status, openedAt(sort: Desc)])
   @@index([dealerId, status, openedAt(sort: Desc)])
   @@index([vehicleId, status])
   @@index([outgoingVehicleId])

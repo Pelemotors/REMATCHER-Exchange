@@ -20,7 +20,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     vehicleDecision: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   },
 }));
