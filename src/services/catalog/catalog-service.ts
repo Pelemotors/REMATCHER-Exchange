@@ -681,20 +681,20 @@ export async function replaceCatalogPublications(params: {
       });
     }
   }
-  if (failures.length > 0) {
-    return { ok: false as const, error: "not_eligible" as const, failures };
-  }
+  const eligibleIds = uniqueIds.filter(
+    (vehicleId) => !failures.some((f) => f.vehicleId === vehicleId)
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.catalogPublication.updateMany({
       where: {
         catalogId: catalog.id,
-        vehicleId: { notIn: uniqueIds },
+        vehicleId: { notIn: eligibleIds },
         isActive: true,
       },
       data: { isActive: false, unpublishedAt: new Date() },
     });
-    for (const [index, vehicleId] of uniqueIds.entries()) {
+    for (const [index, vehicleId] of eligibleIds.entries()) {
       await tx.catalogPublication.upsert({
         where: {
           catalogId_vehicleId: { catalogId: catalog.id, vehicleId },
@@ -717,7 +717,13 @@ export async function replaceCatalogPublications(params: {
     }
   });
 
-  return { ok: true as const, catalog: await getCatalogForDealer(params.dealerId) };
+  return {
+    ok: true as const,
+    catalog: await getCatalogForDealer(params.dealerId),
+    published: eligibleIds.length,
+    failed: failures.length,
+    failures,
+  };
 }
 
 export async function updateCatalogPublicationForDealer(params: {

@@ -295,7 +295,7 @@ export async function cancelDemandForDealer(params: {
     where: {
       id: params.demandId,
       dealerId: params.dealerId,
-      status: { in: ["ACTIVE", "PAUSED", "EXPIRED", "PENDING_CONFIRMATION"] },
+      status: { in: ["ACTIVE", "PAUSED", "EXPIRED", "PENDING_CONFIRMATION", "DRAFT"] },
     },
   });
   if (!demand) return { ok: false as const, error: "not_found" as const };

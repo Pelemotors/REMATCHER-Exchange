@@ -140,8 +140,8 @@ async function resolveVehicleShare(dealerId: string, vehicleId: string) {
       : null;
   const title = [vehicle.make, vehicle.model, vehicle.year].filter(Boolean).join(" ") || "רכב";
   const message = url
-    ? `היי, ראיתי את ה-${title} בקטלוג: ${url}`
-    : `מחפש ${title}`;
+    ? `יש לי ${title} זמין. אפשר לראות אותו כאן: ${url}`
+    : `יש לי ${title} זמין. אשמח לשלוח פרטים נוספים.`;
 
   let remediation: ShareRemediation = null;
   if (!url) {

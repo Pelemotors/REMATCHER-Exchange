@@ -162,10 +162,11 @@ describe("reconcile + desired-state", () => {
     ).toContain("reconcileCatalogPublicationForVehicle");
   });
 
-  it("replace publications is all-or-nothing", () => {
+  it("replace publications isolates invalid rows", () => {
     const src = readSrc("src/services/catalog/catalog-service.ts");
     expect(src).toContain("replaceCatalogPublications");
-    expect(src).toContain("failures.length");
+    expect(src).toContain("eligibleIds");
+    expect(src).toContain("failed: failures.length");
     expect(src).toContain("$transaction");
   });
 });
