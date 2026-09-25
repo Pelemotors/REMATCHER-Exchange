@@ -8,6 +8,8 @@ export type ActionCenterType =
   | "REVEAL_READY"
   | "DEALER_OPPORTUNITY"
   | "DECISION_MISSING_INFO"
+  | "VEHICLE_REVIEW"
+  | "PENDING_SEARCH_CONFIRMATION"
   | "VALIDATION"
   | "INFORMATION_REQUEST"
   | "CATALOG_LEAD";
@@ -63,6 +65,7 @@ export async function getActionCenter(dealerId: string): Promise<{
     validations,
     infoRequests,
     catalogLeads,
+    pendingDemands,
   ] = await Promise.all([
     prisma.candidateMatch.findMany({
       where: {
@@ -112,6 +115,7 @@ export async function getActionCenter(dealerId: string): Promise<{
         outgoingVehicleId: true,
         incomingAgreedPrice: true,
         incomingAskPrice: true,
+        vehicle: { select: { dealerRelationship: true } },
       },
     }),
     prisma.validationEvent.findMany({
@@ -127,6 +131,12 @@ export async function getActionCenter(dealerId: string): Promise<{
     prisma.catalogLead.findMany({
       where: { dealerId, status: "NEW" },
       select: { id: true, createdAt: true },
+      take: 20,
+    }),
+    prisma.demand.findMany({
+      where: { dealerId, status: "PENDING_CONFIRMATION" },
+      select: { id: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
       take: 20,
     }),
   ]);
@@ -196,6 +206,20 @@ export async function getActionCenter(dealerId: string): Promise<{
   }
 
   for (const row of openDecisions) {
+    if (row.vehicle.dealerRelationship === "OFFERED_TO_ME" || row.vehicle.dealerRelationship === "TRADE_IN_CANDIDATE") {
+      items.push({
+        id: `VEHICLE_REVIEW:${row.id}`,
+        type: "VEHICLE_REVIEW",
+        title: "רכב ממתין להחלטה שלך",
+        priority: 2,
+        entityType: "VehicleDecision",
+        entityId: row.id,
+        href: `/inventory/${row.vehicleId}`,
+        createdAt: row.openedAt.toISOString(),
+        urgent: false,
+      });
+      continue;
+    }
     const missing = decisionMissingReasons(row);
     if (missing.length === 0) continue;
     items.push({
@@ -239,6 +263,20 @@ export async function getActionCenter(dealerId: string): Promise<{
       entityType: "CatalogLead",
       entityId: row.id,
       href: `/catalog/leads/${row.id}`,
+      createdAt: row.createdAt.toISOString(),
+      urgent: false,
+    });
+  }
+
+  for (const row of pendingDemands) {
+    items.push({
+      id: `PENDING_SEARCH_CONFIRMATION:${row.id}`,
+      type: "PENDING_SEARCH_CONFIRMATION",
+      title: "חיפוש ממתין לאישור שלך",
+      priority: 2,
+      entityType: "Demand",
+      entityId: row.id,
+      href: `/demands/${row.id}`,
       createdAt: row.createdAt.toISOString(),
       urgent: false,
     });

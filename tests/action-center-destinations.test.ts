@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   deepLinkForCatalogLead,
   deepLinkForDealerOpportunity,
@@ -12,8 +12,7 @@ import {
 function routerSrc() {
   return readFileSync(
     join(
-      process.cwd(),
-      "../../REMATCHER-Exchange-Mobile/ios/REMATCHERExchange/App/AppRouter.swift"
+      resolve(process.cwd(), "../REMATCHER-Exchange-Mobile/ios/REMATCHERExchange/App/AppRouter.swift")
     ),
     "utf8"
   );
