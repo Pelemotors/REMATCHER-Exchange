@@ -37,7 +37,15 @@ export async function getCatalogForDealer(dealerId: string) {
     where: { dealerId },
     include: {
       publications: {
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          vehicle: {
+            status: "ACTIVE",
+            dealerId,
+            dealerRelationship: { in: CATALOG_ELIGIBLE_RELATIONSHIPS },
+            catalogOverride: { not: "FORCE_EXCLUDE" },
+          },
+        },
         select: {
           id: true,
           vehicleId: true,
@@ -51,7 +59,21 @@ export async function getCatalogForDealer(dealerId: string) {
         },
         orderBy: [{ sortOrder: "asc" }, { publishedAt: "desc" }],
       },
-      _count: { select: { publications: { where: { isActive: true } } } },
+      _count: {
+        select: {
+          publications: {
+            where: {
+              isActive: true,
+              vehicle: {
+                status: "ACTIVE",
+                dealerId,
+                dealerRelationship: { in: CATALOG_ELIGIBLE_RELATIONSHIPS },
+                catalogOverride: { not: "FORCE_EXCLUDE" },
+              },
+            },
+          },
+        },
+      },
     },
   });
   if (!catalog) return null;
