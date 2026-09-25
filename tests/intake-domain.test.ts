@@ -10,6 +10,7 @@ import {
   GOV_ACTIVE_PRIVATE_RESOURCE_ID,
   GOV_PERSONAL_IMPORT_RESOURCE_ID,
   identityFromGovRecord,
+  classifyGovProviderResults,
 } from "@/services/identity/gov-vehicle";
 import { normalizePlate } from "@/services/intake/status";
 import { CLASSIFY_CONFIDENCE_THRESHOLD } from "@/services/intake/media-classify";
@@ -84,6 +85,12 @@ describe("gov plate helpers", () => {
         identityFromGovRecord(sample, GOV_ACTIVE_PRIVATE_RESOURCE_ID, "12345678").make
       ).toBe(sample.expected);
     }
+  });
+
+  it("distinguishes full GOV not-found from partial provider failure", () => {
+    expect(classifyGovProviderResults(["EMPTY", "EMPTY"])).toBe("NOT_FOUND");
+    expect(classifyGovProviderResults(["EMPTY", "ERROR"])).toBe("UNAVAILABLE");
+    expect(classifyGovProviderResults(["ERROR", "ERROR"])).toBe("UNAVAILABLE");
   });
 });
 

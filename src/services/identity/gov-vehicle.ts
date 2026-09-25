@@ -17,6 +17,16 @@ export type GovLookupState =
   | "UNAVAILABLE"
   | "INVALID_PLATE";
 
+export type GovProviderResult = "FOUND" | "EMPTY" | "ERROR";
+
+export function classifyGovProviderResults(results: GovProviderResult[]): GovLookupState {
+  if (results.includes("FOUND")) return "FOUND";
+  if (results.length > 0 && results.every((result) => result === "EMPTY")) {
+    return "NOT_FOUND";
+  }
+  return "UNAVAILABLE";
+}
+
 export type GovVehicleIdentity = {
   plate: string;
   make: string | null;
@@ -148,8 +158,7 @@ export async function lookupVehicleByPlate(normalizedPlate: string): Promise<{
   }
 
   const plateNum = Number(normalizedPlate);
-  let sawSuccess = false;
-  let lastNetworkError = false;
+  const providerResults: GovProviderResult[] = [];
 
   for (const resourceId of GOV_LOOKUP_RESOURCE_IDS) {
     const hit = await datastoreSearch(resourceId, { mispar_rechev: plateNum });
@@ -163,14 +172,9 @@ export async function lookupVehicleByPlate(normalizedPlate: string): Promise<{
         ),
       };
     }
-    if (hit.kind === "empty") sawSuccess = true;
-    if (hit.kind === "error") lastNetworkError = true;
+    providerResults.push(hit.kind === "empty" ? "EMPTY" : "ERROR");
   }
-
-  if (!sawSuccess && lastNetworkError) {
-    return { state: "UNAVAILABLE", identity: null };
-  }
-  return { state: "NOT_FOUND", identity: null };
+  return { state: classifyGovProviderResults(providerResults), identity: null };
 }
 
 async function datastoreSearch(
