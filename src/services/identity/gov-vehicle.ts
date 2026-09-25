@@ -76,16 +76,25 @@ export function identityFromGovRecord(
   const degem = str(record.degem_nm);
   const tozeret = str(record.tozeret_nm);
   const kinuy = str(record.kinuy_mishari);
-  const latinMake = degem?.match(/^[A-Za-z]{2,}/)?.[0] ?? null;
+  // `degem_nm` often starts with an internal type/model code (for example
+  // RJA/FDAJ), not a manufacturer. Only accept a known manufacturer prefix;
+  // otherwise prefer the authoritative manufacturer field.
+  const latinPrefix = degem?.match(/^[A-Za-z][A-Za-z .'-]*/)?.[0]?.trim() ?? null;
+  const latinMake = latinPrefix && GOV_MANUFACTURER_PREFIXES.has(latinPrefix.toUpperCase())
+    ? latinPrefix
+    : null;
+  const make = normalizeGovManufacturer(tozeret) ?? latinMake ?? str(record.tozeret_eretz_nm);
 
   return {
     plate: normalizedPlate,
-    make: latinMake ?? tozeret ?? str(record.tozeret_eretz_nm),
+    make,
     model:
       kinuy ??
-      (degem && latinMake
-        ? degem.slice(latinMake.length).trim() || degem
-        : degem),
+      (degem && latinPrefix && !latinMake
+        ? degem.slice(latinPrefix.length).trim() || degem
+        : degem && latinMake
+          ? degem.slice(latinMake.length).trim() || degem
+          : degem),
     year,
     color: str(record.tzeva_rechev) ?? str(record.tzeva_cd),
     trim: degem,
@@ -94,6 +103,40 @@ export function identityFromGovRecord(
     resourceId,
     lookedUpAt: new Date().toISOString(),
   };
+}
+
+const GOV_MANUFACTURER_PREFIXES = new Set([
+  "ALFA ROMEO",
+  "AUDI",
+  "BMW",
+  "FORD",
+  "HONDA",
+  "HYUNDAI",
+  "KIA",
+  "MAZDA",
+  "MERCEDES",
+  "NISSAN",
+  "RENAULT",
+  "SKODA",
+  "SUZUKI",
+  "TOYOTA",
+  "VOLKSWAGEN",
+  "VOLVO",
+]);
+
+function normalizeGovManufacturer(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.replace(/["׳״]/g, "").trim();
+  const key = normalized.toLowerCase().replace(/\s+/g, " ");
+  const aliases: Record<string, string> = {
+    "ב מ וו": "BMW",
+    "ב.מ.וו": "BMW",
+    "רנו": "Renault",
+    "ניסאן": "Nissan",
+    "אלפא רומיאו": "Alfa Romeo",
+  };
+  const alias = Object.entries(aliases).find(([from]) => key.startsWith(from));
+  return alias?.[1] ?? (normalized || null);
 }
 
 export async function lookupVehicleByPlate(normalizedPlate: string): Promise<{

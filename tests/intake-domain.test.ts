@@ -72,6 +72,19 @@ describe("gov plate helpers", () => {
     expect(id.model).toMatch(/KTOC/);
     expect(id.resourceId).toBe(GOV_PERSONAL_IMPORT_RESOURCE_ID);
   });
+
+  it("does not treat GOV model/type codes as manufacturers", () => {
+    const cases = [
+      { tozeret_nm: "רנו", degem_nm: "RJA CLIO", expected: "Renault" },
+      { tozeret_nm: "ניסאן", degem_nm: "FDAJ QASHQAI", expected: "Nissan" },
+      { tozeret_nm: "אלפא רומיאו", degem_nm: "940 GIULIA", expected: "Alfa Romeo" },
+    ];
+    for (const sample of cases) {
+      expect(
+        identityFromGovRecord(sample, GOV_ACTIVE_PRIVATE_RESOURCE_ID, "12345678").make
+      ).toBe(sample.expected);
+    }
+  });
 });
 
 describe("intake domain surface", () => {
